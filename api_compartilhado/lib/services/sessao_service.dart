@@ -1,17 +1,18 @@
-// lib/services/sessao_service.dart
-//
-// Guarda o utilizador autenticado durante a sessão.
-// Não persiste — limpa ao fechar a app.
-
-import '../models/usuario_model.dart'; // ajuste ao caminho real
+import '../models/usuario_model.dart';
 
 class SessaoService {
   SessaoService._();
   static final SessaoService instance = SessaoService._();
 
   UsuarioModel? _usuario;
+  bool _modoOffline = false;
 
-  UsuarioModel? get usuario => _usuario;
+  // ── Getters ───────────────────────────────────────────────────────
+
+  UsuarioModel? get usuario        => _usuario;
+  UsuarioModel? get usuarioAtual   => _usuario;
+  bool          get temSessao      => _usuario != null;
+  bool          get modoOffline    => _modoOffline;
 
   /// ID do utilizador autenticado. Lança se não houver sessão.
   int get idUsuario {
@@ -19,12 +20,26 @@ class SessaoService {
     return _usuario!.id;
   }
 
-  bool get temSessao => _usuario != null;
+  // ── Ciclo de vida ─────────────────────────────────────────────────
 
-  UsuarioModel? get usuarioAtual => _usuario;
-void limparSessao() => _usuario = null;
+  /// Login online normal.
+  void iniciar(UsuarioModel usuario) {
+    _usuario      = usuario;
+    _modoOffline  = false;
+  }
 
-  void iniciar(UsuarioModel usuario) => _usuario = usuario;
+  /// Login com credenciais em cache (sem servidor).
+  void iniciarOffline(UsuarioModel usuario) {
+    _usuario      = usuario;
+    _modoOffline  = true;
+  }
 
-  void encerrar() => _usuario = null;
+  /// Limpa a sessão (logout).
+  void encerrar() {
+    _usuario      = null;
+    _modoOffline  = false;
+  }
+
+  /// Alias para encerrar() — compatibilidade com código existente.
+  void limparSessao() => encerrar();
 }
