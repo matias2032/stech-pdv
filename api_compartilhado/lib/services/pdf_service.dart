@@ -1,0 +1,1345 @@
+import 'dart:io';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:printing/printing.dart';
+import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
+
+// ═══════════════════════════════════════════════════════════════════
+// CONSTANTES FISCAIS — fonte única de verdade, NUNCA em base de dados
+// ═══════════════════════════════════════════════════════════════════
+
+/// Código atribuído pela Autoridade Tributária de Moçambique.
+const String kCodigoAT = 'STECH-MZ-2026-XXXX'; // ← substituir pelo real
+
+/// IVA vigente em Moçambique
+const double kTaxaIva = 0.16;
+
+// ═══════════════════════════════════════════════════════════════════
+// ENUM — tipos de documento fiscal (para uso local no PDF)
+// ═══════════════════════════════════════════════════════════════════
+
+enum TipoDocumentoPdf { factura, cotacao, recibo, notaDeCompra,vendaADinheiro }
+
+extension TipoDocumentoPdfExt on TipoDocumentoPdf {
+  String get titulo => switch (this) {
+        TipoDocumentoPdf.factura => 'FACTURA',
+        TipoDocumentoPdf.cotacao => 'COTAÇÃO',
+        TipoDocumentoPdf.recibo => 'RECIBO',
+        TipoDocumentoPdf.notaDeCompra => 'NOTA DE COMPRA',
+          TipoDocumentoPdf.vendaADinheiro => 'VENDA A DINHEIRO',
+      };
+
+  String get prefixo => switch (this) {
+        TipoDocumentoPdf.factura => 'FAT',
+        TipoDocumentoPdf.cotacao => 'COT',
+        TipoDocumentoPdf.recibo => 'REC',
+        TipoDocumentoPdf.notaDeCompra => 'NCO',
+        TipoDocumentoPdf.vendaADinheiro => 'VD',
+      };
+
+  String get labelReferencia => switch (this) {
+        TipoDocumentoPdf.factura => 'Factura Nº',
+        TipoDocumentoPdf.cotacao => 'Cotação Nº',
+        TipoDocumentoPdf.recibo => 'Recibo Nº',
+        TipoDocumentoPdf.notaDeCompra => 'N. Compra Nº',
+        TipoDocumentoPdf.vendaADinheiro => 'Venda a Dinheiro Nº',
+      };
+
+  /// Converte o prefixo da BD para o enum local de PDF.
+  static TipoDocumentoPdf dePrefixo(String prefixo) => switch (prefixo.toUpperCase()) {
+        'FAT' => TipoDocumentoPdf.factura,
+        'COT' => TipoDocumentoPdf.cotacao,
+        'REC' => TipoDocumentoPdf.recibo,
+        'NCO' => TipoDocumentoPdf.notaDeCompra,
+        'VD' => TipoDocumentoPdf.vendaADinheiro,
+        _ => TipoDocumentoPdf.factura,
+      };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODELO LOCAL DO PDF — renomeado de DocumentoFiscalModel
+// para evitar conflito com o model da API (DocumentoFiscalModel)
+// ═══════════════════════════════════════════════════════════════════
+
+class DocumentoPdfModel {
+  final TipoDocumentoPdf tipo;
+
+  /// Referência gerada pelo backend, ex: FAT-0001/2026
+  final String referencia;
+
+  /// Código AT — sempre passar kCodigoAT
+  final String codigoAT;
+
+  final DateTime dataEmissao;
+
+  /// Data de validade (opcional; ex: Cotação válida por 7 dias)
+  final DateTime? dataValidade;
+
+  final String? salesperson;
+  final String prazoPagamento;
+  final PedidoModel pedido;
+  final ClienteModel cliente;
+  final String tipoPagamento;
+
+  const DocumentoPdfModel({
+    required this.tipo,
+    required this.referencia,
+    required this.codigoAT,
+    required this.dataEmissao,
+    required this.pedido,
+    required this.cliente,
+    required this.tipoPagamento,
+    this.dataValidade,
+    this.salesperson,
+    this.prazoPagamento = 'Pronto Pagamento',
+  });
+
+  /// Fábrica de conveniência — constrói a partir do DocumentoFiscalModel
+  /// (o model da API) + dados complementares.
+  factory DocumentoPdfModel.deApiModel({
+    required DocumentoFiscalModel apiModel,
+    required PedidoModel pedido,
+    required ClienteModel cliente,
+    required String tipoPagamento,
+    DateTime? dataValidade,
+    String? salesperson,
+    String prazoPagamento = 'Pronto Pagamento',
+  }) {
+    return DocumentoPdfModel(
+      tipo: TipoDocumentoPdfExt.dePrefixo(apiModel.tipoDocumento.prefixo),
+      referencia: apiModel.referencia,
+      codigoAT: apiModel.codigoAt,
+      dataEmissao: apiModel.emitidoEm,
+      pedido: pedido,
+      cliente: cliente,
+      tipoPagamento: tipoPagamento,
+      dataValidade: dataValidade,
+      salesperson: salesperson,
+      prazoPagamento: prazoPagamento,
+    );
+  }
+
+  // Adicionar dentro de class DocumentoPdfModel, após o factory deApiModel existente:
+
+factory DocumentoPdfModel.deApiModelMultiplos({
+  required DocumentoFiscalModel apiModel,
+  required List<PedidoModel> pedidos,
+  required ClienteModel cliente,
+  required String tipoPagamento,
+}) {
+  // Agrega todos os itens numa lista única
+  final todosProdutos = pedidos.expand((p) => p.itensProduto).toList();
+  final todosServicos = pedidos.expand((p) => p.itensServico).toList();
+  final totalGeral    = pedidos.fold(0.0, (acc, p) => acc + p.total);
+  final valorPago     = pedidos.fold(0.0, (acc, p) => acc + p.valorPago);
+
+  // Cria um PedidoModel sintético que agrega todos os dados
+  final pedidoAgregado = pedidos.first.copyWith(
+    itensProduto: todosProdutos,
+    itensServico: todosServicos,
+    total:        totalGeral,
+    valorPago:    valorPago,
+  );
+
+  return DocumentoPdfModel(
+    tipo:          TipoDocumentoPdfExt.dePrefixo(apiModel.tipoDocumento.prefixo),
+    referencia:    apiModel.referencia,
+    codigoAT:      apiModel.codigoAt,
+    dataEmissao:   apiModel.emitidoEm,
+    pedido:        pedidoAgregado,
+    cliente:       cliente,
+    tipoPagamento: tipoPagamento,
+  );
+}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DADOS FIXOS DA EMPRESA
+// ═══════════════════════════════════════════════════════════════════
+
+abstract final class _Empresa {
+  static const nomeCompleto =
+      'Segurança Tecnologica SU, LDA (Stech Engenharia)';
+  static const bairro = 'Bairro: Chingodzi, Tete';
+  static const telefone = 'Número: +258 84 239 0756 ou 87 939 0756';
+  static const email = 'Email: info@stech.co.mz';
+  static const website = 'Website: www.stecheng.co.mz';
+  static const nuit = 'NUIT: 401 684 530';
+
+  static const List<_Banco> bancos = [
+    _Banco(
+      banco: 'Banco Comercial de Investimentos, SA',
+      conta: 'C- 29052431310001',
+      nib: 'N- 00080000905243131 0113',
+      moeda: 'MT',
+    ),
+    _Banco(
+      banco: 'Moza Banco',
+      conta: 'C- 4211626910001',
+      nib: 'N- 003400004211626910192',
+      moeda: 'MT',
+    ),
+  ];
+
+  static const List<String> termos = [
+    'Validade: Cotação válida por 7 dias.',
+    'Preços: Incluem apenas os itens descritos; extras serão cobrados à parte.',
+    'Pagamento: Pode exigir adiantamento. Atrasos podem suspender os serviços.',
+    'Prazos: Contam após confirmação e pagamento. Podem variar por factores externos.',
+    'Garantia: Serviços com padrão técnico; equipamentos conforme fabricante. Não cobre mau uso.',
+    'Alterações/Cancelamentos: Podem gerar custos adicionais.',
+    'Responsabilidade do Cliente: Fornecer dados correctos e garantir acesso/condições ao local.',
+    'Responsabilidade: A Stech Engenharia não responde por danos indirectos ou externos ao serviço.',
+    'Aceitação: Aprovar o documento significa aceitar estes termos.',
+  ];
+}
+
+class _Banco {
+  final String banco, conta, nib, moeda;
+  const _Banco({
+    required this.banco,
+    required this.conta,
+    required this.nib,
+    required this.moeda,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORES DA MARCA
+// ═══════════════════════════════════════════════════════════════════
+
+const _kAzul = PdfColor.fromInt(0xFF1B2A6B);
+const _kVermelho = PdfColor.fromInt(0xFFC8102E);
+
+// ═══════════════════════════════════════════════════════════════════
+// FORMATOS DE PAPEL
+// ═══════════════════════════════════════════════════════════════════
+
+enum PaperFormat { a4, thermal58mm, thermal80mm }
+
+// ═══════════════════════════════════════════════════════════════════
+// PDF SERVICE
+// ═══════════════════════════════════════════════════════════════════
+
+class PdfService {
+  static final PdfService instance = PdfService._internal();
+  factory PdfService() => instance;
+  PdfService._internal();
+
+  final _fmt = DateFormat('dd/MM/yyyy');
+
+  double _removerIva(double valorComIva) {
+  return valorComIva / (1 + kTaxaIva);
+}
+
+double _calcularIva(double valorComIva) {
+  return valorComIva - _removerIva(valorComIva);
+}
+
+  // ─────────────────────────────────────────────────────────────────
+  // PÚBLICO: Gerar documento fiscal
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<File> gerarDocumentoFiscal(DocumentoPdfModel doc) async {
+    final pdf = await _buildDocumentoFiscal(doc);
+    return _savePdfWithName(pdf, _nomeArquivo(doc));
+  }
+
+  Future<void> imprimirDocumentoFiscalViaSumatra({
+    required DocumentoPdfModel doc,
+    required String impressoraNome,
+  }) async {
+    _assertWindows();
+    final sumatra = _sumatraPath();
+    final pdf = await _buildDocumentoFiscal(doc);
+    final file = await _savePdfWithName(pdf, _nomeArquivo(doc));
+    final result = await Process.run(sumatra, [
+      '-print-to', impressoraNome,
+      '-print-settings', 'fit',
+      '-silent',
+      file.path,
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception('SumatraPDF erro (${result.exitCode}): ${result.stderr}');
+    }
+  }
+
+  Future<void> imprimirDocumentoFiscalComDialogo({
+    required DocumentoPdfModel doc,
+  }) async {
+    _assertWindows();
+    final sumatra = _sumatraPath();
+    final pdf = await _buildDocumentoFiscal(doc);
+    final file = await _savePdfWithName(pdf, _nomeArquivo(doc));
+    await Process.run(sumatra, ['-print-dialog', file.path]);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // PÚBLICO: Comprovativo térmico (fluxo antigo — mantido intacto)
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<File> gerarComprovativo({
+    required PedidoModel pedido,
+    required String tipoPagamento,
+    String? nomeCliente,
+    String? telefoneCliente,
+    PaperFormat paperFormat = PaperFormat.a4,
+  }) async {
+    final pdf = await _buildComprovativo(
+      pedido: pedido,
+      tipoPagamento: tipoPagamento,
+      paperFormat: paperFormat,
+      nomeCliente: nomeCliente,
+      telefoneCliente: telefoneCliente,
+    );
+    return _savePdf(pdf, pedido.idPedido);
+  }
+
+  Future<void> imprimirComprovativo({
+    required PedidoModel pedido,
+    required String tipoPagamento,
+    String? nomeCliente,
+    String? telefoneCliente,
+    PaperFormat paperFormat = PaperFormat.thermal80mm,
+  }) async {
+    _assertWindows();
+    final sumatra = _sumatraPath();
+    final pdf = await _buildComprovativo(
+      pedido: pedido,
+      tipoPagamento: tipoPagamento,
+      paperFormat: paperFormat,
+      nomeCliente: nomeCliente,
+      telefoneCliente: telefoneCliente,
+    );
+    final file = await _savePdf(pdf, pedido.idPedido);
+    await Process.run(sumatra, ['-print-dialog', file.path]);
+  }
+
+  Future<void> imprimirSilencioso({
+    required PedidoModel pedido,
+    required String tipoPagamento,
+    required Printer impressora,
+    String? nomeCliente,
+    String? telefoneCliente,
+    PaperFormat paperFormat = PaperFormat.thermal80mm,
+  }) async {
+    final pdf = await _buildComprovativo(
+      pedido: pedido,
+      tipoPagamento: tipoPagamento,
+      paperFormat: paperFormat,
+      nomeCliente: nomeCliente,
+      telefoneCliente: telefoneCliente,
+    );
+    final file = await _savePdf(pdf, pedido.idPedido);
+    final bytes = await file.readAsBytes();
+    await Printing.directPrintPdf(
+      printer: impressora,
+      onLayout: (_) async => bytes,
+      name: _nomeAutomaticoComprovativo(pedido.idPedido),
+      usePrinterSettings: false,
+    );
+  }
+
+  Future<void> imprimirViaSumatra({
+    required PedidoModel pedido,
+    required String tipoPagamento,
+    required String impressoraNome,
+    String? nomeCliente,
+    String? telefoneCliente,
+    PaperFormat paperFormat = PaperFormat.thermal80mm,
+  }) async {
+    _assertWindows();
+    final sumatra = _sumatraPath();
+    final pdf = await _buildComprovativo(
+      pedido: pedido,
+      tipoPagamento: tipoPagamento,
+      paperFormat: paperFormat,
+      nomeCliente: nomeCliente,
+      telefoneCliente: telefoneCliente,
+    );
+    final file = await _savePdf(pdf, pedido.idPedido);
+    final result = await Process.run(sumatra, [
+      '-print-to', impressoraNome,
+      '-print-settings', 'fit',
+      '-silent',
+      file.path,
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception('SumatraPDF erro (${result.exitCode}): ${result.stderr}');
+    }
+  }
+
+  Future<void> abrirPdf(File file) async {
+    final result = await OpenFilex.open(file.path);
+    switch (result.type) {
+      case ResultType.done:
+        return;
+      case ResultType.noAppToOpen:
+        throw Exception(
+            'Nenhuma app de leitura de PDF encontrada.\nFicheiro em: ${file.path}');
+      case ResultType.fileNotFound:
+        throw Exception('Ficheiro não encontrado: ${file.path}');
+      case ResultType.permissionDenied:
+        throw Exception('Permissão negada ao abrir o ficheiro.');
+      case ResultType.error:
+        throw Exception('Erro ao abrir o PDF: ${result.message}');
+    }
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // BUILD — DOCUMENTO FISCAL
+  // ═════════════════════════════════════════════════════════════════
+
+  Future<pw.Document> _buildDocumentoFiscal(DocumentoPdfModel doc) async {
+    final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
+    final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
+
+    final pdf = pw.Document(
+      title: doc.referencia,
+      author: _Empresa.nomeCompleto,
+      creator: 'Sistema de Gestão Stech',
+    );
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
+        footer: (ctx) => _docFiscalFooterPagina(ctx),
+        build: (ctx) => [
+          _docFiscalCabecalho(doc, iconImage),
+          pw.SizedBox(height: 6),
+          _docFiscalEmissorCliente(doc),
+          pw.SizedBox(height: 6),
+          pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+          pw.SizedBox(height: 4),
+          _docFiscalMetadados(doc),
+          pw.SizedBox(height: 6),
+          _docFiscalTabelaItens(doc),
+          pw.SizedBox(height: 10),
+          _docFiscalAssinatura(),
+          pw.SizedBox(height: 8),
+          _docFiscalTermos(doc),
+          pw.SizedBox(height: 8),
+          _docFiscalDadosBancarios(),
+          pw.SizedBox(height: 6),
+          _docFiscalCodigoAT(doc.codigoAT),
+        ],
+      ),
+    );
+
+    return pdf;
+  }
+
+  // ─── 1. Cabeçalho ──────────────────────────────────────────────
+
+// ─── 1. Cabeçalho ──────────────────────────────────────────────
+pw.Widget _docFiscalCabecalho(DocumentoPdfModel doc, pw.MemoryImage icon) {
+  return pw.Column(
+    children: [
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Image(
+            icon,
+            width: 135,
+            height: 80,
+            fit: pw.BoxFit.contain,
+          ),
+          pw.SizedBox(width: 20),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  doc.tipo.titulo,
+                  style: pw.TextStyle(
+                    fontSize: 26,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _kAzul,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+                // === REMOVIDO A REFERÊNCIA GRANDE DO CABEÇALHO ===
+                // pw.Text(doc.referencia ... ) ← removido
+              ],
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 10),
+      pw.Divider(color: _kAzul, thickness: 2.5),
+    ],
+  );
+}
+
+  // ─── 2. Emissor | Cliente ──────────────────────────────────────
+
+  pw.Widget _docFiscalEmissorCliente(DocumentoPdfModel doc) {
+    final c = doc.cliente;
+    final nomeCliente = '${c.nome ?? ''} ${c.apelido ?? ''}'.trim();
+
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _t(_Empresa.nomeCompleto, bold: true, size: 8.5),
+              pw.SizedBox(height: 2),
+              _t(_Empresa.bairro, size: 8),
+              _t(_Empresa.telefone, size: 8),
+              _t(_Empresa.email, size: 8),
+              _t(_Empresa.website, size: 8),
+              _t(_Empresa.nuit, size: 8),
+            ],
+          ),
+        ),
+        pw.SizedBox(width: 20),
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _t('Exmo. (s) Sr(s)', size: 8, color: PdfColors.grey700),
+              pw.SizedBox(height: 2),
+              if (nomeCliente.isNotEmpty)
+                _t('Nome:  $nomeCliente', bold: true, size: 8.5),
+              if (c.nuit != null && c.nuit!.isNotEmpty)
+                _t('NUIT:  ${c.nuit}', size: 8),
+              if (c.morada != null && c.morada!.isNotEmpty)
+                _t('Endereço:  ${c.morada}', size: 8),
+              if (c.contacto != null && c.contacto!.isNotEmpty)
+                _t('Tel:  ${c.contacto}', size: 8),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── 3. Metadados ─────────────────────────────────────────────
+
+  pw.Widget _docFiscalMetadados(DocumentoPdfModel doc) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+_metaRow('Data:', _fmt.format(doc.dataEmissao)),
+_metaRow('Gerado em:', DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())),
+              if (doc.dataValidade != null)
+                _metaRow('Data de V.C.:', _fmt.format(doc.dataValidade!)),
+              _metaRow('Prazo de Pagamento:', doc.prazoPagamento),
+              if (doc.salesperson != null && doc.salesperson!.isNotEmpty)
+                _metaRow('Salesperson:', doc.salesperson!),
+              _metaRow('Moeda:', 'MT'),
+            ],
+          ),
+        ),
+        pw.Text(
+          '${doc.tipo.labelReferencia} ${doc.referencia}',
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: _kVermelho,
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _metaRow(String label, String valor) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 2),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(
+            width: 130,
+            child: _t(label, size: 8, color: PdfColors.grey700),
+          ),
+          _t(valor, size: 8),
+        ],
+      ),
+    );
+  }
+
+  // ─── 4. Tabela de itens ───────────────────────────────────────
+
+  pw.Widget _docFiscalTabelaItens(DocumentoPdfModel doc) {
+    final pedido = doc.pedido;
+final totalComIva = pedido.total;
+
+final subtotalSemIva = pedido.itensProduto.fold<double>(
+      0,
+      (soma, item) => soma + _removerIva(item.subtotal),
+    ) +
+    pedido.itensServico.fold<double>(
+      0,
+      (soma, item) => soma + _removerIva(item.subtotal),
+    );
+
+final valorIva = totalComIva - subtotalSemIva;
+
+ final List<_LinhaItem> linhas = [
+  for (final p in pedido.itensProduto)
+    _LinhaItem(
+      quantidade: p.quantidade,
+      descricao: p.nomeProduto.isNotEmpty
+          ? p.nomeProduto
+          : 'Produto #${p.idProduto}',
+      precoUnitario: _removerIva(p.precoUnitario),
+      total: _removerIva(p.subtotal),
+    ),
+for (final s in pedido.itensServico)
+  _LinhaItem(
+    quantidade: s.quantidade,
+    descricao: (s.nomeServico != null && s.nomeServico!.isNotEmpty)
+        ? s.nomeServico!
+        : 'Serviço #${s.idServico}',
+    precoUnitario: _removerIva(s.precoUnitario),
+    total: _removerIva(s.subtotal),
+    obs: s.observacoes,
+  ),
+    ];
+
+    const int minLinhas = 12;
+    while (linhas.length < minLinhas) {
+      linhas.add(_LinhaItem.vazia());
+    }
+
+    const pw.TextStyle estiloHeader = pw.TextStyle(fontSize: 8, color: PdfColors.white);
+    const pw.TextStyle estiloCell = pw.TextStyle(fontSize: 8);
+    final pw.TextStyle estiloCellBold = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+      columnWidths: const {
+        0: pw.FixedColumnWidth(28),
+        1: pw.FlexColumnWidth(),
+        2: pw.FixedColumnWidth(88),
+        3: pw.FixedColumnWidth(88),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: _kAzul),
+          children: [
+            _thCell('Qt', estiloHeader, align: pw.TextAlign.center),
+            _thCell('Descrição', estiloHeader),
+            _thCell('Preço Unitário', estiloHeader, align: pw.TextAlign.right),
+            _thCell('Total', estiloHeader, align: pw.TextAlign.right),
+          ],
+        ),
+        for (final l in linhas)
+          pw.TableRow(
+            children: [
+              _tdCell(l.qtStr, estiloCell, align: pw.TextAlign.center),
+              _tdCellDescricao(l, estiloCell),
+              _tdCell(l.precoStr, estiloCell, align: pw.TextAlign.right),
+              _tdCell(l.totalStr, estiloCell, align: pw.TextAlign.right),
+            ],
+          ),
+        pw.TableRow(
+          children: [
+            _tdCell('', estiloCell),
+            _tdCell('', estiloCell),
+            _tdCell('Subtotal', estiloCellBold, align: pw.TextAlign.right),
+            _tdCell('MZN ${subtotalSemIva.toStringAsFixed(2)}', estiloCellBold, align: pw.TextAlign.right),
+          ],
+        ),
+        pw.TableRow(
+          children: [
+            _tdCell('', estiloCell),
+            _tdCell('', estiloCell),
+            _tdCell('IVA ${(kTaxaIva * 100).toStringAsFixed(0)}%', estiloCell, align: pw.TextAlign.right),
+            _tdCell(valorIva.toStringAsFixed(2), estiloCell, align: pw.TextAlign.right),
+          ],
+        ),
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColors.grey200),
+          children: [
+            _tdCell('', estiloCell),
+            _tdCell('', estiloCell),
+            _tdCell('Total', pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _kAzul), align: pw.TextAlign.right),
+            _tdCell('MZN ${totalComIva.toStringAsFixed(2)}', pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _kVermelho), align: pw.TextAlign.right),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ─── 5. Assinatura ────────────────────────────────────────────
+
+  pw.Widget _docFiscalAssinatura() {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(height: 4),
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _t('Aprovado por: ___________________________', size: 8),
+                  pw.SizedBox(height: 12),
+                  _t('Assinatura: _____________________________', size: 8),
+                ],
+              ),
+            ),
+            pw.Expanded(
+              child: pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: _t('Data: _______ / _______ / ___________', size: 8),
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+      ],
+    );
+  }
+
+  // ─── 6. Termos e condições ────────────────────────────────────
+
+  pw.Widget _docFiscalTermos(DocumentoPdfModel doc) {
+    final tituloTermos = doc.tipo == TipoDocumentoPdf.cotacao
+        ? 'Termos e Condições'
+        : 'Termos e Condições de Pagamento';
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _t(tituloTermos, bold: true, size: 8),
+        pw.SizedBox(height: 3),
+        ..._Empresa.termos.asMap().entries.map(
+          (e) => pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 1.5),
+            child: pw.Text('${e.key + 1}. ${e.value}',
+                style: const pw.TextStyle(fontSize: 7)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── 7. Dados bancários ───────────────────────────────────────
+
+  pw.Widget _docFiscalDadosBancarios() {
+    const pw.TextStyle estiloHeader = pw.TextStyle(fontSize: 7, color: PdfColors.white);
+    const pw.TextStyle estiloCell = pw.TextStyle(fontSize: 7);
+
+    return pw.Column(
+      children: [
+        pw.Container(
+          width: double.infinity,
+          color: PdfColors.grey300,
+          padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+          child: pw.Text(
+            'O pagamento pode ser feito por Cheque, Depósito ou Transferência Bancária'
+            ' — Titular: Stech Engenharia SU, Lda',
+            style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+            textAlign: pw.TextAlign.center,
+          ),
+        ),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(2.5),
+            1: pw.FlexColumnWidth(2),
+            2: pw.FlexColumnWidth(3),
+            3: pw.FixedColumnWidth(28),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: _kAzul),
+              children: [
+                _thCell('Banco', estiloHeader),
+                _thCell('Conta', estiloHeader),
+                _thCell('NIB', estiloHeader),
+                _thCell('Moeda', estiloHeader, align: pw.TextAlign.center),
+              ],
+            ),
+            ..._Empresa.bancos.map(
+              (b) => pw.TableRow(
+                children: [
+                  _tdCell(b.banco, estiloCell),
+                  _tdCell(b.conta, estiloCell),
+                  _tdCell(b.nib, estiloCell),
+                  _tdCell(b.moeda, estiloCell, align: pw.TextAlign.center),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ─── 8. Código AT ────────────────────────────────────────────
+
+pw.Widget _docFiscalCodigoAT(String codigoAT) {
+  return pw.Container(
+    width: double.infinity,
+    padding: const pw.EdgeInsets.only(top: 4),
+    alignment: pw.Alignment.center,
+    child: pw.Text(
+      'Documento processado por computador através do Sistema de Facturação Stech ERP.',
+      // devidamente autorizado pela Administração Tributária de Moçambique – Área Fiscal de Tete
+      textAlign: pw.TextAlign.center,
+      style: pw.TextStyle(
+        fontSize: 7,
+        fontStyle: pw.FontStyle.italic,
+        color: PdfColors.grey700,
+      ),
+    ),
+  );
+}
+
+  // ─── Rodapé de página ─────────────────────────────────────────
+
+  pw.Widget _docFiscalFooterPagina(pw.Context ctx) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        _t('Stech Engenharia © ${DateTime.now().year}', size: 7, color: PdfColors.grey600),
+        _t('Página ${ctx.pageNumber} de ${ctx.pagesCount}', size: 7, color: PdfColors.grey600),
+      ],
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // BUILD — COMPROVATIVO TÉRMICO (fluxo antigo — mantido intacto)
+  // ═════════════════════════════════════════════════════════════════
+
+  Future<pw.Document> _buildComprovativo({
+    required PedidoModel pedido,
+    required String tipoPagamento,
+    required PaperFormat paperFormat,
+    String? nomeCliente,
+    String? telefoneCliente,
+  }) async {
+    final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
+    final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
+
+    final bool isSmall = paperFormat != PaperFormat.a4;
+    final bool temCliente = nomeCliente != null || telefoneCliente != null;
+    final double alturaDinamica =
+        _estimarAlturaComprovativo(pedido, isSmall, temCliente);
+    final pageFormat = _pageFormatFor(paperFormat, alturaDinamica);
+
+    final pdf = pw.Document(
+      title: _nomeAutomaticoComprovativo(pedido.idPedido),
+      author: 'Stech Engenharia',
+      creator: 'Sistema de Gestão',
+    );
+
+    final double margin = isSmall ? 10 : 40;
+    final double baseFontSize = isSmall ? 9 : 12;
+    final dataRef = pedido.dataFinalizacao ?? pedido.dataPedido;
+    final dataFormatada = DateFormat('dd/MM/yyyy HH:mm').format(dataRef);
+
+    pdf.addPage(
+      pw.Page(
+        pageTheme: pw.PageTheme(
+          pageFormat: pageFormat,
+          orientation: pw.PageOrientation.portrait,
+          margin: pw.EdgeInsets.all(margin),
+          clip: true,
+        ),
+        build: (context) => pw.Column(
+          crossAxisAlignment: isSmall
+              ? pw.CrossAxisAlignment.center
+              : pw.CrossAxisAlignment.start,
+          children: [
+            _comprovativoCabecalho(
+              pedido: pedido,
+              dataFormatada: dataFormatada,
+              isSmall: isSmall,
+              baseFontSize: baseFontSize,
+              iconImage: isSmall ? null : iconImage,
+            ),
+            pw.SizedBox(height: isSmall ? 6 : 16),
+            _divider(isSmall),
+            pw.SizedBox(height: isSmall ? 4 : 12),
+            if (temCliente) ...[
+              _comprovativoCliente(
+                nome: nomeCliente,
+                telefone: telefoneCliente,
+                isSmall: isSmall,
+                baseFontSize: baseFontSize,
+              ),
+              pw.SizedBox(height: isSmall ? 4 : 12),
+              _divider(isSmall),
+              pw.SizedBox(height: isSmall ? 4 : 12),
+            ],
+            _comprovativoItens(
+              pedido: pedido,
+              isSmall: isSmall,
+              baseFontSize: baseFontSize,
+            ),
+            pw.SizedBox(height: isSmall ? 4 : 12),
+            _divider(isSmall),
+            pw.SizedBox(height: isSmall ? 4 : 12),
+            _comprovativoPagamento(
+              pedido: pedido,
+              tipoPagamento: tipoPagamento,
+              isSmall: isSmall,
+              baseFontSize: baseFontSize,
+            ),
+            pw.SizedBox(height: isSmall ? 4 : 12),
+            _divider(isSmall),
+            pw.SizedBox(height: isSmall ? 4 : 8),
+            _comprovativoRodape(isSmall: isSmall, baseFontSize: baseFontSize),
+          ],
+        ),
+      ),
+    );
+
+    return pdf;
+  }
+
+  double _estimarAlturaComprovativo(
+      PedidoModel pedido, bool isSmall, bool temCliente) {
+    double h = isSmall ? 15.0 : 30.0;
+    h += isSmall ? 25.0 : 45.0;
+    if (temCliente) h += isSmall ? 15.0 : 35.0;
+    final int totalItens =
+        pedido.itensProduto.length + pedido.itensServico.length;
+    h += totalItens * (isSmall ? 12.0 : 18.0);
+    h += isSmall ? 20.0 : 40.0;
+    h += isSmall ? 15.0 : 25.0;
+    h += 10.0;
+    return h;
+  }
+
+  static PdfPageFormat _pageFormatFor(PaperFormat format, double altura) {
+    switch (format) {
+      case PaperFormat.thermal58mm:
+        return PdfPageFormat(58 * PdfPageFormat.mm, altura * PdfPageFormat.mm,
+            marginAll: 2 * PdfPageFormat.mm);
+      case PaperFormat.thermal80mm:
+        return PdfPageFormat(80 * PdfPageFormat.mm, altura * PdfPageFormat.mm,
+            marginAll: 4 * PdfPageFormat.mm);
+      case PaperFormat.a4:
+        return PdfPageFormat.a4;
+    }
+  }
+
+  pw.Widget _comprovativoCabecalho({
+    required PedidoModel pedido,
+    required String dataFormatada,
+    required bool isSmall,
+    required double baseFontSize,
+    pw.MemoryImage? iconImage,
+  }) {
+    if (isSmall) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          iconImage != null
+              ? pw.Image(iconImage, width: 48, height: 48)
+              : _t('Stech Engenharia', bold: true, size: 14, color: PdfColors.deepOrange),
+          pw.SizedBox(height: 2),
+          _t('COMPROVATIVO DE VENDA', bold: true, size: 11, color: _kAzul),
+          pw.SizedBox(height: 2),
+          _t('Pedido #${pedido.idPedido}', bold: true, size: baseFontSize, color: _kVermelho),
+          _t(dataFormatada, size: baseFontSize - 1),
+        ],
+      );
+    }
+    return pw.Container(
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: _kVermelho, width: 3)),
+      ),
+      padding: const pw.EdgeInsets.only(bottom: 16),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            iconImage != null
+                ? pw.Image(iconImage, width: 90, height: 90)
+                : _t('Stech Engenharia', bold: true, size: 28, color: PdfColors.red),
+            pw.SizedBox(height: 8),
+            _t('Sistema de Gestão de Pedidos', size: 12, color: PdfColors.grey700),
+          ]),
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+            _t('COMPROVATIVO DE VENDA', bold: true, size: 20),
+            pw.SizedBox(height: 4),
+            _t('Pedido #${pedido.idPedido}', bold: true, size: 14, color: _kAzul),
+            _t(dataFormatada, size: 10, color: PdfColors.grey700),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _comprovativoCliente({
+    String? nome,
+    String? telefone,
+    required bool isSmall,
+    required double baseFontSize,
+  }) {
+    if (isSmall) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          _t('CLIENTE', bold: true, size: baseFontSize),
+          if (nome != null) _t(nome, size: baseFontSize),
+          if (telefone != null) _t(telefone, size: baseFontSize),
+        ],
+      );
+    }
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey200,
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        _t('CLIENTE', bold: true, size: 12, color: PdfColors.grey800),
+        pw.SizedBox(height: 8),
+        if (nome != null) _t('Nome: $nome', size: 11),
+        if (telefone != null) _t('Telefone: $telefone', size: 11),
+      ]),
+    );
+  }
+
+  pw.Widget _comprovativoItens({
+    required PedidoModel pedido,
+    required bool isSmall,
+    required double baseFontSize,
+  }) {
+    final widgets = <pw.Widget>[
+      _t('ITENS',
+          bold: true,
+          size: baseFontSize + (isSmall ? 0 : 2),
+          color: isSmall ? PdfColors.black : _kAzul),
+      pw.SizedBox(height: isSmall ? 4 : 8),
+    ];
+
+    for (final item in pedido.itensProduto) {
+      widgets.add(_linhaItemComprovativo(
+        isSmall: isSmall,
+        baseFontSize: baseFontSize,
+        nome: item.nomeProduto.isNotEmpty
+            ? item.nomeProduto
+            : 'Produto #${item.idProduto}',
+        quantidade: item.quantidade,
+        precoUnit: item.precoUnitario,
+        subtotal: item.subtotal,
+      ));
+    }
+
+    for (final item in pedido.itensServico) {
+      widgets.add(_linhaItemComprovativo(
+        isSmall: isSmall,
+        baseFontSize: baseFontSize,
+        nome: (item.nomeServico != null && item.nomeServico!.isNotEmpty)
+            ? item.nomeServico!
+            : 'Serviço #${item.idServico}',
+        quantidade: item.quantidade,
+        precoUnit: item.precoUnitario,
+        subtotal: item.subtotal,
+        obs: item.observacoes,
+      ));
+    }
+
+    if (pedido.itensProduto.isEmpty && pedido.itensServico.isEmpty) {
+      widgets.add(_t('Sem itens', size: baseFontSize, color: PdfColors.grey600));
+    }
+
+    return pw.Column(
+      crossAxisAlignment: isSmall
+          ? pw.CrossAxisAlignment.stretch
+          : pw.CrossAxisAlignment.start,
+      children: widgets,
+    );
+  }
+
+  pw.Widget _linhaItemComprovativo({
+    required bool isSmall,
+    required double baseFontSize,
+    required String nome,
+    required int quantidade,
+    required double precoUnit,
+    required double subtotal,
+    String? obs,
+  }) {
+    if (isSmall) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _t(nome, bold: true, size: baseFontSize),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              _t('${quantidade}x  MZN ${precoUnit.toStringAsFixed(2)}', size: baseFontSize - 1),
+              _t('MZN ${subtotal.toStringAsFixed(2)}', bold: true, size: baseFontSize - 1),
+            ],
+          ),
+          if (obs != null && obs.isNotEmpty)
+            _t(obs, size: baseFontSize - 2, color: PdfColors.grey600),
+          pw.SizedBox(height: 3),
+        ],
+      );
+    }
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(vertical: 6),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _t(nome, bold: true, size: baseFontSize),
+          pw.SizedBox(height: 2),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              _t('Qtd: $quantidade', size: baseFontSize - 1, color: PdfColors.grey700),
+              _t('Un.: MZN ${precoUnit.toStringAsFixed(2)}', size: baseFontSize - 1, color: PdfColors.grey700),
+              _t('Sub: MZN ${subtotal.toStringAsFixed(2)}', bold: true, size: baseFontSize - 1),
+            ],
+          ),
+          if (obs != null && obs.isNotEmpty)
+            _t(obs, size: baseFontSize - 2, color: PdfColors.grey600),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _comprovativoPagamento({
+    required PedidoModel pedido,
+    required String tipoPagamento,
+    required bool isSmall,
+    required double baseFontSize,
+  }) {
+    final isDinheiro = tipoPagamento.toLowerCase().contains('dinheiro');
+    final totalStr = 'MZN ${pedido.total.toStringAsFixed(2)}';
+    final valorPagoStr = 'MZN ${pedido.valorPago.toStringAsFixed(2)}';
+    final trocoStr = 'MZN ${(pedido.troco ?? 0.0).toStringAsFixed(2)}';
+
+    pw.Widget row(String label, String val, {bool bold = false, PdfColor? color}) {
+      return pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          _t(label, bold: bold, size: baseFontSize),
+          _t(val, bold: true, size: baseFontSize, color: color),
+        ],
+      );
+    }
+
+    final rows = <pw.Widget>[
+      row('TOTAL', totalStr, bold: true, color: isSmall ? PdfColors.black : _kAzul),
+      pw.SizedBox(height: isSmall ? 3 : 8),
+      row('Pagamento:', tipoPagamento),
+      if (isDinheiro) ...[
+        pw.SizedBox(height: isSmall ? 2 : 6),
+        row('Valor Pago:', valorPagoStr),
+        pw.SizedBox(height: isSmall ? 2 : 6),
+        row('Troco:', trocoStr, color: _kVermelho),
+      ],
+    ];
+
+    if (isSmall) {
+      return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: rows);
+    }
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey400),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Column(children: rows),
+    );
+  }
+
+  pw.Widget _comprovativoRodape({
+    required bool isSmall,
+    required double baseFontSize,
+  }) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
+      children: [
+        _t('Documento somente para controlo interno.',
+            size: baseFontSize - (isSmall ? 1 : 2), color: PdfColors.grey700),
+        pw.SizedBox(height: isSmall ? 3 : 6),
+        _t('Obrigado pela sua preferência!',
+            bold: true, size: baseFontSize + (isSmall ? 0 : 2),
+            color: isSmall ? PdfColors.black : _kAzul),
+        pw.SizedBox(height: isSmall ? 2 : 4),
+        _t('Stech Engenharia © ${DateTime.now().year}',
+            size: baseFontSize - 1, color: PdfColors.grey600),
+      ],
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // HELPERS GERAIS
+  // ═════════════════════════════════════════════════════════════════
+
+  pw.Widget _t(String text, {double size = 10, bool bold = false, PdfColor? color}) {
+    return pw.Text(text,
+        style: pw.TextStyle(
+          fontSize: size,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+          color: color,
+        ));
+  }
+
+  pw.Widget _thCell(String text, pw.TextStyle style, {pw.TextAlign align = pw.TextAlign.left}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      child: pw.Text(text, style: style, textAlign: align),
+    );
+  }
+
+  pw.Widget _tdCell(String text, pw.TextStyle style, {pw.TextAlign align = pw.TextAlign.left}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: pw.Text(text, style: style, textAlign: align),
+    );
+  }
+
+  pw.Widget _tdCellDescricao(_LinhaItem l, pw.TextStyle style) {
+    if (l.obs != null && l.obs!.isNotEmpty) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(l.descricao, style: style),
+            pw.Text(l.obs!, style: pw.TextStyle(fontSize: 6.5, color: PdfColors.grey600)),
+          ],
+        ),
+      );
+    }
+    return _tdCell(l.descricao, style);
+  }
+
+  pw.Widget _divider(bool isSmall) {
+    if (isSmall) {
+      return pw.Text('-' * 32,
+          style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.center);
+    }
+    return pw.Divider(color: PdfColors.grey400, thickness: 1);
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // NOMENCLATURA DE FICHEIROS
+  // ═════════════════════════════════════════════════════════════════
+
+  String _nomeArquivo(DocumentoPdfModel doc) {
+    final safeRef = doc.referencia.replaceAll('/', '-');
+    return '${doc.tipo.prefixo}-$safeRef';
+  }
+
+  String _nomeAutomaticoComprovativo(int pedidoId) {
+    final agora = DateTime.now();
+    final id = pedidoId.toString().padLeft(5, '0');
+    final data = DateFormat('yyyyMMdd').format(agora);
+    final hora = DateFormat('HHmm').format(agora);
+    return 'COMP-$id-$data-$hora';
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // GUARDAR PDF EM DISCO
+  // ═════════════════════════════════════════════════════════════════
+
+  Future<File> _savePdfWithName(pw.Document pdf, String nome) async {
+    final safeNome = nome.replaceAll(RegExp(r'[/\\:*?"<>|]'), '-');
+    final fileName = '$safeNome.pdf';
+    final dir = await _resolveDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
+  Future<File> _savePdf(pw.Document pdf, int pedidoId) async {
+    return _savePdfWithName(pdf, _nomeAutomaticoComprovativo(pedidoId));
+  }
+
+  Future<Directory> _resolveDirectory() async {
+    try {
+      if (Platform.isAndroid) {
+        final d = Directory('/storage/emulated/0/Download/');
+        if (await d.exists()) {
+          final test = File('${d.path}/.write_test');
+          await test.writeAsString('test');
+          await test.delete();
+          return d;
+        }
+        final ext = await getExternalStorageDirectory();
+        if (ext != null) {
+          final d2 = Directory('${ext.path}/Downloads');
+          if (!await d2.exists()) await d2.create(recursive: true);
+          return d2;
+        }
+      } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        final dl = await getDownloadsDirectory();
+        if (dl != null) return dl;
+      }
+    } catch (_) {}
+    return getApplicationDocumentsDirectory();
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // UTILITÁRIOS WINDOWS / SUMATRA
+  // ═════════════════════════════════════════════════════════════════
+
+  void _assertWindows() {
+    if (!Platform.isWindows) {
+      throw UnsupportedError('SumatraPDF só está disponível no Windows.');
+    }
+  }
+
+  String _sumatraPath() {
+    final path =
+        '${Directory(Platform.resolvedExecutable).parent.path}\\SumatraPDF.exe';
+    if (!File(path).existsSync()) {
+      throw Exception('SumatraPDF.exe não encontrado.\nCaminho esperado: $path');
+    }
+    return path;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA CLASS — linha de item na tabela fiscal
+// ═══════════════════════════════════════════════════════════════════
+
+class _LinhaItem {
+  final int quantidade;
+  final String descricao;
+  final double precoUnitario;
+  final double total;
+  final String? obs;
+
+  const _LinhaItem({
+    required this.quantidade,
+    required this.descricao,
+    required this.precoUnitario,
+    required this.total,
+    this.obs,
+  });
+
+  factory _LinhaItem.vazia() => const _LinhaItem(
+        quantidade: 0,
+        descricao: '',
+        precoUnitario: 0,
+        total: 0,
+      );
+
+  bool get isEmpty => descricao.isEmpty;
+
+  String get qtStr => isEmpty ? '' : quantidade.toString();
+  String get precoStr => isEmpty ? '0,00 MZN' : 'MZN ${precoUnitario.toStringAsFixed(2)}';
+  String get totalStr => isEmpty ? '0,00 MZN' : 'MZN ${total.toStringAsFixed(2)}';
+}

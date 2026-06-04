@@ -1,0 +1,608 @@
+// lib/screens/finalizar_pedido.dart
+
+import 'package:flutter/material.dart';
+import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:api_compartilhado/api_config.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+
+const _kPrimary    = Color(0xFF1B2A6B);
+const _kAccent     = Color(0xFFC8102E);
+const _kBackground = Color(0xFFF4F5F7);
+
+class FinalizarPedidoScreen extends StatefulWidget {
+  final PedidoModel pedido;
+  const FinalizarPedidoScreen({Key? key, required this.pedido}) : super(key: key);
+
+  @override
+  State<FinalizarPedidoScreen> createState() => _FinalizarPedidoScreenState();
+}
+
+class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
+  final _pedidoService  = PedidoService();
+  late final ClienteService _clienteService;
+  final _currencyFmt = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
+
+  // ── Pagamento ─────────────────────────────────────────────────────────────
+  List<TipoPagamentoResponseDTO> _tiposPagamento = [];
+  int? _idTipoPagamento;
+  final _valorPagoCtrl = TextEditingController();
+
+  double get _valorPago =>
+      double.tryParse(_valorPagoCtrl.text.replaceAll(',', '.')) ?? 0.0;
+  double get _troco =>
+      (_valorPago - widget.pedido.total).clamp(0, double.infinity);
+  bool   get _emDivida =>
+      _valorPago > 0 && _valorPago < widget.pedido.total;
+
+  // ── Cliente ───────────────────────────────────────────────────────────────
+  String _tipoCliente = 'singular'; // 'singular' | 'empresa'
+  List<ClienteModel> _empresas = [];
+  ClienteModel? _empresaSelecionada;
+  final _nomeCtrl    = TextEditingController();
+  final _apelidoCtrl = TextEditingController();
+
+  // ── Estado ────────────────────────────────────────────────────────────────
+  bool _carregando  = true;
+  bool _finalizando = false;
+  bool get _ehDinheiro => _idTipoPagamento == 1;
+
+bool get _podeFinalizar {
+  if (_idTipoPagamento == null) return false;
+  if (_ehDinheiro && _valorPago < widget.pedido.total) return false;
+  return true;
+}
+
+  @override
+  void initState() {
+    super.initState();
+    _clienteService = ClienteService(
+      baseUrl:    ApiConfig.baseUrl,
+      httpClient: http.Client(),
+    );
+
+    _carregar();
+  }
+
+  @override
+  void dispose() {
+    _valorPagoCtrl.dispose();
+    _nomeCtrl.dispose();
+    _apelidoCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _carregar() async {
+    try {
+      final resultados = await Future.wait([
+        _pedidoService.listarTiposPagamento(),
+        _clienteService.listarPorPerfil(1), // perfil 1 = Empresas
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _tiposPagamento  = resultados[0] as List<TipoPagamentoResponseDTO>;
+        _empresas        = resultados[1] as List<ClienteModel>;
+        _idTipoPagamento = _tiposPagamento.isNotEmpty
+            ? _tiposPagamento.first.idTipoPagamento
+            : null;
+        _carregando = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  // ── Validar e finalizar ───────────────────────────────────────────────────
+
+  Future<void> _finalizar() async {
+    if (_finalizando) return;
+
+if (_idTipoPagamento == null) {
+  return _snack('Seleccione o tipo de pagamento', Colors.orange);
+}
+// Para dinheiro: exige valor >= total; para outros: usa o total exacto
+if (_ehDinheiro && _valorPago < widget.pedido.total) {
+  return _snack('O valor recebido é insuficiente', Colors.orange);
+}
+if (_tipoCliente == 'empresa' && _empresaSelecionada == null) {
+  return _snack('Seleccione a empresa', Colors.orange);
+}
+
+    setState(() => _finalizando = true);
+    try {
+      final dto = FinalizarPedidoRequestDTO(
+        idTipoPagamento:        _idTipoPagamento!,
+ valorPago: _ehDinheiro ? _valorPago : widget.pedido.total,
+        idCliente:              _tipoCliente == 'empresa'
+                                    ? _empresaSelecionada!.id : null,
+        nomeClienteSingular:    _tipoCliente == 'singular'
+                                    ? _nomeCtrl.text.trim().nullIfEmpty : null,
+        apelidoClienteSingular: _tipoCliente == 'singular'
+                                    ? _apelidoCtrl.text.trim().nullIfEmpty : null,
+      );
+      await _pedidoService.finalizarPedido(widget.pedido.idPedido, dto);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      _snack('Erro: $e', _kAccent);
+    } finally {
+      if (mounted) setState(() => _finalizando = false);
+    }
+  }
+
+  void _snack(String msg, Color cor) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: cor,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════════════════════
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _kBackground,
+      body: CustomScrollView(
+        slivers: [
+          _buildAppBar(),
+          SliverToBoxAdapter(
+            child: _carregando
+                ? const SizedBox(
+                    height: 300,
+                    child: Center(child: CircularProgressIndicator(color: _kPrimary)))
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildResumoCard(),
+                        const SizedBox(height: 10),
+                        _buildClienteCard(),
+                        const SizedBox(height: 10),
+                        _buildPagamentoCard(),
+                        const SizedBox(height: 10),
+                        if (_ehDinheiro) _buildTrocoCard(),
+                        const SizedBox(height: 16),
+                        _buildBotao(),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── AppBar ───────────────────────────────────────────────────────────────
+
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      pinned: true,
+      expandedHeight: 110,
+      backgroundColor: _kPrimary,
+      foregroundColor: Colors.white,
+      leading: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+        child: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context)),
+      ),
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [_kPrimary, _kPrimary.withBlue(140)],
+            ),
+          ),
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.check_circle_outline,
+                      color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Finalizar Pedido',
+                        style: TextStyle(color: Colors.white,
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(widget.pedido.referencia,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.75), fontSize: 12)),
+                  ],
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Resumo ───────────────────────────────────────────────────────────────
+
+  Widget _buildResumoCard() {
+    return _card(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _secLabel(Icons.receipt_outlined, 'Resumo'),
+        const SizedBox(height: 8),
+        ...widget.pedido.itensProduto.map((i) =>
+            _linhaItem('${i.quantidade}× ${i.nomeProduto}', i.subtotal)),
+        ...widget.pedido.itensServico.map((i) =>
+            _linhaItem('${i.quantidade}× ${i.nomeServico ?? 'Serviço'}', i.subtotal)),
+        const Divider(height: 14),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Total', style: TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 14, color: _kPrimary)),
+          Text(_currencyFmt.format(widget.pedido.total),
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 17, color: _kPrimary)),
+        ]),
+      ],
+    ));
+  }
+
+  // ─── Cliente ──────────────────────────────────────────────────────────────
+
+  Widget _buildClienteCard() {
+    return _card(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _secLabel(Icons.person_outline, 'Cliente'),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _toggleBtn('singular', Icons.person_outline, 'Singular')),
+          const SizedBox(width: 8),
+          Expanded(child: _toggleBtn('empresa', Icons.business, 'Empresa')),
+        ]),
+        const SizedBox(height: 12),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: _tipoCliente == 'empresa'
+              ? _buildEmpresaSelector()
+              : _buildSingularFields(),
+        ),
+      ],
+    ));
+  }
+
+  Widget _toggleBtn(String tipo, IconData icon, String label) {
+    final sel = _tipoCliente == tipo;
+    return GestureDetector(
+      onTap: () => setState(() {
+        _tipoCliente = tipo;
+        _empresaSelecionada = null;
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          color: sel ? _kPrimary : Colors.grey[100],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: sel ? _kPrimary : Colors.grey.shade300),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 15,
+              color: sel ? Colors.white : Colors.grey[600]),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: sel ? Colors.white : Colors.grey[600])),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildEmpresaSelector() {
+    if (_empresas.isEmpty) {
+      return _infoBox(
+        key: const ValueKey('sem-empresas'),
+        icon: Icons.info_outline,
+        texto: 'Nenhuma empresa cadastrada.',
+        cor: Colors.orange,
+      );
+    }
+    return DropdownButtonFormField<ClienteModel>(
+      key: const ValueKey('dropdown-empresa'),
+      value: _empresaSelecionada,
+      decoration: _inputDecoration('Seleccionar empresa…'),
+      items: _empresas.map((e) => DropdownMenuItem(
+        value: e,
+        child: Text(e.nomeCompleto, style: const TextStyle(fontSize: 13)),
+      )).toList(),
+      onChanged: (v) => setState(() => _empresaSelecionada = v),
+    );
+  }
+
+  Widget _buildSingularFields() {
+    return Column(
+      key: const ValueKey('singular-fields'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Expanded(child: _textField(_nomeCtrl,    'Nome (opcional)')),
+          const SizedBox(width: 8),
+          Expanded(child: _textField(_apelidoCtrl, 'Apelido (opcional)')),
+        ]),
+        const SizedBox(height: 5),
+        Row(children: [
+          Icon(Icons.info_outline, size: 11, color: Colors.grey[400]),
+          const SizedBox(width: 4),
+          Text('Cliente não será cadastrado na base de dados.',
+              style: TextStyle(fontSize: 10, color: Colors.grey[400])),
+        ]),
+      ],
+    );
+  }
+
+  // ─── Pagamento ────────────────────────────────────────────────────────────
+
+// ─── Mapa de cores por id de tipo de pagamento ────────────────────────────
+Color _corPagamento(int id) {
+  switch (id) {
+    case 1: return const Color(0xFF2E7D32); // Dinheiro — verde
+    case 2: return const Color(0xFF1565C0); // POS — azul
+    case 3: return const Color(0xFFE53935); // M-Pesa — vermelho
+    case 4: return const Color(0xFFFF8C00); // E-Mola — laranja
+    default: return _kPrimary;
+  }
+}
+
+Widget _buildPagamentoCard() {
+  return _card(child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _secLabel(Icons.payment_outlined, 'Pagamento'),
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8, runSpacing: 8,
+        children: _tiposPagamento.map((t) {
+          final sel = _idTipoPagamento == t.idTipoPagamento;
+          final cor = _corPagamento(t.idTipoPagamento);
+          return GestureDetector(
+            onTap: () => setState(() {
+              _idTipoPagamento = t.idTipoPagamento;
+              if (!_ehDinheiro) {
+                _valorPagoCtrl.text = widget.pedido.total.toStringAsFixed(2);
+              }
+            }),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: sel ? cor.withOpacity(0.10) : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: sel ? cor.withOpacity(0.65) : Colors.grey.shade300,
+                  width: sel ? 1.6 : 1.0,
+                ),
+                boxShadow: sel
+                    ? [BoxShadow(color: cor.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                    : null,
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(
+                  t.idTipoPagamento == 1 ? Icons.payments_rounded
+                    : t.idTipoPagamento == 2 ? Icons.credit_card_rounded
+                    : t.idTipoPagamento == 3 ? Icons.phone_android_rounded
+                    : Icons.account_balance_wallet_rounded,
+                  size: 15,
+                  color: sel ? cor : Colors.grey,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  t.tipoPagamento,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: sel ? cor : Colors.grey[700],
+                  ),
+                ),
+                if (sel) ...[
+                  const SizedBox(width: 5),
+                  Icon(Icons.check_circle_rounded, size: 13, color: cor),
+                ],
+              ]),
+            ),
+          );
+        }).toList(),
+      ),
+      AnimatedSize(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        child: _ehDinheiro
+            ? Column(children: [
+                const SizedBox(height: 12),
+                TextField(
+                  // controller: _valorPagoCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kPrimary),
+                  decoration: _inputDecoration('0.00').copyWith(
+                    labelText: 'Valor recebido',
+                    labelStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    prefixText: 'MZN  ',
+                    prefixStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ])
+            : const SizedBox.shrink(),
+      ),
+    ],
+  ));
+}
+  // ─── Troco / Dívida ───────────────────────────────────────────────────────
+
+  Widget _buildTrocoCard() {
+    final cor = _emDivida ? _kAccent : Colors.green;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: cor.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cor.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(children: [
+            Icon(_emDivida
+                    ? Icons.warning_amber_outlined
+                    : Icons.change_circle_outlined,
+                color: cor, size: 18),
+            const SizedBox(width: 8),
+            Text(_emDivida ? 'Em dívida' : 'Troco',
+                style: TextStyle(
+                    color: cor, fontWeight: FontWeight.w600, fontSize: 14)),
+          ]),
+          Text(
+            _currencyFmt.format(
+                _emDivida ? widget.pedido.total - _valorPago : _troco),
+            style: TextStyle(
+                color: cor, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Botão ────────────────────────────────────────────────────────────────
+
+Widget _buildBotao() {
+  final activo = _podeFinalizar && !_finalizando;
+  return SizedBox(
+    width: double.infinity,
+    height: 50,
+    child: ElevatedButton.icon(
+      onPressed: activo ? _finalizar : null,
+      icon: _finalizando
+          ? const SizedBox(
+              width: 18, height: 18,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white))
+          : Icon(activo
+              ? Icons.check_circle_outline
+              : Icons.lock_outline_rounded),
+      label: Text(
+        _finalizando
+            ? 'A finalizar…'
+            : activo
+                ? 'Confirmar Finalização'
+                : _idTipoPagamento == null
+                    ? 'Seleccione o método de pagamento'
+                    : 'Valor recebido insuficiente',
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        overflow: TextOverflow.ellipsis,
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: activo ? _kPrimary : Colors.grey[300],
+        foregroundColor: activo ? Colors.white : Colors.grey[600],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: activo ? 3 : 0,
+      ),
+    ),
+  );
+}
+
+  // ─── Utilitários de UI ────────────────────────────────────────────────────
+
+  Widget _card({required Widget child}) => Card(
+    elevation: 0,
+    color: Colors.white,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: Padding(padding: const EdgeInsets.all(12), child: child),
+  );
+
+  Widget _secLabel(IconData icon, String texto) => Row(children: [
+    Icon(icon, size: 14, color: _kPrimary),
+    const SizedBox(width: 6),
+    Text(texto, style: const TextStyle(
+        fontWeight: FontWeight.bold, fontSize: 13, color: _kPrimary)),
+  ]);
+
+  Widget _linhaItem(String nome, double subtotal) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(child: Text(nome,
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            overflow: TextOverflow.ellipsis)),
+        Text(_currencyFmt.format(subtotal),
+            style: const TextStyle(fontSize: 12, color: _kPrimary)),
+      ],
+    ),
+  );
+
+  Widget _textField(TextEditingController ctrl, String hint) => TextField(
+    controller: ctrl,
+    style: const TextStyle(fontSize: 13),
+    decoration: _inputDecoration(hint),
+  );
+
+  InputDecoration _inputDecoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
+    filled: true,
+    fillColor: _kBackground,
+    contentPadding:
+        const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: _kPrimary.withOpacity(0.15)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: _kPrimary.withOpacity(0.15)),
+    ),
+  );
+
+  Widget _infoBox({
+    Key? key,
+    required IconData icon,
+    required String texto,
+    required Color cor,
+  }) =>
+      Container(
+        key: key,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: cor.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cor.withOpacity(0.25)),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 14, color: cor),
+          const SizedBox(width: 7),
+          Expanded(
+              child: Text(texto,
+                  style: TextStyle(fontSize: 11, color: cor))),
+        ]),
+      );
+}
+
+extension _Str on String {
+  String? get nullIfEmpty => isEmpty ? null : this;
+}

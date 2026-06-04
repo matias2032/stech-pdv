@@ -1,0 +1,60 @@
+package com.stechengenharia.pdv_backend.documento.entity;
+
+import com.stechengenharia.pdv_backend.common.entity.AuditableEntity;
+import com.stechengenharia.pdv_backend.usuario.entity.Usuario;
+import jakarta.persistence.*;
+import lombok.*;
+import java.time.OffsetDateTime;
+
+@Entity
+@Table(name = "documento_fiscal")
+@Getter
+ @Setter 
+ @NoArgsConstructor 
+ @AllArgsConstructor
+public class DocumentoFiscal extends AuditableEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_documento")
+    private Integer id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_tipo_doc", nullable = false)
+    private TipoDocumentoFiscal tipoDocumento;
+
+    @Column(name = "id_pedido", nullable = false)
+    private Integer idPedido;
+
+    @Column(nullable = false, unique = true, length = 30)
+    private String referencia;
+
+    @Column(name = "numero_seq", nullable = false)
+    private Integer numeroSeq;
+
+    @Column(nullable = false)
+    private Integer ano;
+
+    @Column(name = "codigo_at", nullable = false, length = 50)
+    private String codigoAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_usuario", nullable = false)
+    private Usuario usuario;
+
+    @Column(name = "emitido_em", nullable = false, updatable = false)
+    private OffsetDateTime emitidoEm;
+
+    @Column(nullable = false)
+    private Boolean anulado = false;
+
+    @Column(name = "motivo_anulacao")
+    private String motivoAnulacao;
+
+    @PrePersist
+    protected void onCreate() {
+        if (emitidoEm == null) emitidoEm = OffsetDateTime.now();
+        if (anulado == null)   anulado = false;
+        // Documento recém-emitido entra como PENDING_CREATE (herdado do AuditableEntity)
+    }
+}

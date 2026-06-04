@@ -1,0 +1,173 @@
+import 'package:intl/intl.dart';
+
+class ProdutoModel {
+  final int idProduto;
+  final String nomeProduto;
+  final String? descricao;
+  final double preco;
+  final int quantidadeEstoque;
+  final double? precoPromocional;
+  final int ativo; // 1 = activo, 0 = inactivo (smallint no schema)
+  final DateTime? dataCadastro;
+  final List<int> categorias;
+  final List<int> marcas;
+  final String? imagemPrincipalUrl;
+
+  const ProdutoModel({
+    required this.idProduto,
+    required this.nomeProduto,
+    this.descricao,
+    required this.preco,
+    required this.quantidadeEstoque,
+    this.precoPromocional,
+    required this.ativo,
+    this.dataCadastro,
+    this.categorias = const [],
+    this.marcas = const [],
+    this.imagemPrincipalUrl,
+  });
+
+  bool get estaAtivo => ativo == 1;
+
+  /// Retorna preço promocional se existir, caso contrário preço normal.
+  double get precoEfectivo => precoPromocional ?? preco;
+
+  factory ProdutoModel.fromJson(Map<String, dynamic> json) {
+    return ProdutoModel(
+      idProduto: json['idProduto'] as int,
+      nomeProduto: json['nomeProduto'] as String,
+      descricao: json['descricao'] as String?,
+      preco: (json['preco'] as num).toDouble(),
+      quantidadeEstoque: json['quantidadeEstoque'] as int,
+      precoPromocional: json['precoPromocional'] != null
+          ? (json['precoPromocional'] as num).toDouble()
+          : null,
+      ativo: (json['ativo'] as num?)?.toInt() ?? 1,
+      dataCadastro: json['dataCadastro'] != null
+          ? DateTime.tryParse(json['dataCadastro'] as String)
+          : null,
+      categorias: (json['categorias'] as List<dynamic>?)
+              ?.map((e) => e as int)
+              .toList() ??
+          [],
+      marcas: (json['marcas'] as List<dynamic>?)
+              ?.map((e) => e as int)
+              .toList() ??
+          [],
+      imagemPrincipalUrl: json['imagemPrincipalUrl'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'idProduto': idProduto,
+        'nomeProduto': nomeProduto,
+        'descricao': descricao,
+        'preco': preco,
+        'quantidadeEstoque': quantidadeEstoque,
+        'precoPromocional': precoPromocional,
+        'ativo': ativo,
+        'dataCadastro': dataCadastro?.toIso8601String(),
+        'categorias': categorias,
+        'marcas': marcas,
+        'imagemPrincipalUrl': imagemPrincipalUrl,
+      };
+
+  ProdutoModel copyWith({
+    int? idProduto,
+    String? nomeProduto,
+    String? descricao,
+    double? preco,
+    int? quantidadeEstoque,
+    double? precoPromocional,
+    int? ativo,
+    DateTime? dataCadastro,
+    List<int>? categorias,
+    List<int>? marcas,
+    String? imagemPrincipalUrl,
+  }) {
+    return ProdutoModel(
+      idProduto: idProduto ?? this.idProduto,
+      nomeProduto: nomeProduto ?? this.nomeProduto,
+      descricao: descricao ?? this.descricao,
+      preco: preco ?? this.preco,
+      quantidadeEstoque: quantidadeEstoque ?? this.quantidadeEstoque,
+      precoPromocional: precoPromocional ?? this.precoPromocional,
+      ativo: ativo ?? this.ativo,
+      dataCadastro: dataCadastro ?? this.dataCadastro,
+      categorias: categorias ?? this.categorias,
+      marcas: marcas ?? this.marcas,
+      imagemPrincipalUrl: imagemPrincipalUrl ?? this.imagemPrincipalUrl,
+    );
+  }
+
+  @override
+  String toString() => 'ProdutoModel(id: $idProduto, nome: $nomeProduto)';
+}
+
+// ─── Request DTO ─────────────────────────────────────────────────────────────
+
+class ProdutoRequestModel {
+  final String nomeProduto;
+  final String? descricao;
+  final double preco;
+  final int quantidadeEstoque;
+  final double? precoPromocional;
+  final List<int> categorias;
+  final List<int> marcas;
+
+  const ProdutoRequestModel({
+    required this.nomeProduto,
+    this.descricao,
+    required this.preco,
+    required this.quantidadeEstoque,
+    this.precoPromocional,
+    this.categorias = const [],
+    this.marcas = const [],
+  });
+
+  Map<String, dynamic> toJson() => {
+        'nomeProduto': nomeProduto,
+        'descricao': descricao,
+        'preco': preco,
+        'quantidadeEstoque': quantidadeEstoque,
+        'precoPromocional': precoPromocional,
+        'categorias': categorias,
+        'marcas': marcas,
+      };
+}
+
+// ─── Imagem DTO ───────────────────────────────────────────────────────────────
+
+class ProdutoImagemModel {
+  final int idImagem;
+  final int idProduto;
+  final String caminhoImagem;
+  final String? legenda;
+  final int imagemPrincipal; // 0 ou 1
+
+  const ProdutoImagemModel({
+    required this.idImagem,
+    required this.idProduto,
+    required this.caminhoImagem,
+    this.legenda,
+    required this.imagemPrincipal,
+  });
+
+  factory ProdutoImagemModel.fromJson(Map<String, dynamic> json) {
+    return ProdutoImagemModel(
+      idImagem: json['idImagem'] as int,
+      idProduto: json['idProduto'] as int,
+      caminhoImagem: json['caminhoImagem'] as String,
+      legenda: json['legenda'] as String?,
+      imagemPrincipal: (json['imagemPrincipal'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'idImagem': idImagem,
+        'idProduto': idProduto,
+        'caminhoImagem': caminhoImagem,
+        'legenda': legenda,
+        'imagemPrincipal': imagemPrincipal,
+      };
+}

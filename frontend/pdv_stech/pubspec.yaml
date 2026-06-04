@@ -1,0 +1,43 @@
+name: pdv_stech
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  desktop_drop: ^0.4.4
+  image_picker: ^1.0.7
+
+  # CORRIGIDO: Subindo dois níveis para encontrar a pasta na raiz
+  api_compartilhado:
+    path: ../../api_compartilhado
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1 
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon.ico"
+    icon_size: 48
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/
+    - .env

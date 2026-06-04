@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+*.iml
+.vscode
+*.suo
+*.user
+
+# Maven
+target/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Ficheiros sensíveis locais (nunca entram na imagem)
+src/main/resources/application-local.properties
+src/main/resources/application-dev.properties
