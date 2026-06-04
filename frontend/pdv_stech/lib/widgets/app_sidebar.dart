@@ -134,96 +134,89 @@ class _AppSidebarState extends State<AppSidebar>
       Expanded(
         child: ListView(
           padding: EdgeInsets.zero,
-          children: [
-            _buildDrawerHeader(usuario),
+      children: [
+  _buildDrawerHeader(usuario),
 
-            // ✅ Todos os perfis vêem o Catálogo
-                _buildMenuItem(
-                icon: Icons.dashboard,
-                title: 'Painel de Controle',
-                route: '/dashboard',
-
-              ),
-           
-            _buildMenuItemComBadge(
-              icon: Icons.shopping_cart,
-              title: 'Catálogo',
-              route: '/catalogo',
-              contador: _countPedidosAbertos,
-            ),
-
-            // 🔒 Apenas administrador vê os itens abaixo
-            if (usuario.isAdmin) ...[
-              _buildMenuItem(
-                icon: Icons.dashboard,
-                title: 'Painel de Controle',
-                route: '/dashboard',
-
-              ),
-              _buildMenuItem(
-                icon: Icons.manage_accounts,
-                title: 'Gerenciar Usuários',
-                route: '/gerenciar_usuarios',
-              ),
-              _buildMenuItem(
-                icon: Icons.history,
-                title: 'Histórico de Pedidos',
-                route: '/pedidos_finalizados',
-              ),
-              _buildMenuItem(
-                icon: Icons.grid_view,
-                title: 'Gerenciar Categorias',
-                route: '/gerenciar_categorias',
-              ),
-              _buildMenuItem(
-                icon: Icons.label_important_outline,
-                title: 'Gerenciar Marcas',
-                route: '/gerenciar_marcas',
-              ),
-              _buildMenuItem(
-                icon: Icons.miscellaneous_services,
-                title: 'Gerenciar Serviços',
-                route: '/gerenciar_servicos',
-              ),
-              _buildMenuItem(
-                icon: Icons.inventory_2_outlined,
-                title: 'Gerenciar Produtos',
-                route: '/gerenciar_produtos',
-                usarBadge: true,
-              ),
-
-                _buildMenuItem(
-                icon: Icons.contacts_outlined,
-                title: 'Gerenciar Clientes',
-                route: '/gerenciar_clientes',
-                usarBadge: true,
-              ),
-              _buildMenuItem(
-                icon: Icons.description,
-                title: 'Facturação',
-                route: '/gerenciar_documentos',
-                usarBadge: true,
-              ),
-
-                 _buildMenuItem(
-                icon: Icons.assessment,
-                title: 'Extractos',
-                route: '/gerenciar_extractos',
-                usarBadge: true,
-              ),
-        if (!Platform.isAndroid && !Platform.isIOS)
+  // ✅ Item único: Todos os perfis veem o Painel de Controle
   _buildMenuItem(
-    icon: Icons.print,
-    title: 'Configurações da Impressora',
-    route: '/configuracoes_impressora',
+    icon: Icons.dashboard,
+    title: 'Painel de Controle',
+    route: '/dashboard',
   ),
-            ],
-          ],
+   
+  _buildMenuItemComBadge(
+    icon: Icons.shopping_cart,
+    title: 'Catálogo',
+    route: '/catalogo',
+    contador: _countPedidosAbertos,
+  ),
+
+  // 🔒 Menus administrativos (Montados de forma limpa e sem duplicados)
+  if (usuario.isAdmin) ...[
+    _buildMenuItem(
+      icon: Icons.manage_accounts,
+      title: 'Gerenciar Usuários',
+      route: '/gerenciar_usuarios',
+    ),
+    _buildMenuItem(
+      icon: Icons.history,
+      title: 'Histórico de Pedidos',
+      route: '/pedidos_finalizados',
+    ),
+    _buildMenuItem(
+      icon: Icons.grid_view,
+      title: 'Gerenciar Categorias',
+      route: '/gerenciar_categorias',
+    ),
+    _buildMenuItem(
+      icon: Icons.label_important_outline,
+      title: 'Gerenciar Marcas',
+      route: '/gerenciar_marcas',
+    ),
+    _buildMenuItem(
+      icon: Icons.miscellaneous_services,
+      title: 'Gerenciar Serviços',
+      route: '/gerenciar_servicos',
+    ),
+    _buildMenuItem(
+      icon: Icons.inventory_2_outlined,
+      title: 'Gerenciar Produtos',
+      route: '/gerenciar_produtos',
+      usarBadge: true,
+    ),
+    _buildMenuItem(
+      icon: Icons.contacts_outlined,
+      title: 'Gerenciar Clientes',
+      route: '/gerenciar_clientes',
+      usarBadge: true,
+    ),
+    _buildMenuItem(
+      icon: Icons.description,
+      title: 'Facturação',
+      route: '/gerenciar_documentos',
+      usarBadge: true,
+    ),
+    _buildMenuItem(
+      icon: Icons.assessment,
+      title: 'Extractos',
+      route: '/gerenciar_extractos',
+      usarBadge: true,
+    ),
+    
+    // ✅ Condição de plataforma simplificada (Apenas Desktop/Web vê a impressora se for Admin)
+    if (!Platform.isAndroid && !Platform.isIOS)
+      _buildMenuItem(
+        icon: Icons.print,
+        title: 'Configurações da Impressora',
+        route: '/configuracoes_impressora',
+      ),
+  ],
+
+  _buildUserSection(usuario),  // 👈 Fixo no fundo do painel
+],
         ),
       ),
-
-      _buildUserSection(usuario),  // 👈 fixo no fundo
-    ],
+    ],  
   ),
 );
   }
