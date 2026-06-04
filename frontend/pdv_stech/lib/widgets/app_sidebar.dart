@@ -138,6 +138,13 @@ class _AppSidebarState extends State<AppSidebar>
             _buildDrawerHeader(usuario),
 
             // ✅ Todos os perfis vêem o Catálogo
+                _buildMenuItem(
+                icon: Icons.dashboard,
+                title: 'Painel de Controle',
+                route: '/dashboard',
+
+              ),
+           
             _buildMenuItemComBadge(
               icon: Icons.shopping_cart,
               title: 'Catálogo',

@@ -4,10 +4,10 @@ import 'dart:io';
 class ApiConfig {
   // ── Configuração de ambiente ──────────────────────────────────────
 
-  static const String _prodBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://xxxx.onrender.com',
-  );
+static const String _prodBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://localhost:8080', 
+);
 
   static const int _porta = int.fromEnvironment(
     'API_PORT',

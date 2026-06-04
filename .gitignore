@@ -51,3 +51,4 @@ backend/src/main/resources/firebase-service-account.json
 **/Output/
 *.exe
 *.msi
+**/application-local.properties 
