@@ -1,8 +1,10 @@
 --
 -- PostgreSQL database dump
+
+-- V1__schema_stech.sql
 --
 
-\restrict S1NrFehVFGFgVTT9rlozau6O2lDZgMcNMW7xXOpeeUPEEmhi1Jv1HjJ3aEgpl7x
+
 
 -- Dumped from database version 18.1
 -- Dumped by pg_dump version 18.1
@@ -2439,5 +2441,4 @@ ALTER TABLE ONLY public.usuario
 -- PostgreSQL database dump complete
 --
 
-\unrestrict S1NrFehVFGFgVTT9rlozau6O2lDZgMcNMW7xXOpeeUPEEmhi1Jv1HjJ3aEgpl7x
 
