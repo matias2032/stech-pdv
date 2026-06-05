@@ -23,6 +23,8 @@ import 'package:api_compartilhado/api_compartilhado.dart';
 import '../database/daos/documento_fiscal_dao.dart';
 import 'package:api_compartilhado/models/documento_fiscal_model.dart';
 import 'package:api_compartilhado/services/documento_fiscal_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class SyncScheduler {
   SyncScheduler._();
@@ -99,41 +101,115 @@ _documentoFiscalService = documentoFiscalService;
 
   // ── Flush da fila ─────────────────────────────────────────────────
 
-  Future<void> flushQueue() async {
-    if (_syncEmCurso) {
-      debugPrint('⚙️ SyncScheduler — sync já em curso, ignorar');
+  // Substituir flushQueue completo
+Future<void> flushQueue() async {
+  if (_syncEmCurso) {
+    debugPrint('⚙️ SyncScheduler — sync já em curso, ignorar');
+    return;
+  }
+  _syncEmCurso = true;
+
+  try {
+    final pendentes = await _syncQueueDao!.getPending();
+    if (pendentes.isEmpty) {
+      debugPrint('✅ SyncScheduler — fila vazia, nada a sincronizar');
       return;
     }
-    _syncEmCurso = true;
 
-    try {
-      final pendentes = await _syncQueueDao!.getPending();
-      if (pendentes.isEmpty) {
-        debugPrint('✅ SyncScheduler — fila vazia, nada a sincronizar');
-        return;
-      }
+    debugPrint('⚙️ SyncScheduler — ${pendentes.length} operação(ões) a enviar via batch');
 
-      debugPrint('⚙️ SyncScheduler — ${pendentes.length} operação(ões) pendente(s)');
+    // ── Montar payload do batch ───────────────────────────────────
+    final operacoes = pendentes.map((item) {
+      final payload = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
+      return {
+        'entidade':  item['entidade'] as String,
+        'operacao':  item['operacao'] as String,
+        'localId':   payload['localId'] as String?,
+        'id':        payload['id'] as int?,
+        'payload':   payload,
+      };
+    }).toList();
 
+    // ── Enviar batch ao backend ───────────────────────────────────
+    final response = await http.post(
+      Uri.parse(ApiConfig.syncBatchUrl),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({'operacoes': operacoes}),
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      debugPrint('❌ SyncScheduler — batch rejeitado HTTP ${response.statusCode}');
+      // Incrementar tentativas em todos
       for (final item in pendentes) {
-        final id       = item['id']       as int;
-        final entidade = item['entidade'] as String;
-        final operacao = item['operacao'] as String;
-        final payload  = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
-
-        try {
-          await _processarOperacao(entidade, operacao, payload);
-          await _syncQueueDao!.delete(id);
-          debugPrint('✅ SyncScheduler — operação $id ($entidade/$operacao) sincronizada');
-        } catch (e) {
-          await _syncQueueDao!.incrementarTentativas(id);
-          debugPrint('❌ SyncScheduler — operação $id falhou (tentativa incrementada): $e');
-        }
+        await _syncQueueDao!.incrementarTentativas(item['id'] as int);
       }
-    } finally {
-      _syncEmCurso = false;
+      return;
     }
+
+    // ── Processar resultados individuais ──────────────────────────
+    final body      = jsonDecode(response.body) as Map<String, dynamic>;
+    final resultados = (body['resultados'] as List<dynamic>?) ?? [];
+
+    // Mapear localId → resultado e id → resultado para lookup rápido
+    final porLocalId = <String, Map<String, dynamic>>{};
+    final porId      = <String, Map<String, dynamic>>{};
+
+    for (final r in resultados) {
+      final res = r as Map<String, dynamic>;
+      final localId = res['localId'] as String?;
+      final idReal  = res['idReal'];
+      if (localId != null) porLocalId[localId] = res;
+      if (idReal  != null) porId['${res['entidade']}_$idReal'] = res;
+    }
+
+    for (final item in pendentes) {
+      final queueId  = item['id']       as int;
+      final entidade = item['entidade'] as String;
+      final operacao = item['operacao'] as String;
+      final payload  = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
+      final localId  = payload['localId'] as String?;
+      final backendId = payload['id'] as int?;
+
+      // Encontrar resultado correspondente
+      Map<String, dynamic>? resultado;
+      if (localId != null)    resultado = porLocalId[localId];
+      if (resultado == null && backendId != null) {
+        resultado = porId['${entidade}_$backendId'];
+      }
+
+      final sucesso = resultado?['sucesso'] as bool? ?? false;
+
+      if (sucesso) {
+        // Actualizar DAO local com idReal (para CREATE)
+        final idReal = resultado?['idReal'] as int?;
+        try {
+          await _actualizarDaoLocal(
+            entidade: entidade,
+            operacao: operacao,
+            payload:  payload,
+            localId:  localId,
+            idReal:   idReal,
+          );
+        } catch (e) {
+          debugPrint('⚠️ SyncScheduler — erro ao actualizar DAO local ($entidade): $e');
+        }
+        await _syncQueueDao!.delete(queueId);
+        debugPrint('✅ SyncScheduler — $entidade/$operacao sincronizado'
+            '${idReal != null ? " (idReal: $idReal)" : ""}');
+      } else {
+        await _syncQueueDao!.incrementarTentativas(queueId);
+        debugPrint('❌ SyncScheduler — $entidade/$operacao falhou: ${resultado?["erro"]}');
+      }
+    }
+  } catch (e) {
+    debugPrint('❌ SyncScheduler — erro no batch: $e');
+    // Não incrementa tentativas aqui — erro de rede, não de lógica
+  } finally {
+    _syncEmCurso = false;
   }
+}
+
+
 
   // ── Processar operação individual ─────────────────────────────────
 
@@ -509,6 +585,52 @@ Future<void> _processarDocumentoFiscal(
 
     default:
       throw Exception('Operação desconhecida para documento_fiscal: $operacao');
+  }
+}
+
+
+Future<void> _actualizarDaoLocal({
+  required String entidade,
+  required String operacao,
+  required Map<String, dynamic> payload,
+  required String? localId,
+  required int? idReal,
+}) async {
+  switch (entidade) {
+    case 'cliente':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        await _clienteDao!.deleteByLocalId(localId);
+        // Fazer pull do registo real se online; se não, marca como synced
+        final existente = await _clienteDao!.getById(idReal);
+        if (existente != null) {
+          await _clienteDao!.marcarSynced(idReal);
+        }
+      }
+
+    case 'marca':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        await _marcaDao!.deleteByLocalId(localId);
+      }
+
+    case 'categoria':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        await _categoriaDao!.deleteByLocalId(localId);
+      }
+
+    case 'produto':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        await _produtoDao!.deleteByLocalId(localId);
+      }
+
+    case 'servico':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        await _servicoDao!.deleteByLocalId(localId);
+      }
+
+    case 'pedido':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        await _pedidoDao!.deleteByLocalId(localId);
+      }
   }
 }
 

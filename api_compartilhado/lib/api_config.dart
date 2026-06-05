@@ -88,6 +88,8 @@ static const String _prodBaseUrl = String.fromEnvironment(
   static const String marcas = '/api/marcas';
   static const String clientes = '/api/clientes';
    static const String _documentosFiscais = '/api/documentos-fiscais';
+   static const String _sync = '/api/sync';
+
 
   // ── URLs completas ────────────────────────────────────────────────
 
@@ -106,6 +108,7 @@ static const String _prodBaseUrl = String.fromEnvironment(
   static String get marcasUrl => '$baseUrl$marcas';
     static String get clientesUrl => '$baseUrl$clientes';
      static String get documentosFiscaisUrl => '$baseUrl$_documentosFiscais';
+     static String get syncBatchUrl => '$baseUrl$_sync/batch';
 
   // ── Configurações gerais ──────────────────────────────────────────
 

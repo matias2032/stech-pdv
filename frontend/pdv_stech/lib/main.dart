@@ -1,14 +1,4 @@
-// ── PATCH para main.dart ──────────────────────────────────────────
-//
-// Substitui o bloco de imports e o método main() + MyApp completo.
-// Destino: lib/main.dart
-//
-// Alterações:
-//   1. Adicionados imports de LocalDatabase, ConnectivityService,
-//      ClienteRepository, ClienteDao, SyncQueueDao
-//   2. main() inicializa LocalDatabase e ConnectivityService antes do runApp
-//   3. MyApp constrói ClienteRepository e passa-o aos providers
-// ─────────────────────────────────────────────────────────────────
+
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -127,6 +117,25 @@ final marcaService     = MarcaService();
     syncQueueDao: SyncQueueDao(),
     connectivity: connectivity,
   );
+
+SyncScheduler.instance.init(
+  connectivity:           connectivity,
+  syncQueueDao:           SyncQueueDao(),
+  clienteDao:             ClienteDao(),
+  clienteService:         clienteService,
+  marcaDao:               MarcaDao(),
+  marcaService:           marcaService,
+  categoriaDao:           CategoriaDao(),
+  categoriaService:       categoriaService,
+  produtoDao:             ProdutoDao(),
+  produtoService:         produtoService,
+  servicoDao:             ServicoDao(),
+  servicoService:         servicoService,
+  pedidoDao:              PedidoDao(),
+  pedidoService:          pedidoService,
+  documentoFiscalDao:     DocumentoFiscalDao(),
+  documentoFiscalService: docFiscalService,
+);
 
   return MultiProvider(
     providers: [
