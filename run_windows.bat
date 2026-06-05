@@ -7,6 +7,7 @@ echo  [1] LOCAL   — Backend local + Flutter local
 echo  [2] CLOUD   — Flutter aponta para Render
 echo  [3] ANDROID LOCAL  — Emulador + backend local
 echo  [4] ANDROID CLOUD  — Emulador + Render
+echo  [5] FULL-OFFLINE — Flutter sem backend (testa cache local)
 echo.
 set /p OPCAO="Escolha uma opcao (1/2/3/4): "
 
@@ -58,7 +59,20 @@ if "%OPCAO%"=="4" (
     goto FIM
 )
 
-echo [ERRO] Opcao invalida. Execute novamente e escolha 1, 2, 3 ou 4.
+:: ── OPÇÃO 5 — Flutter LOCAL sem backend (testa full-offline) ────────
+if "%OPCAO%"=="5" (
+    echo.
+    echo [INFO] Iniciando Flutter Windows SEM backend (modo full-offline)...
+    cd "E:\pdv-stech engenharia\frontend\pdv_stech"
+    start "FLUTTER WINDOWS (FULL-OFFLINE)" cmd /k "flutter run -d windows"
+    echo.
+    echo [AVISO] Nenhum backend foi iniciado.
+    echo         A app deve arrancar com dados em cache.
+    echo         Quando iniciar o backend manualmente, o sync deve ocorrer.
+    goto FIM
+)
+
+echo [ERRO] Opcao invalida. Execute novamente e escolha 1, 2, 3, 4 ou 5.
 
 :FIM
 echo.

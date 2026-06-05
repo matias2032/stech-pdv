@@ -1,18 +1,3 @@
-// PATCH para o ficheiro existente em:
-// packages/api_compartilhado/lib/models/usuario_model.dart
-//
-// Adiciona ao UsuarioModel existente:
-//   1. Campos syncStatus e localId
-//   2. factory fromLocalDb
-//   3. método toLocalDb
-//   4. getter isPending, isSynced, isConflict, isOffline
-//   5. _parseDate exposto como static público
-//   6. UsuarioRequestDTO
-//   7. AlterarSenhaDTO
-//
-// ─────────────────────────────────────────────────────────────────
-// SUBSTITUI a classe UsuarioModel existente por esta versão completa
-// ─────────────────────────────────────────────────────────────────
 
 class UsuarioModel {
   final int      id;

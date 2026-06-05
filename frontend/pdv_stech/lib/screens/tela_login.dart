@@ -2,6 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:flutter/material.dart';  // já existe
+import 'package:api_compartilhado/api_compartilhado.dart';  // já existe
+import 'package:api_compartilhado/core/database/daos/usuario_dao.dart'; // ← NOVO
 
 
 // ──────────────────────────────────────────────
@@ -57,20 +60,19 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ── lógica ──────────────────────────────────
-  Future<void> _handleLogin() async {
-    final credencial = _credencialCtrl.text.trim();
-    final password   = _passwordCtrl.text;
+Future<void> _handleLogin() async {
+  final credencial = _credencialCtrl.text.trim();
+  final password   = _passwordCtrl.text;
 
-    if (credencial.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Preencha todos os campos.');
-      return;
-    }
+  if (credencial.isEmpty || password.isEmpty) {
+    setState(() => _errorMessage = 'Preencha todos os campos.');
+    return;
+  }
 
-    setState(() {
-      _isLoading    = true;
-      _errorMessage = '';
-    });
+  setState(() { _isLoading = true; _errorMessage = ''; });
 
+  // ── Online: tenta HTTP ────────────────────────────────────────────
+  if (ConnectivityService.instance.isOnline) {
     try {
       final result = await _authService.login(credencial, password);
 
@@ -78,32 +80,85 @@ class _LoginScreenState extends State<LoginScreen>
         case StatusAutenticacao.primeiraSenha:
           if (result.usuario != null) {
             SessaoService.instance.iniciar(result.usuario!);
+            await _guardarSessaoLocal(result.usuario!);
           }
-          if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/primeira_troca_senha');
-          }
+          if (mounted) Navigator.of(context).pushReplacementNamed('/primeira_troca_senha');
+          return;
 
         case StatusAutenticacao.sucesso:
           if (result.usuario != null) {
             SessaoService.instance.iniciar(result.usuario!);
+            await _guardarSessaoLocal(result.usuario!);
           }
-          if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          }
+          if (mounted) Navigator.of(context).pushReplacementNamed('/dashboard');
+          return;
 
         default:
-          setState(() {
-            _errorMessage = result.mensagem ?? 'Erro desconhecido.';
-            _isLoading    = false;
-          });
+          setState(() { _errorMessage = result.mensagem ?? 'Erro desconhecido.'; _isLoading = false; });
+          return;
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Erro ao conectar: $e';
-        _isLoading    = false;
-      });
+      debugPrint('⚠️ Login HTTP falhou apesar de online: $e');
+      // não retorna — cai no fallback offline abaixo
     }
   }
+
+  // ── Offline: credenciais em cache ─────────────────────────────────
+  await _tentarLoginOffline(credencial);
+}
+
+Future<void> _guardarSessaoLocal(UsuarioModel usuario) async {
+  try {
+    await UsuarioDao().upsert(usuario.toLocalDb());
+  } catch (e) {
+    debugPrint('⚠️ Não foi possível guardar sessão local: $e');
+  }
+}
+
+Future<void> _tentarLoginOffline(String credencial) async {
+  try {
+    final rows = await UsuarioDao().getAll();
+    final cred = credencial.toLowerCase();
+
+    final match = rows.firstWhere(
+      (r) =>
+          (r['email']   as String? ?? '').toLowerCase() == cred ||
+          (r['apelido'] as String? ?? '').toLowerCase() == cred,
+      orElse: () => {},
+    );
+
+    if (match.isEmpty) {
+      setState(() {
+        _errorMessage = 'Sem ligação e nenhuma sessão guardada para este utilizador.';
+        _isLoading    = false;
+      });
+      return;
+    }
+
+    SessaoService.instance.iniciarOffline(UsuarioModel.fromLocalDb(match));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+            SizedBox(width: 8),
+            Expanded(child: Text(
+              'Modo offline — sessão guardada. Sincroniza quando a ligação voltar.',
+              style: TextStyle(fontSize: 12),
+            )),
+          ]),
+          backgroundColor: Color(0xFF92400E),
+          duration: Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.of(context).pushReplacementNamed('/dashboard');
+    }
+  } catch (e) {
+    setState(() { _errorMessage = 'Erro ao verificar credenciais locais: $e'; _isLoading = false; });
+  }
+}
 
   // ── UI ──────────────────────────────────────
   @override

@@ -1,22 +1,19 @@
+// lib/screens/splash_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
-// import 'package:api_compartilhado/api_compartilhado.dart';
-// import 'package:http/http.dart' as http;
+import 'package:http/http.dart' as http;
+import 'package:api_compartilhado/api_compartilhado.dart';
 
-// ── Paleta STech (idêntica à tela de login) ─────────────────────────
+// ── Paleta STech ─────────────────────────────────────────────────────
 const _navy   = Color(0xFF1B2A6B);
-const _navyDk = Color(0xFF111A42);
 const _red    = Color(0xFFC8102E);
 const _bg     = Color(0xFFF4F5F7);
 
-// ── Timeout do health-check ─────────────────────────────────────────
-// const _kHealthTimeout = Duration(seconds: 10);
-
-// ── Endpoint de verificação ─────────────────────────────────────────
-// Mude para o caminho real do seu backend:
-//   Spring Boot: GET /actuator/health  →  { "status": "UP" }
-//   Ou endpoint customizado:            →  qualquer 2xx
-// const _kHealthPath = '/api/health';
+// ── Configuração ─────────────────────────────────────────────────────
+const _kHealthTimeout  = Duration(seconds: 8);
+const _kHealthPath     = '/actuator/health';
+const _kMinSplashMs    = 1800; // tempo mínimo de splash em ms
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,24 +24,24 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  // ── animações ────────────────────────────────────────────────────
+
+  // ── Animações ─────────────────────────────────────────────────────
   late final AnimationController _logoCtrl;
   late final AnimationController _textCtrl;
-  late final AnimationController _barCtrl;
   late final AnimationController _pulseCtrl;
 
-  late final Animation<double>  _logoScale;
-  late final Animation<double>  _logoFade;
-  late final Animation<double>  _textFade;
-  late final Animation<Offset>  _textSlide;
-  late final Animation<double>  _pulse;
+  late final Animation<double> _logoScale;
+  late final Animation<double> _logoFade;
+  late final Animation<double> _textFade;
+  late final Animation<Offset> _textSlide;
+  late final Animation<double> _pulse;
 
-  // ── estado ───────────────────────────────────────────────────────
+  // ── Estado ────────────────────────────────────────────────────────
   _SplashState _state       = _SplashState.iniciando;
+  _ConnMode    _connMode    = _ConnMode.desconhecido;
   String       _statusMsg   = 'A iniciar…';
   String?      _errorDetail;
-  double       _barProgress = 0;   // 0.0 → 1.0 (barra manual)
-  String       _resolvedUrl = '';
+  double       _barProgress = 0.0;
 
   @override
   void initState() {
@@ -53,106 +50,126 @@ class _SplashScreenState extends State<SplashScreen>
     _startSequence();
   }
 
-  // ── setup de animações ───────────────────────────────────────────
+  // ── Animações ─────────────────────────────────────────────────────
+
   void _setupAnimations() {
     _logoCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
+        vsync: this, duration: const Duration(milliseconds: 700));
     _textCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _barCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
+        vsync: this, duration: const Duration(milliseconds: 500));
     _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
 
     _logoScale = Tween<double>(begin: .6, end: 1.0).animate(
-      CurvedAnimation(parent: _logoCtrl, curve: Curves.elasticOut),
-    );
-    _logoFade = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut);
-
-    _textFade = CurvedAnimation(parent: _textCtrl, curve: Curves.easeOut);
+        CurvedAnimation(parent: _logoCtrl, curve: Curves.elasticOut));
+    _logoFade =
+        CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut);
+    _textFade =
+        CurvedAnimation(parent: _textCtrl, curve: Curves.easeOut);
     _textSlide = Tween<Offset>(
-      begin: const Offset(0, .3),
-      end:   Offset.zero,
-    ).animate(CurvedAnimation(parent: _textCtrl, curve: Curves.easeOut));
-
-    _pulse = Tween<double>(begin: .85, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
+            begin: const Offset(0, .3), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _textCtrl, curve: Curves.easeOut));
+    _pulse = Tween<double>(begin: .92, end: 1.0).animate(
+        CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
-  // ── sequência principal ─────────────────────────────────────────
-Future<void> _startSequence() async {
-  // Entrada do logo
-  await _logoCtrl.forward();
-  await Future.delayed(const Duration(milliseconds: 100));
-  await _textCtrl.forward();
+  // ── Sequência principal ───────────────────────────────────────────
 
-  // Simulação de carregamento
-  final steps = [
-    ['A iniciar módulos...', 0.15],
-    ['A verificar sistema...', 0.30],
-    ['A carregar interface...', 0.50],
-    ['A sincronizar recursos...', 0.70],
-    ['A preparar dashboard...', 0.90],
-    ['Pronto!', 1.0],
-  ];
+  Future<void> _startSequence() async {
+    final stopwatch = Stopwatch()..start();
 
-  for (final step in steps) {
-    _setStep(step[0] as String, step[1] as double);
-    await Future.delayed(
-      Duration(milliseconds: step[1] == 1.0 ? 500 : 700),
-    );
+    // 1. Animações de entrada
+    await _logoCtrl.forward();
+    await Future.delayed(const Duration(milliseconds: 100));
+    await _textCtrl.forward();
+
+    // 2. Resolver URL base
+    _setStep('A resolver servidor…', 0.15);
+    final url = await ApiConfig.baseUrlAsync;
+
+    // 3. Verificar conectividade de rede
+    _setStep('A verificar conectividade…', 0.30);
+    final isNetworkUp = ConnectivityService.instance.isOnline;
+
+    // 4. Verificar se o backend responde
+    _setStep('A contactar servidor…', 0.50);
+    final isBackendUp = isNetworkUp ? await _healthCheck(url) : false;
+
+    // 5. Determinar modo de operação
+    _setStep('A preparar modo de operação…', 0.70);
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (isBackendUp) {
+      _setConnMode(_ConnMode.online);
+    } else if (isNetworkUp) {
+      // Rede existe mas backend não responde (Render a dormir, etc.)
+      _setConnMode(_ConnMode.offlineFirst);
+    } else {
+      // Sem rede nenhuma
+      _setConnMode(_ConnMode.fullOffline);
+    }
+
+    // 6. Verificar se há dados locais em modo offline
+    if (!isBackendUp) {
+      _setStep('A verificar dados locais…', 0.85);
+      final temDados = await _verificarDadosLocais();
+      if (!temDados && !isBackendUp) {
+        // Sem dados locais E sem backend → erro real
+        _setError(
+          'Sem dados disponíveis.',
+          'Não foi possível ligar ao servidor e não existem dados em cache.\n'
+          'Verifique a sua ligação e tente novamente.',
+        );
+        return;
+      }
+    }
+
+    // 7. Garantir tempo mínimo de splash
+    _setStep('Pronto!', 1.0);
+    final elapsed = stopwatch.elapsedMilliseconds;
+    if (elapsed < _kMinSplashMs) {
+      await Future.delayed(
+          Duration(milliseconds: _kMinSplashMs - elapsed));
+    }
+
+    // 8. Navegar
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/');
+    }
   }
 
-  // Navegação
-  if (mounted) {
-    Navigator.of(context).pushReplacementNamed('/');
+  // ── Health-check ao backend ───────────────────────────────────────
+
+  Future<bool> _healthCheck(String baseUrl) async {
+    try {
+      final uri = Uri.parse('$baseUrl$_kHealthPath');
+      final response = await http
+          .get(uri, headers: ApiConfig.defaultHeaders)
+          .timeout(_kHealthTimeout);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
   }
-}
 
-  // ── health-check ────────────────────────────────────────────────
-  // Future<bool> _healthCheck() async {
-  //   try {
-  //     final uri = Uri.parse('$_resolvedUrl$_kHealthPath');
-  //     final response = await http
-  //         .get(uri, headers: ApiConfig.defaultHeaders)
-  //         .timeout(_kHealthTimeout);
+  // ── Verifica se há dados no SQLite local ──────────────────────────
 
-  //     if (response.statusCode >= 200 && response.statusCode < 300) {
-  //       return true;
-  //     }
+  Future<bool> _verificarDadosLocais() async {
+    try {
+      final db = LocalDatabase.instance.db;
+      // Basta existir 1 utilizador ou 1 produto em cache
+      final usuarios = await db.rawQuery(
+          'SELECT COUNT(*) as total FROM usuario LIMIT 1');
+      final total = (usuarios.first['total'] as int?) ?? 0;
+      return total > 0;
+    } catch (_) {
+      return false;
+    }
+  }
 
-  //     _setError(
-  //       'Servidor respondeu com erro ${response.statusCode}.',
-  //       'Verifique se o backend está em execução em $_resolvedUrl',
-  //     );
-  //     return false;
-  //   } on TimeoutException {
-  //     _setError(
-  //       'Tempo limite excedido.',
-  //       'O servidor em $_resolvedUrl não respondeu em ${_kHealthTimeout.inSeconds}s.\n'
-  //       'Verifique a ligação ou as configurações de rede.',
-  //     );
-  //     return false;
-  //   } catch (e) {
-  //     _setError(
-  //       'Não foi possível ligar ao servidor.',
-  //       'Endereço: $_resolvedUrl\nDetalhe: $e\n\n'
-  //       'Em produção, configure API_BASE_URL via --dart-define.',
-  //     );
-  //     return false;
-  //   }
-  // }
+  // ── Helpers de estado ─────────────────────────────────────────────
 
-  // ── helpers de estado ────────────────────────────────────────────
   void _setStep(String msg, double progress) {
     if (!mounted) return;
     setState(() {
@@ -160,6 +177,11 @@ Future<void> _startSequence() async {
       _statusMsg   = msg;
       _barProgress = progress;
     });
+  }
+
+  void _setConnMode(_ConnMode mode) {
+    if (!mounted) return;
+    setState(() => _connMode = mode);
   }
 
   void _setError(String msg, String detail) {
@@ -175,12 +197,14 @@ Future<void> _startSequence() async {
   void dispose() {
     _logoCtrl.dispose();
     _textCtrl.dispose();
-    _barCtrl.dispose();
     _pulseCtrl.dispose();
     super.dispose();
   }
 
-  // ── build ────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -198,6 +222,8 @@ Future<void> _startSequence() async {
                 const SizedBox(height: 28),
                 _buildTitle(),
                 const Spacer(flex: 2),
+                _buildConnBadge(),
+                const SizedBox(height: 20),
                 _buildStatusArea(),
                 const Spacer(flex: 1),
                 _buildFooter(),
@@ -210,14 +236,17 @@ Future<void> _startSequence() async {
     );
   }
 
-  // ── logo ─────────────────────────────────────────────────────────
+  // ── Logo ──────────────────────────────────────────────────────────
+
   Widget _buildLogo() {
     return FadeTransition(
       opacity: _logoFade,
       child: ScaleTransition(
         scale: _logoScale,
         child: ScaleTransition(
-          scale: _state == _SplashState.carregando ? _pulse : AlwaysStoppedAnimation(1.0),
+          scale: _state == _SplashState.carregando
+              ? _pulse
+              : const AlwaysStoppedAnimation(1.0),
           child: Container(
             width: 110,
             height: 110,
@@ -232,9 +261,7 @@ Future<void> _startSequence() async {
                 ),
               ],
               border: Border.all(
-                color: Colors.white.withOpacity(.12),
-                width: 1.5,
-              ),
+                  color: Colors.white.withOpacity(.12), width: 1.5),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
@@ -251,7 +278,8 @@ Future<void> _startSequence() async {
     );
   }
 
-  // ── título e subtítulo ───────────────────────────────────────────
+  // ── Título ────────────────────────────────────────────────────────
+
   Widget _buildTitle() {
     return FadeTransition(
       opacity: _textFade,
@@ -284,7 +312,87 @@ Future<void> _startSequence() async {
     );
   }
 
-  // ── área de status / erro ────────────────────────────────────────
+  // ── Badge de modo de conectividade ───────────────────────────────
+
+  Widget _buildConnBadge() {
+    if (_connMode == _ConnMode.desconhecido) return const SizedBox.shrink();
+
+    final cfg = switch (_connMode) {
+      _ConnMode.online => (
+          icon: Icons.cloud_done_rounded,
+          label: 'Online',
+          sub: 'Servidor disponível',
+          bg: const Color(0xFFECFDF5),
+          border: const Color(0xFF6EE7B7),
+          fg: const Color(0xFF065F46),
+        ),
+      _ConnMode.offlineFirst => (
+          icon: Icons.cloud_sync_rounded,
+          label: 'Offline-First',
+          sub: 'A usar dados locais — sincroniza quando o servidor voltar',
+          bg: const Color(0xFFFFFBEB),
+          border: const Color(0xFFFCD34D),
+          fg: const Color(0xFF92400E),
+        ),
+      _ConnMode.fullOffline => (
+          icon: Icons.wifi_off_rounded,
+          label: 'Sem ligação',
+          sub: 'A usar cache local — sem acesso à rede',
+          bg: const Color(0xFFFEF2F2),
+          border: const Color(0xFFFCA5A5),
+          fg: const Color(0xFF991B1B),
+        ),
+      _ConnMode.desconhecido => (
+          icon: Icons.help_outline,
+          label: '',
+          sub: '',
+          bg: Colors.transparent,
+          border: Colors.transparent,
+          fg: Colors.transparent,
+        ),
+    };
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      child: Container(
+        key: ValueKey(_connMode),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: cfg.bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cfg.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(cfg.icon, color: cfg.fg, size: 20),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(cfg.label,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: cfg.fg)),
+                  Text(cfg.sub,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: cfg.fg.withOpacity(.8),
+                          height: 1.4)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Área de status / erro ────────────────────────────────────────
+
   Widget _buildStatusArea() {
     if (_state == _SplashState.erro) return _buildErrorArea();
     return _buildProgressArea();
@@ -293,7 +401,6 @@ Future<void> _startSequence() async {
   Widget _buildProgressArea() {
     return Column(
       children: [
-        // barra de progresso
         Container(
           height: 4,
           decoration: BoxDecoration(
@@ -308,7 +415,9 @@ Future<void> _startSequence() async {
                   curve: Curves.easeInOut,
                   width: constraints.maxWidth * _barProgress,
                   decoration: BoxDecoration(
-                    color: _barProgress == 1.0 ? Colors.green[600] : _red,
+                    color: _barProgress == 1.0
+                        ? Colors.green[600]
+                        : _red,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -317,21 +426,19 @@ Future<void> _startSequence() async {
           ),
         ),
         const SizedBox(height: 14),
-        // mensagem de status
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
           child: Row(
             key: ValueKey(_statusMsg),
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (_state == _SplashState.carregando && _barProgress < 1.0)
-                SizedBox(
+              if (_state == _SplashState.carregando &&
+                  _barProgress < 1.0)
+                const SizedBox(
                   width: 12,
                   height: 12,
                   child: CircularProgressIndicator(
-                    strokeWidth: 1.8,
-                    color: _red,
-                  ),
+                      strokeWidth: 1.8, color: _red),
                 ),
               if (_barProgress == 1.0)
                 const Icon(Icons.check_circle_outline,
@@ -358,7 +465,6 @@ Future<void> _startSequence() async {
   Widget _buildErrorArea() {
     return Column(
       children: [
-        // ícone de erro
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -368,8 +474,7 @@ Future<void> _startSequence() async {
           ),
           child: Column(
             children: [
-              const Icon(Icons.cloud_off_rounded,
-                  color: _red, size: 28),
+              const Icon(Icons.cloud_off_rounded, color: _red, size: 28),
               const SizedBox(height: 10),
               Text(
                 _statusMsg,
@@ -386,17 +491,15 @@ Future<void> _startSequence() async {
                   _errorDetail!,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.red[400],
-                    height: 1.5,
-                  ),
+                      fontSize: 11,
+                      color: Colors.red[400],
+                      height: 1.5),
                 ),
               ],
             ],
           ),
         ),
         const SizedBox(height: 18),
-        // botão tentar novamente
         SizedBox(
           width: double.infinity,
           height: 46,
@@ -407,21 +510,22 @@ Future<void> _startSequence() async {
                 _statusMsg   = 'A iniciar…';
                 _errorDetail = null;
                 _barProgress = 0;
+                _connMode    = _ConnMode.desconhecido;
               });
+              _logoCtrl.reset();
+              _textCtrl.reset();
               _startSequence();
             },
             icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text(
-              'Tentar novamente',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
+            label: const Text('Tentar novamente',
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
               backgroundColor: _navy,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -429,19 +533,19 @@ Future<void> _startSequence() async {
     );
   }
 
-  // ── rodapé ───────────────────────────────────────────────────────
+  // ── Rodapé ────────────────────────────────────────────────────────
+
   Widget _buildFooter() {
     return Text(
       'STech Engenharia © ${DateTime.now().year}',
       style: TextStyle(
-        fontSize: 11,
-        color: _navy.withOpacity(.3),
-        letterSpacing: .4,
-      ),
+          fontSize: 11,
+          color: _navy.withOpacity(.3),
+          letterSpacing: .4),
     );
   }
 }
 
-// ── estados internos ────────────────────────────────────────────────
+// ── Enumerações internas ──────────────────────────────────────────────
 enum _SplashState { iniciando, carregando, erro }
-
+enum _ConnMode    { desconhecido, online, offlineFirst, fullOffline }
