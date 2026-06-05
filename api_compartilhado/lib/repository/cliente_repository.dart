@@ -48,20 +48,24 @@ class ClienteRepository {
   /// Lista todos os clientes.
   /// Online  → actualiza cache → retorna dados frescos.
   /// Offline → retorna cache local silenciosamente.
-  Future<List<ClienteModel>> listarTodos() async {
-    if (_connectivity.isOnline) {
-      try {
-        final lista = await _service.listarTodos();
-        await _dao.upsertAll(lista.map((c) => c.toLocalDb()).toList());
-        return lista;
-      } catch (e) {
-        debugPrint('⚠️ ClienteRepository.listarTodos HTTP falhou — usando cache: $e');
-      }
+Future<List<ClienteModel>> listarTodos() async {
+  debugPrint('🔌 isOnline=${_connectivity.isOnline} baseUrl=${ApiConfig.baseUrl}');
+  
+  if (_connectivity.isOnline) {
+    try {
+      final lista = await _service.listarTodos();
+      debugPrint('✅ HTTP OK: ${lista.length} clientes');
+      await _dao.upsertAll(lista.map((c) => c.toLocalDb()).toList());
+      return lista;
+    } catch (e) {
+      debugPrint('❌ HTTP falhou: $e');
     }
-    // Fallback: cache local
-    final rows = await _dao.getAll();
-    return rows.map(ClienteModel.fromLocalDb).toList();
   }
+  
+  final rows = await _dao.getAll();
+  debugPrint('📦 Cache local: ${rows.length} clientes');
+  return rows.map(ClienteModel.fromLocalDb).toList();
+}
 
   /// Lista clientes filtrados por perfil.
   Future<List<ClienteModel>> listarPorPerfil(int idPerfil) async {

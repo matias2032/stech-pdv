@@ -79,5 +79,6 @@ export 'repository/pedido_repository.dart';
 
 export 'core/database/daos/documento_fiscal_dao.dart';
 export 'repository/documento_fiscal_repository.dart';
-export '/repository/servico_repository.dart';
+export 'repository/servico_repository.dart';
 export 'core/database/daos/servico_dao.dart';
+export 'core/database/daos/usuario_dao.dart';

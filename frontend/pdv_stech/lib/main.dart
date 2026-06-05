@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
+import 'package:sqflite/sqflite.dart';
 
 
 
@@ -51,6 +52,14 @@ void main() async {
   ApiConfig.printConfig();
 
   await LocalDatabase.instance.init();
+  final count = Sqflite.firstIntValue(
+  await LocalDatabase.instance.db.rawQuery(
+    'SELECT COUNT(*) FROM produto',
+  ),
+);
+
+debugPrint('📦 Produtos no SQLite: $count');
+
   await ConnectivityService.instance.init(); // ← usa o init() unificado
 
   runApp(const MyApp());
@@ -125,6 +134,14 @@ final marcaService     = MarcaService();
     connectivity: connectivity,
   );
 
+final usuarioRepository = UsuarioRepository(
+  service: UsuarioService(),
+  dao: UsuarioDao(),
+  syncQueueDao: SyncQueueDao(),
+  connectivity: connectivity,
+);
+
+
 SyncScheduler.instance.init(
   connectivity:           connectivity,
   syncQueueDao:           SyncQueueDao(),
@@ -174,9 +191,11 @@ SyncScheduler.instance.init(
       ),
 
       // ── Produto ───────────────────────────────────────────────────
-      ChangeNotifierProvider(
-        create: (_) => ProdutoProvider(),
-      ),
+    ChangeNotifierProvider(
+  create: (_) => ProdutoProvider(
+    repository: produtoRepository,
+  ),
+),
 
       // ── Serviço ───────────────────────────────────────────────────
       ChangeNotifierProvider(

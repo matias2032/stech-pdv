@@ -2,34 +2,21 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/produto_model.dart';
-import '../services/produto_service.dart';
+import '../repository/produto_repository.dart';
 
 enum ProdutoStatus { idle, loading, success, error }
 
-/// Provider de produtos.
-///
-/// Expõe toda a superfície do [ProdutoService] com gestão de estado
-/// reactiva via [ChangeNotifier]:
-///
-///  • [produtos]           — lista completa (activos + inactivos)
-///  • [produtosAtivos]     — apenas os activos
-///  • [produtoActual]      — produto em foco (detalhe / edição)
-///  • [imagens]            — imagens do produto em foco
-///  • [categoriasDoProduto] — ids de categorias do produto em foco
-///  • [marcasDoProduto]    — ids de marcas do produto em foco
-///  • [status]             — estado da última operação
-///  • [errorMessage]       — mensagem de erro
 class ProdutoProvider extends ChangeNotifier {
-  // ── Dependência ──────────────────────────────────────────────────────────
-  final ProdutoService _service;
+  final ProdutoRepository _repository;
 
-  ProdutoProvider({ProdutoService? service})
-      : _service = service ?? ProdutoService.instance;
+  ProdutoProvider({
+    required ProdutoRepository repository,
+  }) : _repository = repository;
 
-  // ── Estado ───────────────────────────────────────────────────────────────
   List<ProdutoModel> _produtos = [];
   List<ProdutoModel> _produtosAtivos = [];
   ProdutoModel? _produtoActual;
+
   List<ProdutoImagemModel> _imagens = [];
   List<int> _categoriasDoProduto = [];
   List<int> _marcasDoProduto = [];
@@ -37,23 +24,23 @@ class ProdutoProvider extends ChangeNotifier {
   ProdutoStatus _status = ProdutoStatus.idle;
   String? _errorMessage;
 
-  // ── Getters ──────────────────────────────────────────────────────────────
   List<ProdutoModel> get produtos => List.unmodifiable(_produtos);
   List<ProdutoModel> get produtosAtivos => List.unmodifiable(_produtosAtivos);
   ProdutoModel? get produtoActual => _produtoActual;
+
   List<ProdutoImagemModel> get imagens => List.unmodifiable(_imagens);
-  List<int> get categoriasDoProduto =>
-      List.unmodifiable(_categoriasDoProduto);
+  List<int> get categoriasDoProduto => List.unmodifiable(_categoriasDoProduto);
   List<int> get marcasDoProduto => List.unmodifiable(_marcasDoProduto);
+
   ProdutoStatus get status => _status;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _status == ProdutoStatus.loading;
 
-  // ── Helper ────────────────────────────────────────────────────────────────
   Future<T?> _run<T>(Future<T> Function() fn) async {
     _status = ProdutoStatus.loading;
     _errorMessage = null;
     notifyListeners();
+
     try {
       final result = await fn();
       _status = ProdutoStatus.success;
@@ -68,69 +55,81 @@ class ProdutoProvider extends ChangeNotifier {
     }
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // CRUD BÁSICO
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
+  // CRUD BÁSICO — AGORA VIA REPOSITORY
+  // ─────────────────────────────────────────────
 
-  /// POST /api/produtos
   Future<ProdutoModel?> criar(ProdutoRequestModel dto) async {
-    final result = await _run(() => _service.criar(dto));
+    final result = await _run(() => _repository.criar(dto));
+
     if (result != null) {
       _produtoActual = result;
       _produtos = [result, ..._produtos];
-      if (result.estaAtivo) _produtosAtivos = [result, ..._produtosAtivos];
+
+      if (result.estaAtivo) {
+        _produtosAtivos = [result, ..._produtosAtivos];
+      }
     }
+
     return result;
   }
 
-  /// PUT /api/produtos/{id}
   Future<ProdutoModel?> atualizar(int id, ProdutoRequestModel dto) async {
-    final result = await _run(() => _service.atualizar(id, dto));
+    final result = await _run(() => _repository.atualizar(id, dto));
+
     if (result != null) {
       _produtoActual = result;
       _substituirNaLista(result);
     }
+
     return result;
   }
 
-  /// PATCH /api/produtos/{id}/toggle-ativo
-  /// Inverte o estado activo e re-sincroniza as listas locais.
   Future<bool> toggleAtivo(int id) async {
-    await _run(() => _service.toggleAtivo(id));
+    await _run(() => _repository.toggleAtivo(id));
+
     if (_status == ProdutoStatus.success) {
-      // Recarrega o produto actualizado para reflectir o novo estado
       await buscarPorId(id);
+      await listarAtivos();
       return true;
     }
+
     return false;
   }
 
-  /// GET /api/produtos
   Future<void> listar() async {
-    final result = await _run(() => _service.listar());
-    if (result != null) _produtos = result;
+    final result = await _run(() => _repository.listarTodos());
+
+    if (result != null) {
+      _produtos = result;
+    }
   }
 
-  /// GET /api/produtos/ativos
   Future<void> listarAtivos() async {
-    final result = await _run(() => _service.listarAtivos());
-    if (result != null) _produtosAtivos = result;
+    final result = await _run(() => _repository.listarAtivos());
+
+    if (result != null) {
+      _produtosAtivos = result;
+    }
   }
 
-  /// GET /api/produtos/{id}
   Future<ProdutoModel?> buscarPorId(int id) async {
-    final result = await _run(() => _service.buscarPorId(id));
-    if (result != null) _produtoActual = result;
+    final result = await _run(() => _repository.buscarPorId(id));
+
+    if (result != null) {
+      _produtoActual = result;
+    }
+
     return result;
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // CATEGORIAS
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
+  // CATEGORIAS — ainda requerem internet
+  // ─────────────────────────────────────────────
 
-  /// POST /api/produtos/{idProduto}/categorias/{idCategoria}
   Future<bool> associarCategoria(int idProduto, int idCategoria) async {
-    await _run(() => _service.associarCategoria(idProduto, idCategoria));
+    await _run(() => _repository.associarCategoria(idProduto, idCategoria));
+
     if (_status == ProdutoStatus.success) {
       if (!_categoriasDoProduto.contains(idCategoria)) {
         _categoriasDoProduto = [..._categoriasDoProduto, idCategoria];
@@ -138,35 +137,37 @@ class ProdutoProvider extends ChangeNotifier {
       }
       return true;
     }
+
     return false;
   }
 
-  /// DELETE /api/produtos/{idProduto}/categorias/{idCategoria}
   Future<bool> desassociarCategoria(int idProduto, int idCategoria) async {
-    await _run(() => _service.desassociarCategoria(idProduto, idCategoria));
+    await _run(() => _repository.desassociarCategoria(idProduto, idCategoria));
+
     if (_status == ProdutoStatus.success) {
       _categoriasDoProduto =
           _categoriasDoProduto.where((c) => c != idCategoria).toList();
       notifyListeners();
       return true;
     }
+
     return false;
   }
 
-  /// GET /api/produtos/{idProduto}/categorias
+  // Temporariamente mantidos vazios porque o Repository ainda não tem estes métodos.
+  // Depois podemos criar suporte offline/online para categorias e marcas do produto.
   Future<void> carregarCategoriasDoProduto(int idProduto) async {
-    final result =
-        await _run(() => _service.listarCategoriasDoProduto(idProduto));
-    if (result != null) _categoriasDoProduto = result;
+    _categoriasDoProduto = [];
+    notifyListeners();
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // MARCAS
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
+  // MARCAS — ainda requerem internet
+  // ─────────────────────────────────────────────
 
-  /// POST /api/produtos/{idProduto}/marcas/{idMarca}
   Future<bool> associarMarca(int idProduto, int idMarca) async {
-    await _run(() => _service.associarMarca(idProduto, idMarca));
+    await _run(() => _repository.associarMarca(idProduto, idMarca));
+
     if (_status == ProdutoStatus.success) {
       if (!_marcasDoProduto.contains(idMarca)) {
         _marcasDoProduto = [..._marcasDoProduto, idMarca];
@@ -174,40 +175,38 @@ class ProdutoProvider extends ChangeNotifier {
       }
       return true;
     }
+
     return false;
   }
 
-  /// DELETE /api/produtos/{idProduto}/marcas/{idMarca}
   Future<bool> desassociarMarca(int idProduto, int idMarca) async {
-    await _run(() => _service.desassociarMarca(idProduto, idMarca));
+    await _run(() => _repository.desassociarMarca(idProduto, idMarca));
+
     if (_status == ProdutoStatus.success) {
       _marcasDoProduto =
           _marcasDoProduto.where((m) => m != idMarca).toList();
       notifyListeners();
       return true;
     }
+
     return false;
   }
 
-  /// GET /api/produtos/{idProduto}/marcas
   Future<void> carregarMarcasDoProduto(int idProduto) async {
-    final result =
-        await _run(() => _service.listarMarcasDoProduto(idProduto));
-    if (result != null) _marcasDoProduto = result;
+    _marcasDoProduto = [];
+    notifyListeners();
   }
 
-  /// GET /api/produtos/marcas/{idMarca}/produtos
   Future<List<int>> listarProdutosDaMarca(int idMarca) async {
-    final result =
-        await _run(() => _service.listarProdutosDaMarca(idMarca));
-    return result ?? [];
+    return [];
   }
 
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
   // IMAGENS
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
+  // O ProdutoRepository actual ainda não tem métodos de imagem.
+  // Por enquanto, deixei como erro controlado para não chamar API directamente.
 
-  /// POST /api/produtos/{idProduto}/imagens  (multipart)
   Future<bool> adicionarImagem({
     required int idProduto,
     File? imagemFile,
@@ -216,61 +215,37 @@ class ProdutoProvider extends ChangeNotifier {
     String? legenda,
     int imagemPrincipal = 0,
   }) async {
-    await _run(() => _service.adicionarImagem(
-          idProduto: idProduto,
-          imagemFile: imagemFile,
-          imagemBytes: imagemBytes,
-          nomeArquivo: nomeArquivo,
-          legenda: legenda,
-          imagemPrincipal: imagemPrincipal,
-        ));
-    if (_status == ProdutoStatus.success) {
-      await carregarImagens(idProduto);
-      return true;
-    }
+    _status = ProdutoStatus.error;
+    _errorMessage =
+        'Upload de imagens ainda não está integrado ao ProdutoRepository.';
+    notifyListeners();
     return false;
   }
 
-  /// GET /api/produtos/{idProduto}/imagens
   Future<void> carregarImagens(int idProduto) async {
-    final result = await _run(() => _service.listarImagens(idProduto));
-    if (result != null) _imagens = result;
+    _imagens = [];
+    notifyListeners();
   }
 
-  /// PATCH /api/produtos/{idProduto}/imagens/{idImagem}/principal
   Future<bool> definirImagemPrincipal(int idProduto, int idImagem) async {
-    await _run(() => _service.definirImagemPrincipal(idProduto, idImagem));
-    if (_status == ProdutoStatus.success) {
-      // Actualiza estado local: marca o principal e limpa os outros
-      _imagens = _imagens.map((img) {
-        return ProdutoImagemModel(
-          idImagem: img.idImagem,
-          idProduto: img.idProduto,
-          caminhoImagem: img.caminhoImagem,
-          legenda: img.legenda,
-          imagemPrincipal: img.idImagem == idImagem ? 1 : 0,
-        );
-      }).toList();
-      notifyListeners();
-      return true;
-    }
+    _status = ProdutoStatus.error;
+    _errorMessage =
+        'Definir imagem principal ainda não está integrado ao ProdutoRepository.';
+    notifyListeners();
     return false;
   }
 
-  /// DELETE /api/produtos/imagens/{idImagem}
   Future<bool> removerImagem(int idImagem) async {
-    await _run(() => _service.removerImagem(idImagem));
-    if (_status == ProdutoStatus.success) {
-      _imagens = _imagens.where((img) => img.idImagem != idImagem).toList();
-      notifyListeners();
-      return true;
-    }
+    _status = ProdutoStatus.error;
+    _errorMessage =
+        'Remover imagem ainda não está integrado ao ProdutoRepository.';
+    notifyListeners();
     return false;
   }
 
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
   // UTILITÁRIOS
-  // ════════════════════════════════════════════════════════════════════════
+  // ─────────────────────────────────────────────
 
   void limparProdutoActual() {
     _produtoActual = null;
@@ -286,14 +261,27 @@ class ProdutoProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Substitui um produto nas listas locais após edição ────────────────
   void _substituirNaLista(ProdutoModel actualizado) {
     _produtos = _produtos.map((p) {
       return p.idProduto == actualizado.idProduto ? actualizado : p;
     }).toList();
-    _produtosAtivos = _produtosAtivos
-        .where((p) => p.idProduto != actualizado.idProduto || actualizado.estaAtivo)
-        .map((p) => p.idProduto == actualizado.idProduto ? actualizado : p)
-        .toList();
+
+    if (actualizado.estaAtivo) {
+      final existe = _produtosAtivos.any(
+        (p) => p.idProduto == actualizado.idProduto,
+      );
+
+      if (existe) {
+        _produtosAtivos = _produtosAtivos.map((p) {
+          return p.idProduto == actualizado.idProduto ? actualizado : p;
+        }).toList();
+      } else {
+        _produtosAtivos = [actualizado, ..._produtosAtivos];
+      }
+    } else {
+      _produtosAtivos = _produtosAtivos
+          .where((p) => p.idProduto != actualizado.idProduto)
+          .toList();
+    }
   }
 }
