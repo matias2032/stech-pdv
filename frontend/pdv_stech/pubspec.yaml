@@ -14,6 +14,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   desktop_drop: ^0.4.4
   image_picker: ^1.0.7
+  sqflite_common_ffi: ^2.3.4
 
   # CORRIGIDO: Subindo dois níveis para encontrar a pasta na raiz
   api_compartilhado:

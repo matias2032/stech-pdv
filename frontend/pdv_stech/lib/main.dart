@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:io';
 
 
 
@@ -39,10 +41,15 @@ import 'screens/extractos_form_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ── SQLite FFI — obrigatório em Windows/Linux/macOS ──────────────
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   await ApiConfig.baseUrlAsync;
   ApiConfig.printConfig();
 
-  // ── Infraestrutura offline-first (ordem importante) ───────────────
   await LocalDatabase.instance.init();
   await ConnectivityService.instance.init();
 
