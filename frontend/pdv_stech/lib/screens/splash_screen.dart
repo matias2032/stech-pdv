@@ -111,19 +111,22 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     // 6. Verificar se há dados locais em modo offline
-    if (!isBackendUp) {
-      _setStep('A verificar dados locais…', 0.85);
-      final temDados = await _verificarDadosLocais();
-      if (!temDados && !isBackendUp) {
-        // Sem dados locais E sem backend → erro real
-        _setError(
-          'Sem dados disponíveis.',
-          'Não foi possível ligar ao servidor e não existem dados em cache.\n'
-          'Verifique a sua ligação e tente novamente.',
-        );
-        return;
-      }
+if (!isBackendUp) {
+  _setStep('A verificar dados locais…', 0.85);
+  final temDados = await _verificarDadosLocais();
+  if (!temDados) {
+    // Sem cache: se há rede mas o backend não responde (Render a dormir),
+    // deixa passar — o login vai tentar HTTP e gerir o erro.
+    // Só bloqueia se não há rede nenhuma (fullOffline sem cache = impossível operar).
+    if (_connMode == _ConnMode.fullOffline) {
+      _setError(
+        'Sem ligação e sem dados locais.',
+        'Ligue-se à internet para o primeiro acesso.\n'
+        'Após o primeiro login, a app funciona offline.',
+      );
+      return;
     }
+  }}
 
     // 7. Garantir tempo mínimo de splash
     _setStep('Pronto!', 1.0);
@@ -155,19 +158,21 @@ class _SplashScreenState extends State<SplashScreen>
 
   // ── Verifica se há dados no SQLite local ──────────────────────────
 
-  Future<bool> _verificarDadosLocais() async {
-    try {
-      final db = LocalDatabase.instance.db;
-      // Basta existir 1 utilizador ou 1 produto em cache
-      final usuarios = await db.rawQuery(
-          'SELECT COUNT(*) as total FROM usuario LIMIT 1');
-      final total = (usuarios.first['total'] as int?) ?? 0;
-      return total > 0;
-    } catch (_) {
-      return false;
-    }
+Future<bool> _verificarDadosLocais() async {
+  try {
+    final db = LocalDatabase.instance.db;
+    final r = await db.rawQuery(
+        'SELECT COUNT(*) as total FROM usuario');
+    final total = (r.first['total'] as int?) ?? 0;
+    if (total > 0) return true;
+    // fallback: pode ter produtos sem utilizadores (edge case)
+    final r2 = await db.rawQuery(
+        'SELECT COUNT(*) as total FROM produto');
+    return ((r2.first['total'] as int?) ?? 0) > 0;
+  } catch (_) {
+    return false; // SQLite ainda não inicializado — deixa passar
   }
-
+}
   // ── Helpers de estado ─────────────────────────────────────────────
 
   void _setStep(String msg, double progress) {
