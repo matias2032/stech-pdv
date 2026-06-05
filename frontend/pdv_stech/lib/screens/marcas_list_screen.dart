@@ -12,7 +12,7 @@ const _kCinzaClaro = Color(0xFFF4F5F7);
 const _kCinzaTexto = Color(0xFF6B7280);
 
 class MarcasListScreen extends StatefulWidget {
-  const MarcasListScreen({Key? key}) : super(key: key);
+  const MarcasListScreen({super.key});
 
   @override
   State<MarcasListScreen> createState() => _MarcasListScreenState();
@@ -20,10 +20,11 @@ class MarcasListScreen extends StatefulWidget {
 
 class _MarcasListScreenState extends State<MarcasListScreen> {
   final MarcaService _marcaService = MarcaService();
-  final CategoriaService _categoriaService = CategoriaService();
-  
-  List<Marca> _marcas = [];
-  Map<int, List<Categoria>> _categoriasPorMarca = {};
+
+  List<MarcaModel> _marcas = [];
+  // Cache de categorias por marca — populado quando o backend
+  // disponibilizar endpoint de categorias-por-marca.
+  Map<int, List<CategoriaModel>> _categoriasPorMarca = {};
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -33,33 +34,32 @@ class _MarcasListScreenState extends State<MarcasListScreen> {
     _carregarMarcas();
   }
 
-  
-Future<void> _carregarMarcas() async {
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-  });
+  Future<void> _carregarMarcas() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-  try {
-    // Agora usa o endpoint que já traz as categorias
-    final marcas = await _marcaService.listarMarcasComCategorias();
-    
-    setState(() {
-      _marcas = marcas;
-      _isLoading = false;
-    });
-  } catch (e) {
-    setState(() {
-      _errorMessage = 'Erro ao carregar marcas: $e';
-      _isLoading = false;
-    });
+    try {
+      final marcas = await _marcaService.listarMarcasComCategorias();
+      setState(() {
+        _marcas = marcas;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erro ao carregar marcas: $e';
+        _isLoading = false;
+      });
+    }
   }
-}
 
+  Future<void> _deletarMarca(MarcaModel marca) async {
+    // MarcaModel não tem campo categorias — usa mapa externo.
+    // Quando o backend disponibilizar endpoint de categorias-por-marca,
+    // popular _categoriasPorMarca em _carregarMarcas().
+    final categorias = _categoriasPorMarca[marca.id] ?? [];
 
-  Future<void> _deletarMarca(Marca marca) async {
-     final categorias = marca.categorias ?? []; // SIMPLIFICADO
-    
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -116,9 +116,9 @@ Future<void> _carregarMarcas() async {
       ),
     );
 
-    if (confirmar == true && marca.idMarca != null) {
+    if (confirmar == true) {
       try {
-        await _marcaService.deletarMarca(marca.idMarca!);
+        await _marcaService.deletarMarca(marca.id);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -142,7 +142,7 @@ Future<void> _carregarMarcas() async {
     }
   }
 
-  void _navegarParaFormulario({Marca? marca}) async {
+  void _navegarParaFormulario({MarcaModel? marca}) async {
     final resultado = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -168,7 +168,6 @@ Future<void> _carregarMarcas() async {
           ),
         ],
       ),
-     
       drawer: const AppSidebar(currentRoute: '/gerenciar_marcas'),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
@@ -239,13 +238,14 @@ Future<void> _carregarMarcas() async {
     );
   }
 
-Widget _buildMarcaCard(Marca marca) {
-  final categorias = marca.categorias ?? []; // SIMPLIFICADO
+  Widget _buildMarcaCard(MarcaModel marca) {
+    // MarcaModel não tem campo categorias — usa mapa externo.
+    final categorias = _categoriasPorMarca[marca.id] ?? [];
 
-  return Card(
-    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-    elevation: 2,
-    child: ExpansionTile(
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      elevation: 2,
+      child: ExpansionTile(
         leading: CircleAvatar(
           backgroundColor: Theme.of(context).primaryColor,
           child: Text(
@@ -290,7 +290,8 @@ Widget _buildMarcaCard(Marca marca) {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Icon(Icons.category_outlined, size: 48, color: Colors.grey[400]),
+                  Icon(Icons.category_outlined,
+                      size: 48, color: Colors.grey[400]),
                   const SizedBox(height: 8),
                   Text(
                     'Esta marca ainda não está associada a nenhuma categoria',

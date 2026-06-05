@@ -96,6 +96,27 @@ class DocumentoFiscalModel {
     );
   }
 
+    factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
+      DocumentoFiscalModel(
+        id:        row['id']         as int,
+        tipoDocumento: TipoDocumentoModel(
+          id:      row['id_tipo_doc'] as int,
+          codigo:  row['tipo_codigo'] as String? ?? '',
+          nome:    row['tipo_nome']   as String? ?? '',
+          prefixo: row['tipo_prefixo'] as String? ?? '',
+        ),
+        idPedido:       row['id_pedido']   as int,
+        referencia:     (row['referencia'] as String?) ?? '',
+        numeroSeq:      (row['numero_seq'] as int?) ?? 0,
+        ano:            (row['ano']        as int?) ?? 0,
+        codigoAt:       (row['codigo_at']  as String?) ?? '',
+        idUsuario:      row['id_usuario']  as int,
+        nomeUsuario:    (row['nome_usuario'] as String?) ?? '',
+        emitidoEm:      DateTime.parse(row['emitido_em'] as String),
+        anulado:        (row['anulado']    as int?) == 1,
+        motivoAnulacao: row['motivo_anulacao'] as String?,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'tipoDocumento': tipoDocumento.toJson(),
@@ -109,6 +130,26 @@ class DocumentoFiscalModel {
         'emitidoEm': emitidoEm.toIso8601String(),
         'anulado': anulado,
         'motivoAnulacao': motivoAnulacao,
+      };
+
+        Map<String, dynamic> toLocalDb() => {
+        'id':              id,
+        'id_tipo_doc':     tipoDocumento.id,
+        'tipo_codigo':     tipoDocumento.codigo,
+        'tipo_nome':       tipoDocumento.nome,
+        'tipo_prefixo':    tipoDocumento.prefixo,
+        'id_pedido':       idPedido,
+        'referencia':      referencia,
+        'numero_seq':      numeroSeq,
+        'ano':             ano,
+        'codigo_at':       codigoAt,
+        'id_usuario':      idUsuario,
+        'nome_usuario':    nomeUsuario,
+        'emitido_em':      emitidoEm.toIso8601String(),
+        'anulado':         anulado ? 1 : 0,
+        'motivo_anulacao': motivoAnulacao,
+        'sync_status':     'synced',
+        'updated_at':      DateTime.now().toIso8601String(),
       };
 
   DocumentoFiscalModel copyWith({

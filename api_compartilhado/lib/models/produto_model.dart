@@ -33,6 +33,8 @@ class ProdutoModel {
   double get precoEfectivo => precoPromocional ?? preco;
 
   factory ProdutoModel.fromJson(Map<String, dynamic> json) {
+
+
     return ProdutoModel(
       idProduto: json['idProduto'] as int,
       nomeProduto: json['nomeProduto'] as String,
@@ -57,6 +59,37 @@ class ProdutoModel {
       imagemPrincipalUrl: json['imagemPrincipalUrl'] as String?,
     );
   }
+
+  // Adicionar dentro de ProdutoModel, após fromJson():
+
+factory ProdutoModel.fromLocalDb(Map<String, dynamic> row) => ProdutoModel(
+      idProduto:         row['id']                  as int,
+      nomeProduto:       row['nome_produto']         as String,
+      descricao:         row['descricao']            as String?,
+      preco:             (row['preco']               as num).toDouble(),
+      quantidadeEstoque: row['quantidade_estoque']   as int,
+      precoPromocional:  row['preco_promocional'] != null
+          ? (row['preco_promocional'] as num).toDouble()
+          : null,
+      ativo:             row['ativo']                as int? ?? 1,
+      categorias:        const [],  // não guardamos relações N:N localmente
+      marcas:            const [],
+    );
+
+Map<String, dynamic> toLocalDb() => {
+      'id':                 idProduto,
+      'local_id':           null,
+      'nome_produto':       nomeProduto,
+      'descricao':          descricao,
+      'preco':              preco,
+      'preco_promocional':  precoPromocional,
+      'quantidade_estoque': quantidadeEstoque,
+      'ativo':              ativo,
+      'sync_status':        'synced',
+      'updated_at':         DateTime.now().toIso8601String(),
+    };
+
+    
 
   Map<String, dynamic> toJson() => {
         'idProduto': idProduto,

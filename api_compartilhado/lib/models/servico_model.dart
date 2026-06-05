@@ -6,6 +6,13 @@ class ServicoModel {
   final double precoUnitario;
   final String unidade; // página, folha, unidade…
   final bool ativo;
+  final String syncStatus;
+final String? localId;
+
+bool get isPending  => syncStatus == 'pending';
+bool get isSynced   => syncStatus == 'synced';
+bool get isConflict => syncStatus == 'conflict';
+bool get isOffline  => isPending;
 
   const ServicoModel({
     required this.idServico,
@@ -14,6 +21,8 @@ class ServicoModel {
     required this.precoUnitario,
     required this.unidade,
     required this.ativo,
+      this.syncStatus = 'synced',   // ← novo
+  this.localId,    
   });
 
   factory ServicoModel.fromJson(Map<String, dynamic> json) {
@@ -43,6 +52,8 @@ class ServicoModel {
     double? precoUnitario,
     String? unidade,
     bool? ativo,
+      String? syncStatus,
+  String? localId,
   }) {
     return ServicoModel(
       idServico: idServico ?? this.idServico,
@@ -51,8 +62,31 @@ class ServicoModel {
       precoUnitario: precoUnitario ?? this.precoUnitario,
       unidade: unidade ?? this.unidade,
       ativo: ativo ?? this.ativo,
+        syncStatus: syncStatus ?? this.syncStatus,
+  localId:    localId    ?? this.localId,
     );
   }
+  factory ServicoModel.fromLocalDb(Map<String, dynamic> row) => ServicoModel(
+      idServico:     row['id']             as int,
+      nomeServico:   row['nome_servico']   as String,
+      descricao:     row['descricao']      as String?,
+      precoUnitario: (row['preco_unitario'] as num).toDouble(),
+      unidade:       row['unidade']        as String? ?? 'página',
+      ativo:         (row['ativo']         as int? ?? 1) == 1,
+    );
+
+Map<String, dynamic> toLocalDb() => {
+      'id':            idServico,
+      'local_id':      null,
+      'nome_servico':  nomeServico,
+      'descricao':     descricao,
+      'preco_unitario': precoUnitario,
+      'unidade':       unidade,
+      'ativo':         ativo ? 1 : 0,
+      'sync_status':   'synced',
+      'updated_at':    DateTime.now().toIso8601String(),
+    };
+
 
   @override
   String toString() =>

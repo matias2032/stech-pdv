@@ -44,7 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Ignorar instaladores e builds pesados de distribuição
-installer/
-*.exe
-*.msi
+.run_local.bat
+.run_windows.bat
+**/installer/

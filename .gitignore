@@ -38,17 +38,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-
-
 # ── Segredos — NUNCA commitar ─────────────────────────────────────────────────
 backend/src/main/resources/firebase-service-account.json
 **/firebase-service-account.json
 **/*.env
 **/application-local.properties
 
-# ── Instaladores Globais (Otimizado) ──────────────────────────────────────────
 **/installer/
-**/Output/
-*.exe
-*.msi
-**/application-local.properties 
+.run_local.bat
+.run_windows.bat

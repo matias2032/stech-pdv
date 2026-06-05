@@ -1,182 +1,111 @@
-// lib/services/categoria_service.dart
+// lib/services/categoria_service.dart  (dentro de api_compartilhado)
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:api_compartilhado/api_config.dart';
-import '../models/categoria_model.dart';
+import 'package:api_compartilhado/models/categoria_model.dart';
+
+class CategoriaServiceException implements Exception {
+  final String message;
+  const CategoriaServiceException(this.message);
+  @override
+  String toString() => 'CategoriaServiceException: $message';
+}
 
 class CategoriaService {
-  // ===== LISTAR TODAS AS CATEGORIAS =====
-  Future<List<Categoria>> listarCategorias() async {
-    try {
-      final response = await http
-          .get(
-            Uri.parse(ApiConfig.categoriasUrl),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+  CategoriaService({http.Client? client})
+      : _client = client ?? http.Client();
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Categoria.fromJson(json)).toList();
-      } else {
-        throw Exception('Erro ao carregar categorias: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no listarCategorias: $e');
-      rethrow;
+  final http.Client _client;
+
+  Future<List<CategoriaModel>> listarCategorias() async {
+    final response = await _client
+        .get(Uri.parse(ApiConfig.categoriasUrl), headers: ApiConfig.defaultHeaders)
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body) as List<dynamic>;
+      return data
+          .map((j) => CategoriaModel.fromJson(j as Map<String, dynamic>))
+          .toList();
     }
+    throw CategoriaServiceException('Erro ao carregar categorias: ${response.statusCode}');
   }
 
-  // ===== BUSCAR CATEGORIA POR ID =====
-  Future<Categoria> buscarCategoriaPorId(int id) async {
-    try {
-      final response = await http
-          .get(
-            Uri.parse('${ApiConfig.categoriasUrl}/$id'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+  Future<CategoriaModel> buscarCategoriaPorId(int id) async {
+    final response = await _client
+        .get(Uri.parse('${ApiConfig.categoriasUrl}/$id'), headers: ApiConfig.defaultHeaders)
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 200) {
-        return Categoria.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Categoria não encontrada: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no buscarCategoriaPorId: $e');
-      rethrow;
+    if (response.statusCode == 200) {
+      return CategoriaModel.fromJson(json.decode(response.body) as Map<String, dynamic>);
     }
+    throw CategoriaServiceException('Categoria não encontrada: ${response.statusCode}');
   }
 
-  // ===== CRIAR CATEGORIA =====
-  Future<Categoria> criarCategoria(Categoria categoria) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(ApiConfig.categoriasUrl),
-            headers: ApiConfig.defaultHeaders,
-            body: json.encode(categoria.toJsonCreate()),
-          )
-          .timeout(ApiConfig.timeout);
+  Future<CategoriaModel> criarCategoria(CategoriaRequestDTO dto) async {
+    final response = await _client
+        .post(
+          Uri.parse(ApiConfig.categoriasUrl),
+          headers: ApiConfig.defaultHeaders,
+          body: json.encode(dto.toJson()),
+        )
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        print('✅ Categoria criada com sucesso');
-        return Categoria.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Erro ao criar categoria: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no criarCategoria: $e');
-      rethrow;
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return CategoriaModel.fromJson(json.decode(response.body) as Map<String, dynamic>);
     }
+    throw CategoriaServiceException('Erro ao criar categoria: ${response.statusCode}');
   }
 
-  // ===== ATUALIZAR CATEGORIA =====
-  Future<Categoria> atualizarCategoria(int id, Categoria categoria) async {
-    try {
-      final response = await http
-          .put(
-            Uri.parse('${ApiConfig.categoriasUrl}/$id'),
-            headers: ApiConfig.defaultHeaders,
-            body: json.encode(categoria.toJsonCreate()),
-          )
-          .timeout(ApiConfig.timeout);
+  Future<CategoriaModel> atualizarCategoria(int id, CategoriaRequestDTO dto) async {
+    final response = await _client
+        .put(
+          Uri.parse('${ApiConfig.categoriasUrl}/$id'),
+          headers: ApiConfig.defaultHeaders,
+          body: json.encode(dto.toJson()),
+        )
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 200) {
-        print('✅ Categoria atualizada com sucesso');
-        return Categoria.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Erro ao atualizar categoria: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no atualizarCategoria: $e');
-      rethrow;
+    if (response.statusCode == 200) {
+      return CategoriaModel.fromJson(json.decode(response.body) as Map<String, dynamic>);
     }
+    throw CategoriaServiceException('Erro ao atualizar categoria: ${response.statusCode}');
   }
 
-  // ===== DELETAR CATEGORIA =====
   Future<void> deletarCategoria(int id) async {
-    try {
-      final response = await http
-          .delete(
-            Uri.parse('${ApiConfig.categoriasUrl}/$id'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+    final response = await _client
+        .delete(Uri.parse('${ApiConfig.categoriasUrl}/$id'), headers: ApiConfig.defaultHeaders)
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 204 || response.statusCode == 200) {
-        print('✅ Categoria deletada com sucesso');
-      } else {
-        throw Exception('Erro ao deletar categoria: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no deletarCategoria: $e');
-      rethrow;
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw CategoriaServiceException('Erro ao deletar categoria: ${response.statusCode}');
     }
   }
 
-  // ===== LISTAR MARCAS DA CATEGORIA =====
-  Future<List<int>> listarMarcasDaCategoria(int idCategoria) async {
-    try {
-      final response = await http
-          .get(
-            Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<int>();
-      } else {
-        throw Exception('Erro ao carregar marcas: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no listarMarcasDaCategoria: $e');
-      rethrow;
-    }
-  }
-
-  // ===== ASSOCIAR MARCA À CATEGORIA =====
   Future<void> associarMarca(int idCategoria, int idMarca) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+    final response = await _client
+        .post(
+          Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
+          headers: ApiConfig.defaultHeaders,
+        )
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 200) {
-        print('✅ Marca $idMarca associada à categoria $idCategoria');
-      } else {
-        throw Exception('Erro ao associar marca: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no associarMarca: $e');
-      rethrow;
+    if (response.statusCode != 200) {
+      throw CategoriaServiceException('Erro ao associar marca: ${response.statusCode}');
     }
   }
 
-  // ===== DESASSOCIAR MARCA DA CATEGORIA =====
   Future<void> desassociarMarca(int idCategoria, int idMarca) async {
-    try {
-      final response = await http
-          .delete(
-            Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+    final response = await _client
+        .delete(
+          Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
+          headers: ApiConfig.defaultHeaders,
+        )
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 204 || response.statusCode == 200) {
-        print('✅ Marca $idMarca desassociada da categoria $idCategoria');
-      } else {
-        throw Exception('Erro ao desassociar marca: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no desassociarMarca: $e');
-      rethrow;
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw CategoriaServiceException('Erro ao desassociar marca: ${response.statusCode}');
     }
   }
 }

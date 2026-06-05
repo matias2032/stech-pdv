@@ -2,8 +2,12 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:api_compartilhado/api_config.dart';
-import 'package:api_compartilhado/models/cliente_model.dart';import 'package:api_compartilhado/models/cliente_model.dart';
+import 'package:api_compartilhado/models/cliente_model.dart';
+import 'package:api_compartilhado/models/cliente_model.dart';
 import 'package:api_compartilhado/services/cliente_service.dart';
+import '../repository/cliente_repository.dart';
+import '../../../core/connectivity/connectivity_service.dart';
+
 // ═══════════════════════════════════════════════════════════════════
 // Estado da listagem
 // ═══════════════════════════════════════════════════════════════════
@@ -11,18 +15,23 @@ import 'package:api_compartilhado/services/cliente_service.dart';
 enum ClienteListaStatus { inicial, carregando, sucesso, erro }
 
 class ClienteListaProvider extends ChangeNotifier {
-  ClienteListaProvider({required ClienteService service})
-      : _service = service;
+  ClienteListaProvider({
+    required ClienteRepository   repository,
+    required ConnectivityService connectivity,
+  })  : _repository   = repository,
+        _connectivity = connectivity;
 
-  final ClienteService _service;
+  final ClienteRepository   _repository;
+  final ConnectivityService _connectivity;
 
   // ── Estado ────────────────────────────────────────────────────────
 
-  ClienteListaStatus _status = ClienteListaStatus.inicial;
-  List<ClienteModel> _clientes = [];
+  ClienteListaStatus _status       = ClienteListaStatus.inicial;
+  List<ClienteModel> _clientes     = [];
   String?            _erro;
   String             _termoPesquisa = '';
   int?               _filtroPerfil;
+  bool               _modoOffline  = false;
 
   // ── Getters ───────────────────────────────────────────────────────
 
@@ -32,22 +41,28 @@ class ClienteListaProvider extends ChangeNotifier {
   bool               get carregando   => _status == ClienteListaStatus.carregando;
   bool               get temErro      => _status == ClienteListaStatus.erro;
 
+  /// True quando os dados vêm do cache local (sem internet).
+  bool               get modoOffline  => _modoOffline;
+
   // ── CARREGAR ──────────────────────────────────────────────────────
 
   Future<void> carregar() async {
     _setStatus(ClienteListaStatus.carregando);
     try {
       if (_termoPesquisa.isNotEmpty) {
-        _clientes = await _service.pesquisar(_termoPesquisa);
+        _clientes = await _repository.pesquisar(_termoPesquisa);
       } else if (_filtroPerfil != null) {
-        _clientes = await _service.listarPorPerfil(_filtroPerfil!);
+        _clientes = await _repository.listarPorPerfil(_filtroPerfil!);
       } else {
-        _clientes = await _service.listarTodos();
+        _clientes = await _repository.listarTodos();
       }
-      _erro = null;
+      _modoOffline = _connectivity.isOffline;
+      _erro        = null;
       _setStatus(ClienteListaStatus.sucesso);
-    } on ClienteServiceException catch (e) {
-      _erro = e.mensagem;
+    } catch (e) {
+      // O repositório só propaga excepções em escritas online que falham.
+      // Em leituras, o fallback é silencioso.
+      _erro = 'Erro inesperado: $e';
       _setStatus(ClienteListaStatus.erro);
     }
   }
@@ -74,13 +89,6 @@ class ClienteListaProvider extends ChangeNotifier {
     await carregar();
   }
 
-  // ── REMOVER LOCALMENTE após exclusão confirmada ───────────────────
-
-  void removerLocal(int id) {
-    _clientes = _clientes.where((c) => c.id != id).toList();
-    notifyListeners();
-  }
-
   // ── UPSERT LOCAL após criação/edição confirmada ───────────────────
 
   void upsertLocal(ClienteModel cliente) {
@@ -90,6 +98,13 @@ class ClienteListaProvider extends ChangeNotifier {
     } else {
       _clientes = [cliente, ..._clientes];
     }
+    notifyListeners();
+  }
+
+  // ── REMOVER LOCAL após exclusão confirmada ────────────────────────
+
+  void removerLocal(int id) {
+    _clientes = _clientes.where((c) => c.id != id).toList();
     notifyListeners();
   }
 
@@ -108,14 +123,14 @@ class ClienteListaProvider extends ChangeNotifier {
 enum ClienteFormStatus { inicial, salvando, sucesso, erro }
 
 class ClienteFormProvider extends ChangeNotifier {
-  ClienteFormProvider({required ClienteService service})
-      : _service = service;
+  ClienteFormProvider({required ClienteRepository repository})
+      : _repository = repository;
 
-  final ClienteService _service;
+  final ClienteRepository _repository;
 
   // ── Estado ────────────────────────────────────────────────────────
 
-  ClienteFormStatus _status  = ClienteFormStatus.inicial;
+  ClienteFormStatus _status = ClienteFormStatus.inicial;
   String?           _erro;
   ClienteModel?     _salvo;
 
@@ -133,11 +148,11 @@ class ClienteFormProvider extends ChangeNotifier {
   Future<void> criar(ClienteRequestDTO dto) async {
     _setStatus(ClienteFormStatus.salvando);
     try {
-      _salvo = await _service.criar(dto);
+      _salvo = await _repository.criar(dto);
       _erro  = null;
       _setStatus(ClienteFormStatus.sucesso);
-    } on ClienteServiceException catch (e) {
-      _erro  = e.mensagem;
+    } catch (e) {
+      _erro  = _extrairMensagem(e);
       _salvo = null;
       _setStatus(ClienteFormStatus.erro);
     }
@@ -148,17 +163,17 @@ class ClienteFormProvider extends ChangeNotifier {
   Future<void> editar(int id, ClienteRequestDTO dto) async {
     _setStatus(ClienteFormStatus.salvando);
     try {
-      _salvo = await _service.editar(id, dto);
+      _salvo = await _repository.editar(id, dto);
       _erro  = null;
       _setStatus(ClienteFormStatus.sucesso);
-    } on ClienteServiceException catch (e) {
-      _erro  = e.mensagem;
+    } catch (e) {
+      _erro  = _extrairMensagem(e);
       _salvo = null;
       _setStatus(ClienteFormStatus.erro);
     }
   }
 
-  // ── RESETAR para reutilizar o provider em novo formulário ─────────
+  // ── RESETAR ───────────────────────────────────────────────────────
 
   void resetar() {
     _status = ClienteFormStatus.inicial;
@@ -167,7 +182,12 @@ class ClienteFormProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Helper ────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────
+
+  String _extrairMensagem(Object e) {
+    if (e is ClienteServiceException) return e.mensagem;
+    return 'Erro inesperado: $e';
+  }
 
   void _setStatus(ClienteFormStatus s) {
     _status = s;
@@ -182,10 +202,10 @@ class ClienteFormProvider extends ChangeNotifier {
 enum ClienteExclusaoStatus { inicial, excluindo, sucesso, erro }
 
 class ClienteExclusaoProvider extends ChangeNotifier {
-  ClienteExclusaoProvider({required ClienteService service})
-      : _service = service;
+  ClienteExclusaoProvider({required ClienteRepository repository})
+      : _repository = repository;
 
-  final ClienteService _service;
+  final ClienteRepository _repository;
 
   // ── Estado ────────────────────────────────────────────────────────
 
@@ -205,11 +225,11 @@ class ClienteExclusaoProvider extends ChangeNotifier {
   Future<void> excluir(int id) async {
     _setStatus(ClienteExclusaoStatus.excluindo);
     try {
-      await _service.excluir(id);
+      await _repository.excluir(id);
       _erro = null;
       _setStatus(ClienteExclusaoStatus.sucesso);
-    } on ClienteServiceException catch (e) {
-      _erro = e.mensagem;
+    } catch (e) {
+      _erro = e is ClienteServiceException ? e.mensagem : 'Erro inesperado: $e';
       _setStatus(ClienteExclusaoStatus.erro);
     }
   }

@@ -1,59 +1,78 @@
-// lib/models/marca_model.dart
+// lib/features/marca/model/marca_model.dart
 
-import 'categoria_model.dart';
-
-class Marca {
-  final int? idMarca;
+class MarcaModel {
+  final int id;
   final String nomeMarca;
-  final List<Categoria>? categorias; // NOVO
+  final String syncStatus;
+  final String? localId;
+  final String? updatedAt;
 
-  Marca({
-    this.idMarca,
+  const MarcaModel({
+    required this.id,
     required this.nomeMarca,
-    this.categorias, // NOVO
+    this.syncStatus = 'synced',
+    this.localId,
+    this.updatedAt,
   });
 
-  factory Marca.fromJson(Map<String, dynamic> json) {
-    return Marca(
-      idMarca: json['idMarca'],
-      nomeMarca: json['nomeMarca'],
-      categorias: json['categorias'] != null
-          ? (json['categorias'] as List)
-              .map((cat) => Categoria.fromJson(cat))
-              .toList()
-          : null,
-    );
-  }
+  bool get isPending  => syncStatus == 'pending';
+  bool get isSynced   => syncStatus == 'synced';
+  bool get isConflict => syncStatus == 'conflict';
+  bool get isOffline  => isPending;
 
-  Map<String, dynamic> toJson() {
-    return {
-      if (idMarca != null) 'idMarca': idMarca,
-      'nomeMarca': nomeMarca,
-      if (categorias != null)
-        'categorias': categorias!.map((c) => c.toJson()).toList(),
-    };
-  }
+  factory MarcaModel.fromJson(Map<String, dynamic> json) => MarcaModel(
+        id:         json['idMarca']   as int,
+        nomeMarca:  json['nomeMarca'] as String,
+        syncStatus: (json['syncStatus'] as String?)?.toLowerCase() ?? 'synced',
+        updatedAt:  json['updatedAt']  as String?,
+      );
 
-  Map<String, dynamic> toJsonCreate() {
-    return {
-      'nomeMarca': nomeMarca,
-    };
-  }
+  factory MarcaModel.fromLocalDb(Map<String, dynamic> row) => MarcaModel(
+        id:         row['id']          as int,
+        nomeMarca:  row['nome_marca']  as String,
+        syncStatus: row['sync_status'] as String? ?? 'synced',
+        localId:    row['local_id']    as String?,
+        updatedAt:  row['updated_at']  as String?,
+      );
 
-  Marca copyWith({
-    int? idMarca,
+  Map<String, dynamic> toJson() => {
+        'nomeMarca': nomeMarca,
+      };
+
+  Map<String, dynamic> toLocalDb() => {
+        'id':          id,
+        'local_id':    localId,
+        'nome_marca':  nomeMarca,
+        'sync_status': syncStatus,
+        'updated_at':  updatedAt,
+      };
+
+  MarcaModel copyWith({
+    int?    id,
     String? nomeMarca,
-    List<Categoria>? categorias,
-  }) {
-    return Marca(
-      idMarca: idMarca ?? this.idMarca,
-      nomeMarca: nomeMarca ?? this.nomeMarca,
-      categorias: categorias ?? this.categorias,
-    );
-  }
+    String? syncStatus,
+    String? localId,
+    String? updatedAt,
+  }) => MarcaModel(
+        id:         id         ?? this.id,
+        nomeMarca:  nomeMarca  ?? this.nomeMarca,
+        syncStatus: syncStatus ?? this.syncStatus,
+        localId:    localId    ?? this.localId,
+        updatedAt:  updatedAt  ?? this.updatedAt,
+      );
 
   @override
-  String toString() {
-    return 'Marca{idMarca: $idMarca, nomeMarca: $nomeMarca, categorias: ${categorias?.length ?? 0}}';
-  }
+  bool operator ==(Object other) => other is MarcaModel && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'MarcaModel{id: $id, nomeMarca: $nomeMarca, syncStatus: $syncStatus}';
+}
+
+class MarcaRequestDTO {
+  final String nomeMarca;
+  const MarcaRequestDTO({required this.nomeMarca});
+  Map<String, dynamic> toJson() => {'nomeMarca': nomeMarca};
 }

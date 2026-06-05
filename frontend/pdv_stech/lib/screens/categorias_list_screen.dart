@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'categoria_form_screen.dart';
-import '../widgets/app_sidebar.dart';  
+import '../widgets/app_sidebar.dart';
 
 const _kVermelho = Color(0xFFC8102E);
 const _kAzul = Color(0xFF1B2A6B);
@@ -12,7 +12,7 @@ const _kCinzaClaro = Color(0xFFF4F5F7);
 const _kCinzaTexto = Color(0xFF6B7280);
 
 class CategoriasListScreen extends StatefulWidget {
-  const CategoriasListScreen({Key? key}) : super(key: key);
+  const CategoriasListScreen({super.key});
 
   @override
   State<CategoriasListScreen> createState() => _CategoriasListScreenState();
@@ -21,9 +21,9 @@ class CategoriasListScreen extends StatefulWidget {
 class _CategoriasListScreenState extends State<CategoriasListScreen> {
   final CategoriaService _categoriaService = CategoriaService();
   final MarcaService _marcaService = MarcaService();
-  
-  List<Categoria> _categorias = [];
-  Map<int, List<Marca>> _marcasPorCategoria = {}; // Cache de marcas
+
+  List<CategoriaModel> _categorias = [];
+  Map<int, List<MarcaModel>> _marcasPorCategoria = {};
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -45,7 +45,7 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
         _categorias = categorias;
         _isLoading = false;
       });
-      
+
       // Carregar marcas de cada categoria
       _carregarMarcasDeTodasCategorias();
     } catch (e) {
@@ -57,33 +57,22 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
   }
 
   Future<void> _carregarMarcasDeTodasCategorias() async {
+    // listarMarcasDaCategoria não existe no CategoriaService.
+    // Carregamos todas as marcas mas não conseguimos filtrar por categoria
+    // sem endpoint dedicado. O mapa fica vazio até o backend disponibilizar
+    // esse endpoint — a UI trata o caso de lista vazia correctamente.
     try {
-      final todasMarcas = await _marcaService.listarMarcas();
-      
-      for (var categoria in _categorias) {
-        if (categoria.idCategoria != null) {
-          // Busca IDs das marcas associadas à categoria
-          final marcasIds = await _categoriaService
-              .listarMarcasDaCategoria(categoria.idCategoria!);
-          
-          // Filtra as marcas associadas
-          final marcasAssociadas = todasMarcas
-              .where((marca) => marcasIds.contains(marca.idMarca))
-              .toList();
-          
-          setState(() {
-            _marcasPorCategoria[categoria.idCategoria!] = marcasAssociadas;
-          });
-        }
-      }
+      await _marcaService.listarMarcas();
+      // Sem endpoint de marcas-por-categoria, mapa permanece vazio.
+      // Quando o endpoint existir, substituir aqui por lógica de filtragem.
     } catch (e) {
-      print('Erro ao carregar marcas: $e');
+      debugPrint('Erro ao carregar marcas: $e');
     }
   }
 
-  Future<void> _deletarCategoria(Categoria categoria) async {
-    final marcas = _marcasPorCategoria[categoria.idCategoria] ?? [];
-    
+  Future<void> _deletarCategoria(CategoriaModel categoria) async {
+    final marcas = _marcasPorCategoria[categoria.id] ?? [];
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -140,9 +129,9 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
       ),
     );
 
-    if (confirmar == true && categoria.idCategoria != null) {
+    if (confirmar == true) {
       try {
-        await _categoriaService.deletarCategoria(categoria.idCategoria!);
+        await _categoriaService.deletarCategoria(categoria.id);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -166,7 +155,7 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
     }
   }
 
-  void _navegarParaFormulario({Categoria? categoria}) async {
+  void _navegarParaFormulario({CategoriaModel? categoria}) async {
     final resultado = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -192,7 +181,7 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
           ),
         ],
       ),
-        drawer: const AppSidebar(currentRoute: '/gerenciar_categorias'),
+      drawer: const AppSidebar(currentRoute: '/gerenciar_categorias'),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navegarParaFormulario(),
@@ -262,8 +251,8 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
     );
   }
 
-  Widget _buildCategoriaCard(Categoria categoria) {
-    final marcas = _marcasPorCategoria[categoria.idCategoria] ?? [];
+  Widget _buildCategoriaCard(CategoriaModel categoria) {
+    final marcas = _marcasPorCategoria[categoria.id] ?? [];
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -336,7 +325,8 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Icon(Icons.label_off_outlined, size: 48, color: Colors.grey[400]),
+                  Icon(Icons.label_off_outlined,
+                      size: 48, color: Colors.grey[400]),
                   const SizedBox(height: 8),
                   Text(
                     'Esta categoria ainda não está associada a nenhuma marca',
@@ -348,7 +338,8 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(
-                    onPressed: () => _navegarParaFormulario(categoria: categoria),
+                    onPressed: () =>
+                        _navegarParaFormulario(categoria: categoria),
                     icon: const Icon(Icons.add),
                     label: const Text('Associar Marcas'),
                   ),

@@ -1,15 +1,23 @@
 // lib/features/cliente/model/cliente_model.dart
 
 class ClienteModel {
-  final int id;
+  final int     id;
   final String? nome;
   final String? apelido;
   final String? email;
   final String? nuit;
   final String? contacto;
   final String? morada;
-  final int idPerfil;
-  final String nomePerfil;
+  final int     idPerfil;
+  final String  nomePerfil;
+
+  // ── Campos offline-first ──────────────────────────────────────────
+  /// 'synced' | 'pending' | 'conflict'
+  final String  syncStatus;
+
+  /// UUID local atribuído quando criado offline.
+  /// Null quando o registo veio do backend.
+  final String? localId;
 
   const ClienteModel({
     required this.id,
@@ -21,9 +29,11 @@ class ClienteModel {
     this.morada,
     required this.idPerfil,
     required this.nomePerfil,
+    this.syncStatus = 'synced',
+    this.localId,
   });
 
-  // ── Deserialização ────────────────────────────────────────────────
+  // ── Deserialização — resposta HTTP do backend ─────────────────────
 
   factory ClienteModel.fromJson(Map<String, dynamic> json) {
     return ClienteModel(
@@ -36,38 +46,80 @@ class ClienteModel {
       morada:     json['morada']     as String?,
       idPerfil:   json['idPerfil']   as int,
       nomePerfil: json['nomePerfil'] as String? ?? 'Sem perfil',
+      syncStatus: 'synced',
+      localId:    null,
     );
   }
 
-  // ── Serialização (para POST/PUT) ──────────────────────────────────
+  // ── Deserialização — leitura do SQLite local ──────────────────────
+
+  factory ClienteModel.fromLocalDb(Map<String, dynamic> row) {
+    return ClienteModel(
+      id:         row['id']          as int,
+      nome:       row['nome']        as String?,
+      apelido:    row['apelido']     as String?,
+      email:      row['email']       as String?,
+      nuit:       row['nuit']        as String?,
+      contacto:   row['contacto']    as String?,
+      morada:     row['morada']      as String?,
+      idPerfil:   row['id_perfil']   as int,
+      nomePerfil: row['nome_perfil'] as String? ?? 'Sem perfil',
+      syncStatus: row['sync_status'] as String? ?? 'synced',
+      localId:    row['local_id']    as String?,
+    );
+  }
+
+  // ── Serialização — envio ao backend (POST/PUT) ────────────────────
 
   Map<String, dynamic> toJson() {
     return {
-      if (nome     != null) 'nome':      nome,
-      if (apelido  != null) 'apelido':   apelido,
-      if (email    != null) 'email':     email,
-      if (nuit     != null) 'nuit':      nuit,
-      if (contacto != null) 'contacto':  contacto,
-      if (morada   != null) 'morada':    morada,
+      if (nome     != null) 'nome':     nome,
+      if (apelido  != null) 'apelido':  apelido,
+      if (email    != null) 'email':    email,
+      if (nuit     != null) 'nuit':     nuit,
+      if (contacto != null) 'contacto': contacto,
+      if (morada   != null) 'morada':   morada,
       'idPerfil': idPerfil,
+    };
+  }
+
+  // ── Serialização — escrita no SQLite local ────────────────────────
+
+  Map<String, dynamic> toLocalDb() {
+    return {
+      'id':          id,
+      'local_id':    localId,
+      'nome':        nome,
+      'apelido':     apelido,
+      'email':       email,
+      'nuit':        nuit,
+      'contacto':    contacto,
+      'morada':      morada,
+      'id_perfil':   idPerfil,
+      'nome_perfil': nomePerfil,
+      'sync_status': syncStatus,
+      'updated_at':  DateTime.now().toIso8601String(),
     };
   }
 
   // ── Utilitários ───────────────────────────────────────────────────
 
-  /// Nome completo ou fallback para exibição em listas
   String get nomeCompleto {
     final partes = [nome, apelido].whereType<String>().where((s) => s.isNotEmpty);
     return partes.isNotEmpty ? partes.join(' ') : 'Cliente #$id';
   }
 
-  /// Iniciais para avatar
   String get iniciais {
-    final n = nome?.isNotEmpty == true ? nome![0] : '';
+    final n = nome?.isNotEmpty    == true ? nome![0]    : '';
     final a = apelido?.isNotEmpty == true ? apelido![0] : '';
     final resultado = '$n$a'.toUpperCase();
     return resultado.isNotEmpty ? resultado : '#';
   }
+
+  bool get isPending  => syncStatus == 'pending';
+  bool get isSynced   => syncStatus == 'synced';
+  bool get isConflict => syncStatus == 'conflict';
+  bool get isOffline  => localId != null && syncStatus == 'pending';
 
   ClienteModel copyWith({
     int?    id,
@@ -79,6 +131,8 @@ class ClienteModel {
     String? morada,
     int?    idPerfil,
     String? nomePerfil,
+    String? syncStatus,
+    String? localId,
   }) {
     return ClienteModel(
       id:         id         ?? this.id,
@@ -90,6 +144,8 @@ class ClienteModel {
       morada:     morada     ?? this.morada,
       idPerfil:   idPerfil   ?? this.idPerfil,
       nomePerfil: nomePerfil ?? this.nomePerfil,
+      syncStatus: syncStatus ?? this.syncStatus,
+      localId:    localId    ?? this.localId,
     );
   }
 
@@ -101,9 +157,9 @@ class ClienteModel {
   int get hashCode => id.hashCode;
 
   @override
-  String toString() => 'ClienteModel(id: $id, nomeCompleto: $nomeCompleto)';
+  String toString() =>
+      'ClienteModel(id: $id, nomeCompleto: $nomeCompleto, syncStatus: $syncStatus)';
 }
-
 
 // ─────────────────────────────────────────────────────────────────
 // DTO de criação / edição — enviado ao backend

@@ -34,7 +34,6 @@ export 'services/impressora_service.dart';
 //   import 'package:api_compartilhado/services/pdf_service.dart';
 export 'services/firebase_listener_service.dart';
 export 'services/sync_queue_service.dart';
-export 'services/connectivity_service.dart';
 export 'services/usuario_service.dart';
 export 'services/marca_service.dart';
 export 'services/categoria_service.dart';
@@ -57,3 +56,28 @@ export 'core/constants/constantes_fiscais.dart';
 
 // 5. Controllers
 export 'controllers/pedido_ativo_controller.dart';
+
+export 'core/database/local_database.dart';
+export 'core/database/daos/cliente_dao.dart';
+export 'core/database/daos/marca_dao.dart';
+export 'core/database/daos/sync_queue_dao.dart';
+export 'repository/cliente_repository.dart';
+export 'repository/usuario_repository.dart';
+export 'repository/marca_repository.dart';
+export 'core/connectivity/connectivity_service.dart';
+export 'core/sync/sync_scheduler.dart';
+
+export 'models/categoria_model.dart';           // já existe — confirmar que exporta CategoriaModel
+export 'core/database/daos/categoria_dao.dart';
+export 'repository/categoria_repository.dart';
+export 'providers/marca_provider.dart';         // novo
+export 'providers/categoria_provider.dart';     // novo
+export 'core/database/daos/produto_dao.dart';
+export 'repository/produto_repository.dart';
+export 'core/database/daos/pedido_dao.dart';
+export 'repository/pedido_repository.dart';
+
+export 'core/database/daos/documento_fiscal_dao.dart';
+export 'repository/documento_fiscal_repository.dart';
+export '/repository/servico_repository.dart';
+export 'core/database/daos/servico_dao.dart';

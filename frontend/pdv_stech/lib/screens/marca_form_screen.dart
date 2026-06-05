@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 
 class MarcaFormScreen extends StatefulWidget {
-  final Marca? marca;
+  final MarcaModel? marca;
 
-  const MarcaFormScreen({Key? key, this.marca}) : super(key: key);
+  const MarcaFormScreen({super.key, this.marca});
 
   @override
   State<MarcaFormScreen> createState() => _MarcaFormScreenState();
@@ -23,10 +23,10 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
 
   bool _isLoading = false;
   bool _isLoadingCategorias = false;
-  bool _houveAlteracoes = false; // ✅ NOVO
+  bool _houveAlteracoes = false;
   bool get _isEditMode => widget.marca != null;
 
-  List<Categoria> _todasCategorias = [];
+  List<CategoriaModel> _todasCategorias = [];
   Set<int> _categoriasSelecionadas = {};
   int? _marcaIdSalva;
 
@@ -43,9 +43,13 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
 
   Future<void> _carregarDados() async {
     await _carregarCategorias();
-    if (_isEditMode && widget.marca!.idMarca != null) {
-      _marcaIdSalva = widget.marca!.idMarca;
-      _carregarCategoriasJaAssociadas();
+    if (_isEditMode) {
+      _marcaIdSalva = widget.marca!.id;
+      // MarcaModel não tem campo categorias embebido.
+      // Inicia com set vazio — utilizador gere associações manualmente.
+      // Quando o backend disponibilizar endpoint de categorias-por-marca,
+      // substituir aqui pela chamada correspondente.
+      setState(() => _categoriasSelecionadas = {});
     }
   }
 
@@ -70,17 +74,6 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
     }
   }
 
-  void _carregarCategoriasJaAssociadas() {
-    if (widget.marca?.categorias != null) {
-      setState(() {
-        _categoriasSelecionadas = widget.marca!.categorias!
-            .map((cat) => cat.idCategoria!)
-            .toSet();
-      });
-      print('✅ Categorias já associadas carregadas: $_categoriasSelecionadas');
-    }
-  }
-
   @override
   void dispose() {
     _nomeController.dispose();
@@ -96,24 +89,23 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
     setState(() => _isLoading = true);
 
     try {
-      final marca = Marca(
-        idMarca: widget.marca?.idMarca,
+      final dto = MarcaRequestDTO(
         nomeMarca: _nomeController.text.trim(),
       );
 
-      Marca marcaSalva;
+      MarcaModel marcaSalva;
 
       if (_isEditMode) {
         marcaSalva = await _marcaService.atualizarMarca(
-          widget.marca!.idMarca!,
-          marca,
+          widget.marca!.id,
+          dto,
         );
       } else {
-        marcaSalva = await _marcaService.criarMarca(marca);
+        marcaSalva = await _marcaService.criarMarca(dto);
       }
 
-      _marcaIdSalva = marcaSalva.idMarca;
-      _houveAlteracoes = true; // ✅ NOVO
+      _marcaIdSalva = marcaSalva.id;
+      _houveAlteracoes = true;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -163,7 +155,7 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
         await _marcaService.associarCategoria(_marcaIdSalva!, idCategoria);
         setState(() {
           _categoriasSelecionadas.add(idCategoria);
-          _houveAlteracoes = true; // ✅ NOVO
+          _houveAlteracoes = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -178,7 +170,7 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
         await _marcaService.desassociarCategoria(_marcaIdSalva!, idCategoria);
         setState(() {
           _categoriasSelecionadas.remove(idCategoria);
-          _houveAlteracoes = true; // ✅ NOVO
+          _houveAlteracoes = true;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -204,15 +196,15 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope( // ✅ NOVO
-      onWillPop: () async {
-        Navigator.pop(context, _houveAlteracoes);
-        return false;
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) Navigator.pop(context, _houveAlteracoes);
       },
       child: Scaffold(
         appBar: AppBar(
           title: Text(_isEditMode ? 'Editar Marca' : 'Nova Marca'),
-          leading: IconButton( // ✅ NOVO
+          leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context, _houveAlteracoes),
           ),
@@ -336,9 +328,9 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isLoading 
-                      ? null 
-                      : () => Navigator.pop(context, _houveAlteracoes), // ✅ ATUALIZADO
+                  onPressed: _isLoading
+                      ? null
+                      : () => Navigator.pop(context, _houveAlteracoes),
                   icon: const Icon(Icons.cancel),
                   label: const Text('Cancelar'),
                   style: OutlinedButton.styleFrom(
@@ -434,7 +426,8 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.category, color: Theme.of(context).primaryColor),
+                    Icon(Icons.category,
+                        color: Theme.of(context).primaryColor),
                     const SizedBox(width: 8),
                     const Text(
                       'Categorias Disponíveis',
@@ -453,11 +446,11 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
                 const Divider(height: 24),
                 ..._todasCategorias.map((categoria) {
                   final isSelected =
-                      _categoriasSelecionadas.contains(categoria.idCategoria);
+                      _categoriasSelecionadas.contains(categoria.id);
                   return CheckboxListTile(
                     value: isSelected,
                     onChanged: (valor) =>
-                        _toggleCategoria(categoria.idCategoria!, valor),
+                        _toggleCategoria(categoria.id, valor),
                     title: Text(categoria.nomeCategoria),
                     subtitle: categoria.descricao != null &&
                             categoria.descricao!.isNotEmpty
@@ -477,7 +470,7 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
                     ),
                     activeColor: Theme.of(context).primaryColor,
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),

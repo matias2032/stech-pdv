@@ -1,12 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 
-
 class CategoriaFormScreen extends StatefulWidget {
-  final Categoria? categoria;
+  final CategoriaModel? categoria;
 
-  const CategoriaFormScreen({Key? key, this.categoria}) : super(key: key);
+  const CategoriaFormScreen({super.key, this.categoria});
 
   @override
   State<CategoriaFormScreen> createState() => _CategoriaFormScreenState();
@@ -27,7 +25,7 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
   bool get _isEditMode => widget.categoria != null;
 
   // Marcas
-  List<Marca> _todasMarcas = [];
+  List<MarcaModel> _todasMarcas = [];
   Set<int> _marcasSelecionadas = {};
   int? _categoriaIdSalva; // Guarda o ID após salvar
 
@@ -47,9 +45,11 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
 
   Future<void> _carregarDados() async {
     await _carregarMarcas();
-    if (_isEditMode && widget.categoria!.idCategoria != null) {
-      _categoriaIdSalva = widget.categoria!.idCategoria;
-      await _carregarMarcasDaCategoria(widget.categoria!.idCategoria!);
+    if (_isEditMode) {
+      _categoriaIdSalva = widget.categoria!.id;
+      // Inicia com set vazio — utilizador gere associações manualmente.
+      // Se o backend disponibilizar endpoint de listagem, substituir aqui.
+      setState(() => _marcasSelecionadas = {});
     }
   }
 
@@ -74,18 +74,6 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
     }
   }
 
-  Future<void> _carregarMarcasDaCategoria(int idCategoria) async {
-    try {
-      final marcasIds =
-          await _categoriaService.listarMarcasDaCategoria(idCategoria);
-      setState(() {
-        _marcasSelecionadas = marcasIds.toSet();
-      });
-    } catch (e) {
-      print('Erro ao carregar marcas da categoria: $e');
-    }
-  }
-
   @override
   void dispose() {
     _nomeController.dispose();
@@ -102,27 +90,26 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
     setState(() => _isLoading = true);
 
     try {
-      final categoria = Categoria(
-        idCategoria: widget.categoria?.idCategoria,
+      final dto = CategoriaRequestDTO(
         nomeCategoria: _nomeController.text.trim(),
         descricao: _descricaoController.text.trim().isEmpty
             ? null
             : _descricaoController.text.trim(),
       );
 
-      Categoria categoriaSalva;
+      CategoriaModel categoriaSalva;
 
       if (_isEditMode) {
         categoriaSalva = await _categoriaService.atualizarCategoria(
-          widget.categoria!.idCategoria!,
-          categoria,
+          widget.categoria!.id,
+          dto,
         );
       } else {
-        categoriaSalva = await _categoriaService.criarCategoria(categoria);
+        categoriaSalva = await _categoriaService.criarCategoria(dto);
       }
 
       // Guarda o ID para usar na aba de marcas
-      _categoriaIdSalva = categoriaSalva.idCategoria;
+      _categoriaIdSalva = categoriaSalva.id;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -475,10 +462,10 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
                 const Divider(height: 24),
                 ..._todasMarcas.map((marca) {
                   final isSelected =
-                      _marcasSelecionadas.contains(marca.idMarca);
+                      _marcasSelecionadas.contains(marca.id);
                   return CheckboxListTile(
                     value: isSelected,
-                    onChanged: (valor) => _toggleMarca(marca.idMarca!, valor),
+                    onChanged: (valor) => _toggleMarca(marca.id, valor),
                     title: Text(marca.nomeMarca),
                     secondary: CircleAvatar(
                       backgroundColor: isSelected ? Colors.green : Colors.grey,
@@ -489,7 +476,7 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
                     ),
                     activeColor: Theme.of(context).primaryColor,
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),

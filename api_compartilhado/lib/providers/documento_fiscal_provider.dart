@@ -2,13 +2,13 @@
 
 import 'package:flutter/foundation.dart';
 import '../models/documento_fiscal_model.dart';
-import '../services/documento_fiscal_service.dart';
+import '../repository/documento_fiscal_repository.dart';
 
 class DocumentoFiscalProvider extends ChangeNotifier {
-  final DocumentoFiscalService _service;
+  final DocumentoFiscalRepository _repository;
 
-  DocumentoFiscalProvider({DocumentoFiscalService? service})
-      : _service = service ?? DocumentoFiscalService();
+  DocumentoFiscalProvider({required DocumentoFiscalRepository repository})
+      : _repository = repository;
 
   // ─── Estado ───────────────────────────────────────────────────────────────
 
@@ -36,11 +36,13 @@ class DocumentoFiscalProvider extends ChangeNotifier {
 
   // ─── TIPOS ────────────────────────────────────────────────────────────────
 
+// SUBSTITUIR: carregarTipos
+
   Future<void> carregarTipos() async {
     _setCarregando(true);
     _erro = null;
     try {
-      _tipos = await _service.listarTipos();
+      _tipos = await _repository.listarTipos();
       notifyListeners();
     } catch (e) {
       _erro = e.toString();
@@ -56,7 +58,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
     _setCarregando(true);
     _erro = null;
     try {
-      _documentos = await _service.listarTodos();
+      _documentos = await _repository.listarTodos();
       notifyListeners();
     } catch (e) {
       _erro = e.toString();
@@ -70,7 +72,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
     _setCarregando(true);
     _erro = null;
     try {
-      _documentos = await _service.listarPorPedido(idPedido);
+      _documentos = await _repository.listarPorPedido(idPedido);
       notifyListeners();
     } catch (e) {
       _erro = e.toString();
@@ -84,7 +86,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
     _setCarregando(true);
     _erro = null;
     try {
-      _documentos = await _service.listarPorTipo(idTipoDoc);
+      _documentos = await _repository.listarPorTipo(idTipoDoc);
       notifyListeners();
     } catch (e) {
       _erro = e.toString();
@@ -99,7 +101,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
   Future<DocumentoFiscalModel?> buscarPorId(int id) async {
     _erro = null;
     try {
-      return await _service.buscarPorId(id);
+      return await _repository.buscarPorId(id);
     } catch (e) {
       _erro = e.toString();
       notifyListeners();
@@ -110,7 +112,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
   Future<DocumentoFiscalModel?> buscarPorReferencia(String referencia) async {
     _erro = null;
     try {
-      return await _service.buscarPorReferencia(referencia);
+      return await _repository.buscarPorReferencia(referencia);
     } catch (e) {
       _erro = e.toString();
       notifyListeners();
@@ -120,21 +122,23 @@ class DocumentoFiscalProvider extends ChangeNotifier {
 
   // ─── EMITIR ───────────────────────────────────────────────────────────────
 
+// SUBSTITUIR: emitir
+
   Future<DocumentoFiscalModel?> emitir({
-    required int idPedido,
+    required int    idPedido,
     required String codigoTipo,
-    required int idUsuario,
+    required int    idUsuario,
     required String codigoAt,
   }) async {
     _emitindo = true;
     _erro = null;
     notifyListeners();
     try {
-      final novo = await _service.emitir(
-        idPedido: idPedido,
+      final novo = await _repository.emitir(
+        idPedido:   idPedido,
         codigoTipo: codigoTipo,
-        idUsuario: idUsuario,
-        codigoAt: codigoAt,
+        idUsuario:  idUsuario,
+        codigoAt:   codigoAt,
       );
       _documentos.add(novo);
       notifyListeners();
@@ -152,13 +156,13 @@ class DocumentoFiscalProvider extends ChangeNotifier {
   // ─── ANULAR ───────────────────────────────────────────────────────────────
 
   Future<DocumentoFiscalModel?> anular({
-    required int id,
+    required int    id,
     required String motivoAnulacao,
   }) async {
     _erro = null;
     try {
-      final atualizado = await _service.anular(
-        id: id,
+      final atualizado = await _repository.anular(
+        id:             id,
         motivoAnulacao: motivoAnulacao,
       );
       final idx = _documentos.indexWhere((d) => d.id == id);
@@ -179,7 +183,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
   Future<void> eliminar(int id) async {
     _erro = null;
     try {
-      await _service.eliminar(id);
+      await _repository.eliminar(id);
       _documentos.removeWhere((d) => d.id == id);
       notifyListeners();
     } catch (e) {
@@ -191,36 +195,35 @@ class DocumentoFiscalProvider extends ChangeNotifier {
 
   // Em DocumentoFiscalProvider — adicionar:
 
-Future<DocumentoFiscalModel?> emitirMultiplos({
-  required List<int> idsPedido,
-  required String codigoTipo,
-  required int idUsuario,
-  required String codigoAt,
-}) async {
-  try {
-    _carregando = true;
+ Future<DocumentoFiscalModel?> emitirMultiplos({
+    required List<int> idsPedido,
+    required String    codigoTipo,
+    required int       idUsuario,
+    required String    codigoAt,
+  }) async {
+    _emitindo = true;
+    _erro = null;
     notifyListeners();
-
-    final doc = await _service.emitirMultiplos(
-      idsPedido:  idsPedido,
-      codigoTipo: codigoTipo,
-      idUsuario:  idUsuario,
-      codigoAt:   codigoAt,
-    );
-
-    // Adiciona à lista local se existir
-    _documentos.add(doc);
-    notifyListeners();
-    return doc;
-  } catch (e) {
-    _erro = e.toString();
-    notifyListeners();
-    return null;
-  } finally {
-    _carregando = false;
-    notifyListeners();
+    try {
+      final doc = await _repository.emitirMultiplos(
+        idsPedido:  idsPedido,
+        codigoTipo: codigoTipo,
+        idUsuario:  idUsuario,
+        codigoAt:   codigoAt,
+      );
+      _documentos.add(doc);
+      notifyListeners();
+      return doc;
+    } catch (e) {
+      _erro = e.toString();
+      notifyListeners();
+      return null;
+    } finally {
+      _emitindo = false;
+      notifyListeners();
+    }
   }
-}
+
 
   // ─── Helper ───────────────────────────────────────────────────────────────
 

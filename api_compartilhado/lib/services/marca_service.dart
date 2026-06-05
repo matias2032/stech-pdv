@@ -1,37 +1,43 @@
-// lib/services/marca_service.dart
+// lib/services/marca_service.dart  (dentro de api_compartilhado)
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/marca_model.dart';
 import 'package:api_compartilhado/api_config.dart';
+import 'package:api_compartilhado/models/marca_model.dart';
+
+class MarcaServiceException implements Exception {
+  final String message;
+  const MarcaServiceException(this.message);
+  @override
+  String toString() => 'MarcaServiceException: $message';
+}
 
 class MarcaService {
-  // ===== LISTAR TODAS AS MARCAS =====
-  Future<List<Marca>> listarMarcas() async {
-    try {
-      final response = await http
-          .get(
-            Uri.parse(ApiConfig.marcasUrl),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+  MarcaService({http.Client? client})
+      : _client = client ?? http.Client();
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Marca.fromJson(json)).toList();
-      } else {
-        throw Exception('Erro ao carregar marcas: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no listarMarcas: $e');
-      rethrow;
+  final http.Client _client;
+
+  // ── Listar todas ──────────────────────────────────────────────────
+
+  Future<List<MarcaModel>> listarMarcas() async {
+    final response = await _client
+        .get(Uri.parse(ApiConfig.marcasUrl), headers: ApiConfig.defaultHeaders)
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body) as List<dynamic>;
+      return data
+          .map((j) => MarcaModel.fromJson(j as Map<String, dynamic>))
+          .toList();
     }
+    throw MarcaServiceException('Erro ao carregar marcas: ${response.statusCode}');
   }
 
-// ===== LISTAR MARCAS COM CATEGORIAS =====
-Future<List<Marca>> listarMarcasComCategorias() async {
-  try {
-    final response = await http
+  // ── Listar com categorias ─────────────────────────────────────────
+
+  Future<List<MarcaModel>> listarMarcasComCategorias() async {
+    final response = await _client
         .get(
           Uri.parse('${ApiConfig.marcasUrl}/com-categorias'),
           headers: ApiConfig.defaultHeaders,
@@ -39,178 +45,109 @@ Future<List<Marca>> listarMarcasComCategorias() async {
         .timeout(ApiConfig.timeout);
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.map((json) => Marca.fromJson(json)).toList();
-    } else {
-      throw Exception('Erro ao carregar marcas: ${response.statusCode}');
+      final data = json.decode(response.body) as List<dynamic>;
+      return data
+          .map((j) => MarcaModel.fromJson(j as Map<String, dynamic>))
+          .toList();
     }
-  } catch (e) {
-    print('❌ Erro no listarMarcasComCategorias: $e');
-    rethrow;
-  }
-}
-
-  // ===== BUSCAR MARCA POR ID =====
-  Future<Marca> buscarMarcaPorId(int id) async {
-    try {
-      final response = await http
-          .get(
-            Uri.parse('${ApiConfig.marcasUrl}/$id'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
-
-      if (response.statusCode == 200) {
-        return Marca.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Marca não encontrada: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no buscarMarcaPorId: $e');
-      rethrow;
-    }
+    throw MarcaServiceException('Erro ao carregar marcas com categorias: ${response.statusCode}');
   }
 
-  // ===== CRIAR MARCA =====
-  Future<Marca> criarMarca(Marca marca) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(ApiConfig.marcasUrl),
-            headers: ApiConfig.defaultHeaders,
-            body: json.encode(marca.toJsonCreate()),
-          )
-          .timeout(ApiConfig.timeout);
+  // ── Buscar por ID ─────────────────────────────────────────────────
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        print('✅ Marca criada com sucesso');
-        return Marca.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Erro ao criar marca: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no criarMarca: $e');
-      rethrow;
+  Future<MarcaModel> buscarMarcaPorId(int id) async {
+    final response = await _client
+        .get(
+          Uri.parse('${ApiConfig.marcasUrl}/$id'),
+          headers: ApiConfig.defaultHeaders,
+        )
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode == 200) {
+      return MarcaModel.fromJson(
+          json.decode(response.body) as Map<String, dynamic>);
     }
+    throw MarcaServiceException('Marca não encontrada: ${response.statusCode}');
   }
 
-  // ===== ATUALIZAR MARCA =====
-  Future<Marca> atualizarMarca(int id, Marca marca) async {
-    try {
-      final response = await http
-          .put(
-            Uri.parse('${ApiConfig.marcasUrl}/$id'),
-            headers: ApiConfig.defaultHeaders,
-            body: json.encode(marca.toJsonCreate()),
-          )
-          .timeout(ApiConfig.timeout);
+  // ── Criar ─────────────────────────────────────────────────────────
 
-      if (response.statusCode == 200) {
-        print('✅ Marca atualizada com sucesso');
-        return Marca.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Erro ao atualizar marca: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no atualizarMarca: $e');
-      rethrow;
+  Future<MarcaModel> criarMarca(MarcaRequestDTO dto) async {
+    final response = await _client
+        .post(
+          Uri.parse(ApiConfig.marcasUrl),
+          headers: ApiConfig.defaultHeaders,
+          body: json.encode(dto.toJson()),
+        )
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return MarcaModel.fromJson(
+          json.decode(response.body) as Map<String, dynamic>);
     }
+    throw MarcaServiceException('Erro ao criar marca: ${response.statusCode}');
   }
 
-  // ===== DELETAR MARCA =====
+  // ── Atualizar ─────────────────────────────────────────────────────
+
+  Future<MarcaModel> atualizarMarca(int id, MarcaRequestDTO dto) async {
+    final response = await _client
+        .put(
+          Uri.parse('${ApiConfig.marcasUrl}/$id'),
+          headers: ApiConfig.defaultHeaders,
+          body: json.encode(dto.toJson()),
+        )
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode == 200) {
+      return MarcaModel.fromJson(
+          json.decode(response.body) as Map<String, dynamic>);
+    }
+    throw MarcaServiceException('Erro ao atualizar marca: ${response.statusCode}');
+  }
+
+  // ── Deletar ───────────────────────────────────────────────────────
+
   Future<void> deletarMarca(int id) async {
-    try {
-      final response = await http
-          .delete(
-            Uri.parse('${ApiConfig.marcasUrl}/$id'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+    final response = await _client
+        .delete(
+          Uri.parse('${ApiConfig.marcasUrl}/$id'),
+          headers: ApiConfig.defaultHeaders,
+        )
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 204 || response.statusCode == 200) {
-        print('✅ Marca deletada com sucesso');
-      } else {
-        throw Exception('Erro ao deletar marca: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no deletarMarca: $e');
-      rethrow;
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw MarcaServiceException('Erro ao deletar marca: ${response.statusCode}');
     }
   }
 
-  // ===== LISTAR CATEGORIAS DA MARCA =====
-  // Usa o endpoint de CATEGORIA (categoria_marca)
-  Future<List<int>> listarCategoriasDaMarca(int idMarca) async {
-    try {
-      // Busca via endpoint de categoria que já existe
-      final response = await http
-          .get(
-            Uri.parse('${ApiConfig.categoriasUrl}/marca/$idMarca'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+  // ── Associar categoria ────────────────────────────────────────────
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<int>();
-      } else if (response.statusCode == 404) {
-        // Endpoint não existe, vamos buscar todas e filtrar
-        // Ou retornar lista vazia
-        return [];
-      } else {
-        throw Exception('Erro ao carregar categorias: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no listarCategoriasDaMarca: $e');
-      // Se der erro, retorna lista vazia
-      return [];
-    }
-  }
-
-  // ===== ASSOCIAR CATEGORIA À MARCA =====
-  // Usa o endpoint de CATEGORIA (POST /api/categorias/{idCategoria}/marcas/{idMarca})
   Future<void> associarCategoria(int idMarca, int idCategoria) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(
-                '${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+    final response = await _client
+        .post(
+          Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
+          headers: ApiConfig.defaultHeaders,
+        )
+        .timeout(ApiConfig.timeout);
 
-      if (response.statusCode == 200) {
-        print('✅ Categoria $idCategoria associada à marca $idMarca');
-      } else {
-        throw Exception('Erro ao associar categoria: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no associarCategoria: $e');
-      rethrow;
+    if (response.statusCode != 200) {
+      throw MarcaServiceException('Erro ao associar categoria: ${response.statusCode}');
     }
   }
 
-  // ===== DESASSOCIAR CATEGORIA DA MARCA =====
-  // Usa o endpoint de CATEGORIA (DELETE /api/categorias/{idCategoria}/marcas/{idMarca})
-  Future<void> desassociarCategoria(int idMarca, int idCategoria) async {
-    try {
-      final response = await http
-          .delete(
-            Uri.parse(
-                '${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
-            headers: ApiConfig.defaultHeaders,
-          )
-          .timeout(ApiConfig.timeout);
+  // ── Desassociar categoria ─────────────────────────────────────────
 
-      if (response.statusCode == 204 || response.statusCode == 200) {
-        print('✅ Categoria $idCategoria desassociada da marca $idMarca');
-      } else {
-        throw Exception(
-            'Erro ao desassociar categoria: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Erro no desassociarCategoria: $e');
-      rethrow;
+  Future<void> desassociarCategoria(int idMarca, int idCategoria) async {
+    final response = await _client
+        .delete(
+          Uri.parse('${ApiConfig.categoriasUrl}/$idCategoria/marcas/$idMarca'),
+          headers: ApiConfig.defaultHeaders,
+        )
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw MarcaServiceException('Erro ao desassociar categoria: ${response.statusCode}');
     }
   }
 }

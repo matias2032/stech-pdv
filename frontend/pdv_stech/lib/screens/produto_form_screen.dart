@@ -13,7 +13,7 @@ import 'package:api_compartilhado/api_config.dart';
 class ProdutoFormScreen extends StatefulWidget {
   final ProdutoModel? produto;
 
-  const ProdutoFormScreen({Key? key, this.produto}) : super(key: key);
+  const ProdutoFormScreen({super.key, this.produto});
 
   @override
   State<ProdutoFormScreen> createState() => _ProdutoFormScreenState();
@@ -39,10 +39,10 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   bool get _isEditMode => widget.produto != null;
 
   // ── Marcas e Categorias ────────────────────────────────────────────────────
-  List<Marca> _todasMarcas = [];
-  List<Categoria> _todasCategorias = [];
-  List<Marca> _marcasFiltradas = [];
-  List<Categoria> _categoriasFiltradas = [];
+  List<MarcaModel> _todasMarcas = [];
+  List<CategoriaModel> _todasCategorias = [];
+  List<MarcaModel> _marcasFiltradas = [];
+  List<CategoriaModel> _categoriasFiltradas = [];
   List<int> _marcasSelecionadas = [];
   List<int> _categoriasSelecionadas = [];
 
@@ -132,48 +132,24 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
         _categoriasFiltradas = List.from(_todasCategorias);
       } else if (_marcasSelecionadas.isNotEmpty &&
           _categoriasSelecionadas.isEmpty) {
-        _filtrarCategoriasPorMarcas();
+        // MarcaModel não tem campo categorias embebido — sem filtragem cruzada.
+        // Quando o backend disponibilizar o campo, substituir por
+        // _filtrarCategoriasPorMarcas() aqui.
         _marcasFiltradas = List.from(_todasMarcas);
+        _categoriasFiltradas = List.from(_todasCategorias);
       } else if (_categoriasSelecionadas.isNotEmpty &&
           _marcasSelecionadas.isEmpty) {
-        _filtrarMarcasPorCategorias();
+        // Idem para filtragem de marcas por categoria.
+        _marcasFiltradas = List.from(_todasMarcas);
         _categoriasFiltradas = List.from(_todasCategorias);
       } else {
-        _filtrarCategoriasPorMarcas();
-        _filtrarMarcasPorCategorias();
+        _marcasFiltradas = List.from(_todasMarcas);
+        _categoriasFiltradas = List.from(_todasCategorias);
       }
     });
   }
 
-  void _filtrarCategoriasPorMarcas() {
-    final validas = <int>{};
-    for (final id in _marcasSelecionadas) {
-      final marca = _todasMarcas.firstWhere((m) => m.idMarca == id,
-          orElse: () => Marca(nomeMarca: ''));
-      if (marca.categorias != null) {
-        validas.addAll(marca.categorias!.map((c) => c.idCategoria!));
-      }
-    }
-    _categoriasFiltradas =
-        _todasCategorias.where((c) => validas.contains(c.idCategoria)).toList();
-  }
-
-  void _filtrarMarcasPorCategorias() {
-    final validas = <int>{};
-    for (final marca in _todasMarcas) {
-      if (marca.categorias != null) {
-        if (marca.categorias!
-            .any((c) => _categoriasSelecionadas.contains(c.idCategoria))) {
-          validas.add(marca.idMarca!);
-        }
-      }
-    }
-    _marcasFiltradas =
-        _todasMarcas.where((m) => validas.contains(m.idMarca)).toList();
-  }
-
-  void _onMarcaSelecionada(int? id, bool selecionado) {
-    if (id == null) return;
+  void _onMarcaSelecionada(int id, bool selecionado) {
     setState(() {
       if (selecionado) {
         if (_marcasSelecionadas.isNotEmpty) return;
@@ -185,8 +161,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
     });
   }
 
-  void _onCategoriaSelecionada(int? id, bool selecionado) {
-    if (id == null) return;
+  void _onCategoriaSelecionada(int id, bool selecionado) {
     setState(() {
       if (selecionado) {
         if (_categoriasSelecionadas.isNotEmpty) return;
@@ -365,8 +340,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
             idProduto: produtoSalvo.idProduto,
             imagemFile: _novasImagens[i],
             nomeArquivo: _novasImagens[i].path.split('/').last,
-            imagemPrincipal:
-                (i == 0 && _imagensExistentes.isEmpty) ? 1 : 0,
+            imagemPrincipal: (i == 0 && _imagensExistentes.isEmpty) ? 1 : 0,
           );
         }
       }
@@ -386,10 +360,10 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        Navigator.pop(context, _houveAlteracoes);
-        return false;
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) Navigator.pop(context, _houveAlteracoes);
       },
       child: Scaffold(
         appBar: AppBar(
@@ -438,7 +412,9 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                                     strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.save),
                         label: Text(
-                            _isEditMode ? 'SALVAR ALTERAÇÕES' : 'CRIAR PRODUTO',
+                            _isEditMode
+                                ? 'SALVAR ALTERAÇÕES'
+                                : 'CRIAR PRODUTO',
                             style: const TextStyle(fontSize: 16)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFC8102E),
@@ -468,8 +444,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Dados do Produto',
-                style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Divider(height: 24),
 
             // Nome
@@ -576,8 +551,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Marca *',
-                style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             const Text(
               'Selecione uma marca. As categorias serão filtradas automaticamente.',
@@ -597,12 +571,12 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 spacing: 8,
                 runSpacing: 4,
                 children: _marcasFiltradas.map((marca) {
-                  final sel = _marcasSelecionadas.contains(marca.idMarca);
+                  final sel = _marcasSelecionadas.contains(marca.id);
                   return FilterChip(
                     label: Text(marca.nomeMarca),
                     selected: sel,
                     onSelected: sel || _marcasSelecionadas.isEmpty
-                        ? (v) => _onMarcaSelecionada(marca.idMarca, v)
+                        ? (v) => _onMarcaSelecionada(marca.id, v)
                         : null,
                   );
                 }).toList(),
@@ -624,8 +598,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Categoria *',
-                style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             const Text(
               'Selecione uma categoria. As marcas serão filtradas automaticamente.',
@@ -645,13 +618,12 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 spacing: 8,
                 runSpacing: 4,
                 children: _categoriasFiltradas.map((cat) {
-                  final sel =
-                      _categoriasSelecionadas.contains(cat.idCategoria);
+                  final sel = _categoriasSelecionadas.contains(cat.id);
                   return FilterChip(
                     label: Text(cat.nomeCategoria),
                     selected: sel,
                     onSelected: sel || _categoriasSelecionadas.isEmpty
-                        ? (v) => _onCategoriaSelecionada(cat.idCategoria, v)
+                        ? (v) => _onCategoriaSelecionada(cat.id, v)
                         : null,
                   );
                 }).toList(),
@@ -689,8 +661,9 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-              const Text('Imagens do Produto (Opcional)',
-    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text('Imagens do Produto (Opcional)',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
                   Row(
                     children: [
                       IconButton(

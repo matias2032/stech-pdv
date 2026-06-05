@@ -1,108 +1,117 @@
+// lib/features/servico/provider/servico_provider.dart
+
 import 'package:flutter/material.dart';
-import '../models/servico_model.dart';
-import '../services/servico_service.dart';
+import '../repository/servico_repository.dart';
+import '../../../core/database/daos/servico_dao.dart';
+import '../../../core/database/daos/sync_queue_dao.dart';
+import '../../../core/connectivity/connectivity_service.dart';
+import 'package:api_compartilhado/api_compartilhado.dart';
 
 class ServicoProvider with ChangeNotifier {
-  // Instância do serviço
-  final ServicoService _service = ServicoService.instance;
+  final ServicoRepository _repository;
 
-  // Estados internos
-  List<ServicoModel> _servicos = [];
-  bool _isLoading = false;
-  String? _errorMessage;
+  ServicoProvider({ServicoRepository? repository})
+      : _repository = repository ??
+            ServicoRepository(
+              service:      ServicoService.instance,
+              dao:          ServicoDao(),
+              syncQueueDao: SyncQueueDao(),
+              connectivity: ConnectivityService.instance,
+            );
 
-  // Getters públicos para a UI
-  List<ServicoModel> get servicos => _servicos;
-  bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
+  // ── Estado ────────────────────────────────────────────────────────
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // MÉTODOS DE LEITURA (GET)
-  // ═══════════════════════════════════════════════════════════════════════════
+  List<ServicoModel> _servicos    = [];
+  bool               _isLoading   = false;
+  String?            _errorMessage;
 
-  /// Carrega todos os serviços (Ativos e Inativos) - Ideal para Admin/Gestão
+  // ── Getters ───────────────────────────────────────────────────────
+
+  List<ServicoModel> get servicos      => List.unmodifiable(_servicos);
+  bool               get isLoading     => _isLoading;
+  String?            get errorMessage  => _errorMessage;
+
+  // ── Leitura ───────────────────────────────────────────────────────
+
+  /// Carrega todos os serviços (activos + inactivos) — painel de gestão.
   Future<void> carregarTodosOsServicos() async {
     _setLoading(true);
     _clearError();
-
     try {
-      _servicos = await _service.listarTodos();
+      _servicos = await _repository.listarTodos();
+      notifyListeners();
     } catch (e) {
       _errorMessage = _parseError(e);
+      notifyListeners();
     } finally {
       _setLoading(false);
     }
   }
 
-  /// Carrega apenas os serviços ativos - Ideal para ecrãs de pedidos/clientes
+  /// Carrega apenas os serviços activos — ecrã de pedidos.
   Future<void> carregarServicosAtivos() async {
     _setLoading(true);
     _clearError();
-
     try {
-      _servicos = await _service.listarAtivos();
+      _servicos = await _repository.listarAtivos();
+      notifyListeners();
     } catch (e) {
       _errorMessage = _parseError(e);
+      notifyListeners();
     } finally {
       _setLoading(false);
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // MÉTODOS DE MUTAÇÃO (POST, PUT, PATCH)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Escrita ───────────────────────────────────────────────────────
 
-  /// Cria um novo serviço e atualiza a lista local em memória
+  /// Cria um novo serviço. Funciona offline (optimistic UI).
   Future<bool> criarServico(ServicoRequestModel dto) async {
     _setLoading(true);
     _clearError();
-
     try {
-      final novoServico = await _service.criar(dto);
-      _servicos.add(novoServico);
+      final novo = await _repository.criar(dto);
+      _servicos.add(novo);
       notifyListeners();
-      return true; // Sucesso
+      return true;
     } catch (e) {
       _errorMessage = _parseError(e);
-      return false; // Falha
+      notifyListeners();
+      return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  /// Atualiza um serviço existente e reflete a mudança na lista local
+  /// Actualiza um serviço existente. Funciona offline (optimistic UI).
   Future<bool> actualizarServico(int id, ServicoRequestModel dto) async {
     _setLoading(true);
     _clearError();
-
     try {
-      final servicoAtualizado = await _service.actualizar(id, dto);
-      
-      // Encontra o index e atualiza o item na lista local
-      final index = _servicos.indexWhere((s) => s.idServico == id);
-      if (index != -1) {
-        _servicos[index] = servicoAtualizado;
+      final actualizado = await _repository.actualizar(id, dto);
+      final idx = _servicos.indexWhere((s) => s.idServico == id);
+      if (idx != -1) {
+        _servicos[idx] = actualizado;
         notifyListeners();
       }
       return true;
     } catch (e) {
       _errorMessage = _parseError(e);
+      notifyListeners();
       return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  /// Inverte o estado de ativo/inativo sem precisar recarregar toda a API
+  /// Inverte o estado activo/inactivo. Requer ligação à internet.
   Future<bool> toggleEstadoServico(int id) async {
     _clearError();
-
     try {
-      final servicoModificado = await _service.toggleAtivo(id);
-      
-      final index = _servicos.indexWhere((s) => s.idServico == id);
-      if (index != -1) {
-        _servicos[index] = servicoModificado;
+      final modificado = await _repository.toggleAtivo(id);
+      final idx = _servicos.indexWhere((s) => s.idServico == id);
+      if (idx != -1) {
+        _servicos[idx] = modificado;
         notifyListeners();
       }
       return true;
@@ -113,9 +122,14 @@ class ServicoProvider with ChangeNotifier {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // AUXILIARES PRIVADOS
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Utilitários ───────────────────────────────────────────────────
+
+  void limparErro() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  // ── Privados ──────────────────────────────────────────────────────
 
   void _setLoading(bool value) {
     _isLoading = value;
@@ -126,8 +140,6 @@ class ServicoProvider with ChangeNotifier {
     _errorMessage = null;
   }
 
-  String _parseError(Object error) {
-    // Captura o erro HTTP lançado pelo seu assertStatus ou problemas de rede
-    return error.toString().replaceAll('Exception: ', '');
-  }
+  String _parseError(Object error) =>
+      error.toString().replaceAll('Exception: ', '');
 }
