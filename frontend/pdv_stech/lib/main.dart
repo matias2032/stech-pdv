@@ -54,11 +54,11 @@ void main() async {
   await LocalDatabase.instance.init();
   final count = Sqflite.firstIntValue(
   await LocalDatabase.instance.db.rawQuery(
-    'SELECT COUNT(*) FROM produto',
+    'SELECT COUNT(*) FROM cliente',
   ),
 );
 
-debugPrint('📦 Produtos no SQLite: $count');
+debugPrint('📦 Clientes no SQLite: $count');
 
   await ConnectivityService.instance.init(); // ← usa o init() unificado
 
