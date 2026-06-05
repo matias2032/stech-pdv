@@ -27,3 +27,6 @@ Dockerfile
 # Ficheiros sensíveis locais (nunca entram na imagem)
 src/main/resources/application-local.properties
 src/main/resources/application-dev.properties
+
+# Variáveis de ambiente — NUNCA entram na imagem
+.env

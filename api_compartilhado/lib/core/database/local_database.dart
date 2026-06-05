@@ -25,12 +25,19 @@ class LocalDatabase {
 
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
       onConfigure: _onConfigure,
     );
   }
-
+Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+  if (oldVersion < 2) {
+    // Adiciona coluna telefone à tabela usuario
+    await db.execute(
+      'ALTER TABLE usuario ADD COLUMN telefone TEXT',
+    );
+  }
+}
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
     await db.execute('PRAGMA foreign_keys = ON');
@@ -42,21 +49,22 @@ class LocalDatabase {
     await db.transaction((txn) async {
 
       // ── usuario ───────────────────────────────────────────────────
-      await txn.execute('''
-        CREATE TABLE usuario (
-          id              INTEGER PRIMARY KEY,
-          local_id        TEXT UNIQUE,
-          nome            TEXT    NOT NULL,
-          apelido         TEXT,
-          email           TEXT    NOT NULL,
-          ativo           INTEGER NOT NULL DEFAULT 1,
-          id_perfil       INTEGER NOT NULL,
-          nome_perfil     TEXT    NOT NULL,
-          primeira_senha  INTEGER NOT NULL DEFAULT 1,
-          sync_status     TEXT    NOT NULL DEFAULT 'synced',
-          updated_at      TEXT
-        )
-      ''');
+  await txn.execute('''
+  CREATE TABLE usuario (
+    id              INTEGER PRIMARY KEY,
+    local_id        TEXT UNIQUE,
+    nome            TEXT    NOT NULL,
+    apelido         TEXT,
+    telefone        TEXT,
+    email           TEXT    NOT NULL,
+    ativo           INTEGER NOT NULL DEFAULT 1,
+    id_perfil       INTEGER NOT NULL,
+    nome_perfil     TEXT    NOT NULL,
+    primeira_senha  INTEGER NOT NULL DEFAULT 1,
+    sync_status     TEXT    NOT NULL DEFAULT 'synced',
+    updated_at      TEXT
+  )
+''');
 
       // ── cliente ───────────────────────────────────────────────────
       await txn.execute('''
