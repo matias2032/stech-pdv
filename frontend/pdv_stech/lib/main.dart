@@ -1,5 +1,5 @@
 
-
+//frontend/lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -41,17 +41,17 @@ import 'screens/extractos_form_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── SQLite FFI — obrigatório em Windows/Linux/macOS ──────────────
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
 
+  // ← ORDEM IMPORTA: URL primeiro, depois BD, depois conectividade
   await ApiConfig.baseUrlAsync;
   ApiConfig.printConfig();
 
   await LocalDatabase.instance.init();
-  await ConnectivityService.instance.init();
+  await ConnectivityService.instance.init(); // ← usa o init() unificado
 
   runApp(const MyApp());
 }

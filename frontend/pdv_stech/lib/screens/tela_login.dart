@@ -71,7 +71,6 @@ Future<void> _handleLogin() async {
 
   setState(() { _isLoading = true; _errorMessage = ''; });
 
-  // ── Online: tenta HTTP ────────────────────────────────────────────
   if (ConnectivityService.instance.isOnline) {
     try {
       final result = await _authService.login(credencial, password);
@@ -93,20 +92,27 @@ Future<void> _handleLogin() async {
           if (mounted) Navigator.of(context).pushReplacementNamed('/dashboard');
           return;
 
-        default:
-          setState(() { _errorMessage = result.mensagem ?? 'Erro desconhecido.'; _isLoading = false; });
+        case StatusAutenticacao.credenciaisInvalidas:
+          // Credenciais erradas → não tentar offline (evita bypass de segurança)
+          setState(() {
+            _errorMessage = result.mensagem ?? 'Credencial ou senha incorrectos.';
+            _isLoading    = false;
+          });
           return;
+
+        default:
+          // Erro de servidor → tenta offline com cache
+          debugPrint('⚠️ Servidor respondeu com erro — tentando offline: ${result.mensagem}');
       }
     } catch (e) {
-      debugPrint('⚠️ Login HTTP falhou apesar de online: $e');
-      // não retorna — cai no fallback offline abaixo
+      debugPrint('⚠️ Login HTTP lançou excepção: $e');
+      // Cai no fallback offline abaixo
     }
   }
 
-  // ── Offline: credenciais em cache ─────────────────────────────────
+  // Offline ou HTTP falhou por razão técnica (não por credenciais erradas)
   await _tentarLoginOffline(credencial);
 }
-
 Future<void> _guardarSessaoLocal(UsuarioModel usuario) async {
   try {
     await UsuarioDao().upsert(usuario.toLocalDb());
@@ -118,19 +124,27 @@ Future<void> _guardarSessaoLocal(UsuarioModel usuario) async {
 Future<void> _tentarLoginOffline(String credencial) async {
   try {
     final rows = await UsuarioDao().getAll();
-    final cred = credencial.toLowerCase();
+    final cred = credencial.toLowerCase().trim();
 
-    final match = rows.firstWhere(
-      (r) =>
-          (r['email']   as String? ?? '').toLowerCase() == cred ||
-          (r['apelido'] as String? ?? '').toLowerCase() == cred,
-      orElse: () => {},
-    );
+    Map<String, dynamic> match = {};
+    for (final r in rows) {
+      final email    = (r['email']    as String? ?? '').toLowerCase();
+      final apelido  = (r['apelido'] as String? ?? '').toLowerCase();
+      final telefone = (r['telefone'] as String? ?? '').toLowerCase();
+
+      if (email == cred || apelido == cred || telefone == cred) {
+        match = r;
+        break;
+      }
+    }
 
     if (match.isEmpty) {
       setState(() {
-        _errorMessage = 'Sem ligação e nenhuma sessão guardada para este utilizador.';
-        _isLoading    = false;
+        _errorMessage = ConnectivityService.instance.isOnline
+            ? 'Utilizador não encontrado.'
+            : 'Sem ligação e nenhuma sessão guardada para este utilizador.\n'
+              'Ligue-se à internet para o primeiro acesso.';
+        _isLoading = false;
       });
       return;
     }
@@ -156,7 +170,10 @@ Future<void> _tentarLoginOffline(String credencial) async {
       Navigator.of(context).pushReplacementNamed('/dashboard');
     }
   } catch (e) {
-    setState(() { _errorMessage = 'Erro ao verificar credenciais locais: $e'; _isLoading = false; });
+    setState(() {
+      _errorMessage = 'Erro ao verificar credenciais locais: $e';
+      _isLoading    = false;
+    });
   }
 }
 

@@ -1,43 +1,25 @@
 // lib/services/sync_queue_service.dart
+// ⚠️ FICHEIRO LEGADO — migrar para SyncQueueDao + SyncScheduler
 
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'connectivity_service.dart';
+import 'package:api_compartilhado/api_config.dart';          // ← usa ApiConfig
+import '../core/connectivity/connectivity_service.dart';     // ← caminho correcto
 
 const _kMaxTentativas = 3;
-const _kBaseUrl = 'http://localhost:8080';
 
 Duration _backoff(int tentativa) =>
     Duration(seconds: (2 << tentativa).clamp(2, 30));
 
-// ─── Enum ────────────────────────────────────────────────────────────────────
-
 enum OperacaoTipo {
-  // Pedido
-  criarPedido,
-  adicionarItem,
-  finalizarPedido,
-  cancelarPedido,
-  actualizarValorPago,
-  // Usuario
-  criarUsuario,
-  atualizarUsuario,
-  toggleStatusUsuario,
-  resetarSenhaUsuario,
-  // Produto
-  criarProduto,
-  atualizarProduto,
-  ativarProduto,
-  desativarProduto,
-  // Estoque
-  adicionarEstoque,
-  removerEstoque,
-  definirEstoque,
+  criarPedido, adicionarItem, finalizarPedido, cancelarPedido,
+  actualizarValorPago, criarUsuario, atualizarUsuario,
+  toggleStatusUsuario, resetarSenhaUsuario, criarProduto,
+  atualizarProduto, ativarProduto, desativarProduto,
+  adicionarEstoque, removerEstoque, definirEstoque,
 }
-
-// ─── Modelo ──────────────────────────────────────────────────────────────────
 
 class OperacaoFila {
   final String id;
@@ -57,25 +39,23 @@ class OperacaoFila {
   });
 
   Map<String, dynamic> toJson() => {
-        'id':         id,
-        'tipo':       tipo.name,
-        'payload':    payload,
-        'criadoEm':   criadoEm.toIso8601String(),
-        'tentativas': tentativas,
-        'status':     status,
-      };
+    'id':         id,
+    'tipo':       tipo.name,
+    'payload':    payload,
+    'criadoEm':   criadoEm.toIso8601String(),
+    'tentativas': tentativas,
+    'status':     status,
+  };
 
   factory OperacaoFila.fromJson(Map<String, dynamic> json) => OperacaoFila(
-        id:          json['id'] as String,
-        tipo:        OperacaoTipo.values.firstWhere((e) => e.name == json['tipo']),
-        payload:     Map<String, dynamic>.from(json['payload'] as Map),
-        criadoEm:    DateTime.parse(json['criadoEm'] as String),
-        tentativas:  (json['tentativas'] as int?) ?? 0,
-        status:      (json['status'] as String?) ?? 'pendente',
-      );
+    id:         json['id']       as String,
+    tipo:       OperacaoTipo.values.firstWhere((e) => e.name == json['tipo']),
+    payload:    Map<String, dynamic>.from(json['payload'] as Map),
+    criadoEm:   DateTime.parse(json['criadoEm'] as String),
+    tentativas: (json['tentativas'] as int?) ?? 0,
+    status:     (json['status']     as String?) ?? 'pendente',
+  );
 }
-
-// ─── Serviço ─────────────────────────────────────────────────────────────────
 
 class SyncQueueService {
   static final SyncQueueService instance = SyncQueueService._internal();
@@ -95,16 +75,13 @@ class SyncQueueService {
 
   int get totalPendentes => pendentes.length;
 
-  // ── Inicialização ─────────────────────────────────────────────────────────
-
   Future<void> inicializar() async {
     await _carregarDoDisco();
-    ConnectivityService.instance.onlineStream.listen((online) {
+    // ✅ corrigido: isOnlineStream em vez de onlineStream
+    ConnectivityService.instance.isOnlineStream.listen((online) {
       if (online) _processarFila();
     });
   }
-
-  // ── Enfileirar ────────────────────────────────────────────────────────────
 
   Future<void> enfileirar({
     required OperacaoTipo tipo,
@@ -120,10 +97,9 @@ class SyncQueueService {
     await _salvarNoDisco();
     _emitir();
 
-    if (ConnectivityService.instance.estaOnline) _processarFila();
+    // ✅ corrigido: isOnline em vez de estaOnline
+    if (ConnectivityService.instance.isOnline) _processarFila();
   }
-
-  // ── Processamento ─────────────────────────────────────────────────────────
 
   Future<void> _processarFila() async {
     if (_sincronizando) return;
@@ -133,7 +109,8 @@ class SyncQueueService {
         ..sort((a, b) => a.criadoEm.compareTo(b.criadoEm));
 
       for (final op in ordenados) {
-        if (!ConnectivityService.instance.estaOnline) break;
+        // ✅ corrigido: isOnline em vez de estaOnline
+        if (!ConnectivityService.instance.isOnline) break;
         await _enviarComRetry(op);
       }
     } finally {
@@ -173,120 +150,90 @@ class SyncQueueService {
     _emitir();
   }
 
-  // ── Envio HTTP ────────────────────────────────────────────────────────────
-
   Future<bool> _enviarAoBackend(OperacaoFila op) async {
     const timeout = Duration(seconds: 15);
     final h = {'Content-Type': 'application/json'};
+    // ✅ corrigido: usa ApiConfig.baseUrl em vez de _kBaseUrl hardcoded
+    final base = ApiConfig.baseUrl;
 
     try {
       http.Response resp;
       final p = op.payload;
 
       switch (op.tipo) {
-
-        // ── Pedido ──────────────────────────────────────────────────────────
-
         case OperacaoTipo.criarPedido:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/pedidos'), headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(Uri.parse('$base/api/pedidos'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.adicionarItem:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/pedidos/${p['idPedido']}/itens'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(
+              Uri.parse('$base/api/pedidos/${p['idPedido']}/itens'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.finalizarPedido:
-          resp = await http
-              .patch(Uri.parse('$_kBaseUrl/api/pedidos/${p['idPedido']}/finalizar'),
-                  headers: h)
-              .timeout(timeout);
+          resp = await http.patch(
+              Uri.parse('$base/api/pedidos/${p['idPedido']}/finalizar'),
+              headers: h).timeout(timeout);
 
         case OperacaoTipo.cancelarPedido:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/pedidos/${p['idPedido']}/cancelar'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(
+              Uri.parse('$base/api/pedidos/${p['idPedido']}/cancelar'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.actualizarValorPago:
-          resp = await http
-              .patch(Uri.parse('$_kBaseUrl/api/pedidos/${p['idPedido']}/valor-pago'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
-
-        // ── Usuario ─────────────────────────────────────────────────────────
+          resp = await http.patch(
+              Uri.parse('$base/api/pedidos/${p['idPedido']}/valor-pago'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.criarUsuario:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/usuarios'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(Uri.parse('$base/api/usuarios'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.atualizarUsuario:
-          resp = await http
-              .put(Uri.parse('$_kBaseUrl/api/usuarios/${p['idUsuario']}'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.put(
+              Uri.parse('$base/api/usuarios/${p['idUsuario']}'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.toggleStatusUsuario:
-          resp = await http
-              .patch(Uri.parse('$_kBaseUrl/api/usuarios/${p['idUsuario']}/toggle-status'),
-                  headers: h)
-              .timeout(timeout);
+          resp = await http.patch(
+              Uri.parse('$base/api/usuarios/${p['idUsuario']}/toggle-status'),
+              headers: h).timeout(timeout);
 
         case OperacaoTipo.resetarSenhaUsuario:
-          resp = await http
-              .patch(Uri.parse('$_kBaseUrl/api/usuarios/${p['idUsuario']}/reset-password'),
-                  headers: h)
-              .timeout(timeout);
-
-        // ── Produto ─────────────────────────────────────────────────────────
+          resp = await http.patch(
+              Uri.parse('$base/api/usuarios/${p['idUsuario']}/reset-password'),
+              headers: h).timeout(timeout);
 
         case OperacaoTipo.criarProduto:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/produtos'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(Uri.parse('$base/api/produtos'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.atualizarProduto:
-          resp = await http
-              .put(Uri.parse('$_kBaseUrl/api/produtos/${p['idProduto']}'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.put(
+              Uri.parse('$base/api/produtos/${p['idProduto']}'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.ativarProduto:
-          resp = await http
-              .patch(Uri.parse('$_kBaseUrl/api/produtos/${p['idProduto']}/ativar'),
-                  headers: h)
-              .timeout(timeout);
+          resp = await http.patch(
+              Uri.parse('$base/api/produtos/${p['idProduto']}/ativar'),
+              headers: h).timeout(timeout);
 
         case OperacaoTipo.desativarProduto:
-          resp = await http
-              .patch(Uri.parse('$_kBaseUrl/api/produtos/${p['idProduto']}/desativar'),
-                  headers: h)
-              .timeout(timeout);
-
-        // ── Estoque ─────────────────────────────────────────────────────────
+          resp = await http.patch(
+              Uri.parse('$base/api/produtos/${p['idProduto']}/desativar'),
+              headers: h).timeout(timeout);
 
         case OperacaoTipo.adicionarEstoque:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/estoque/adicionar'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(Uri.parse('$base/api/estoque/adicionar'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.removerEstoque:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/estoque/remover'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(Uri.parse('$base/api/estoque/remover'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
 
         case OperacaoTipo.definirEstoque:
-          resp = await http
-              .post(Uri.parse('$_kBaseUrl/api/estoque/definir'),
-                  headers: h, body: jsonEncode(p))
-              .timeout(timeout);
+          resp = await http.post(Uri.parse('$base/api/estoque/definir'),
+              headers: h, body: jsonEncode(p)).timeout(timeout);
       }
 
       return resp.statusCode >= 200 && resp.statusCode < 300;
@@ -296,11 +243,10 @@ class SyncQueueService {
     }
   }
 
-  // ── Persistência ──────────────────────────────────────────────────────────
-
   Future<void> _salvarNoDisco() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, jsonEncode(_fila.map((o) => o.toJson()).toList()));
+    await prefs.setString(
+        _prefsKey, jsonEncode(_fila.map((o) => o.toJson()).toList()));
   }
 
   Future<void> _carregarDoDisco() async {
@@ -319,13 +265,12 @@ class SyncQueueService {
     }
   }
 
-  // ── Utilitários ───────────────────────────────────────────────────────────
-
   void _emitir() {
     if (!_controller.isClosed) _controller.add(List.unmodifiable(_fila));
   }
 
-  String _gerarId() => '${DateTime.now().millisecondsSinceEpoch}_${_fila.length}';
+  String _gerarId() =>
+      '${DateTime.now().millisecondsSinceEpoch}_${_fila.length}';
 
   Future<void> limparEnviados() async {
     _fila.removeWhere((o) => o.status == 'enviado');

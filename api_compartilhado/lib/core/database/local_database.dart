@@ -23,12 +23,13 @@ class LocalDatabase {
     final dbPath = await getDatabasesPath();
     final path   = join(dbPath, 'stech_pdv.db');
 
-    _db = await openDatabase(
-      path,
-      version: 2,
-      onCreate: _onCreate,
-      onConfigure: _onConfigure,
-    );
+_db = await openDatabase(
+  path,
+  version: 2,
+  onCreate:   _onCreate,
+  onUpgrade:  _onUpgrade,  // ← ADICIONAR
+  onConfigure: _onConfigure,
+);
   }
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
   if (oldVersion < 2) {

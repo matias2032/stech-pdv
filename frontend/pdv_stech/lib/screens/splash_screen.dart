@@ -113,20 +113,8 @@ class _SplashScreenState extends State<SplashScreen>
     // 6. Verificar se há dados locais em modo offline
 if (!isBackendUp) {
   _setStep('A verificar dados locais…', 0.85);
-  final temDados = await _verificarDadosLocais();
-  if (!temDados) {
-    // Sem cache: se há rede mas o backend não responde (Render a dormir),
-    // deixa passar — o login vai tentar HTTP e gerir o erro.
-    // Só bloqueia se não há rede nenhuma (fullOffline sem cache = impossível operar).
-    if (_connMode == _ConnMode.fullOffline) {
-      _setError(
-        'Sem ligação e sem dados locais.',
-        'Ligue-se à internet para o primeiro acesso.\n'
-        'Após o primeiro login, a app funciona offline.',
-      );
-      return;
-    }
-  }}
+  await _verificarDadosLocais(); // apenas para log/debug; nunca bloqueia
+}
 
     // 7. Garantir tempo mínimo de splash
     _setStep('Pronto!', 1.0);
