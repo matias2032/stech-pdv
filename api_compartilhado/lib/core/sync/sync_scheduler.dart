@@ -119,16 +119,35 @@ Future<void> flushQueue() async {
     debugPrint('⚙️ SyncScheduler — ${pendentes.length} operação(ões) a enviar via batch');
 
     // ── Montar payload do batch ───────────────────────────────────
-    final operacoes = pendentes.map((item) {
-      final payload = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
-      return {
-        'entidade':  item['entidade'] as String,
-        'operacao':  item['operacao'] as String,
-        'localId':   payload['localId'] as String?,
-        'id':        payload['id'] as int?,
-        'payload':   payload,
-      };
-    }).toList();
+    final operacoes = <Map<String, dynamic>>[];
+for (final item in pendentes) {
+  var payload = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
+  final entidade = item['entidade'] as String;
+  final operacao = item['operacao'] as String;
+
+  if (entidade == 'pedido' &&
+      (operacao == 'ADD_ITEM_PRODUTO' || operacao == 'ADD_ITEM_SERVICO')) {
+    try {
+      payload = await _resolverIdsPedido(payload);
+    } catch (_) {
+      // Pedido pai ainda pendente — pula esta operação neste flush
+      continue;
+    }
+  }
+
+  operacoes.add({
+    'entidade': entidade,
+    'operacao': operacao,
+    'localId':  payload['localId'] as String?,
+    'id':       payload['id'],
+    'payload':  payload,
+  });
+}
+
+if (operacoes.isEmpty) {
+  debugPrint('⚙️ SyncScheduler — todas as operações pendentes adiadas');
+  return;
+}
 
     // ── Enviar batch ao backend ───────────────────────────────────
     final response = await http.post(
@@ -632,6 +651,32 @@ Future<void> _actualizarDaoLocal({
         await _pedidoDao!.deleteByLocalId(localId);
       }
   }
+}
+
+
+Future<Map<String, dynamic>> _resolverIdsPedido(
+  Map<String, dynamic> payload,
+) async {
+  final idPedidoLocal = payload['idPedidoLocal'] as String?;
+  if (idPedidoLocal == null) return payload; // já tem idPedido real
+
+  // O tempId estava guardado como int negativo; procura no DAO pelo id numérico
+  final tempId = int.tryParse(idPedidoLocal);
+  if (tempId == null) return payload;
+
+  final row = await _pedidoDao!.getById(tempId);
+  if (row != null) {
+    final idReal = row['id'] as int?;
+    if (idReal != null && idReal > 0) {
+      // Substitui o local pelo real
+      final resolvido = Map<String, dynamic>.from(payload);
+      resolvido['idPedido'] = idReal;
+      resolvido.remove('idPedidoLocal');
+      return resolvido;
+    }
+  }
+  // Pedido ainda não sincronizado — adiar esta operação
+  throw Exception('Pedido temporário $idPedidoLocal ainda não sincronizado');
 }
 
 

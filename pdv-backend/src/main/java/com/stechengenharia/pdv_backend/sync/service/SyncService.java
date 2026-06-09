@@ -41,7 +41,7 @@ public class SyncService {
     // ────────────────────────────────────────────────────────────────────────
 
     public SyncResponseDTO processar(SyncRequestDTO request) {
-        List<SyncOperacaoDTO> operacoes  = request.getOperacoes();
+        List<SyncOperacaoDTO>  operacoes  = request.getOperacoes();
         List<SyncResultadoDTO> resultados = new ArrayList<>();
 
         for (SyncOperacaoDTO op : operacoes) {
@@ -92,14 +92,14 @@ public class SyncService {
         return switch (op.getOperacao().toUpperCase()) {
             case "CREATE" -> {
                 var response = clienteService.criar(dto);
-                yield sucesso(op, response.id().intValue());
+                yield sucesso(op, response.id());
             }
             case "UPDATE" -> {
-                clienteService.editar(Long.valueOf(op.getId()), dto);
+                clienteService.editar(op.getId(), dto);
                 yield sucesso(op, op.getId());
             }
             case "DELETE" -> {
-                clienteService.excluir(Long.valueOf(op.getId()));
+                clienteService.excluir(op.getId());
                 yield sucesso(op, op.getId());
             }
             default -> erroIndividual(op, "Operação não suportada: " + op.getOperacao());
@@ -116,14 +116,14 @@ public class SyncService {
         return switch (op.getOperacao().toUpperCase()) {
             case "CREATE" -> {
                 var response = marcaService.criar(dto);
-                yield sucesso(op, response.getIdMarca());
+                yield sucesso(op, (long) response.getIdMarca());
             }
             case "UPDATE" -> {
-                marcaService.atualizar(op.getId(), dto);
+                marcaService.atualizar(op.getId().intValue(), dto);
                 yield sucesso(op, op.getId());
             }
             case "DELETE" -> {
-                marcaService.deletar(op.getId());
+                marcaService.deletar(op.getId().intValue());
                 yield sucesso(op, op.getId());
             }
             default -> erroIndividual(op, "Operação não suportada: " + op.getOperacao());
@@ -140,14 +140,14 @@ public class SyncService {
         return switch (op.getOperacao().toUpperCase()) {
             case "CREATE" -> {
                 var response = categoriaService.criar(dto);
-                yield sucesso(op, response.getIdCategoria());
+                yield sucesso(op, (long) response.getIdCategoria());
             }
             case "UPDATE" -> {
-                categoriaService.atualizar(op.getId(), dto);
+                categoriaService.atualizar(op.getId().intValue(), dto);
                 yield sucesso(op, op.getId());
             }
             case "DELETE" -> {
-                categoriaService.deletar(op.getId());
+                categoriaService.deletar(op.getId().intValue());
                 yield sucesso(op, op.getId());
             }
             default -> erroIndividual(op, "Operação não suportada: " + op.getOperacao());
@@ -163,15 +163,15 @@ public class SyncService {
 
         return switch (op.getOperacao().toUpperCase()) {
             case "CREATE" -> {
-               var response = servicoService.criar(dto);
-yield sucesso(op, response.idServico);
+                var response = servicoService.criar(dto);
+                yield sucesso(op, (long) response.idServico);
             }
             case "UPDATE" -> {
-                servicoService.actualizar(op.getId(), dto);
+                servicoService.actualizar(op.getId().intValue(), dto);
                 yield sucesso(op, op.getId());
             }
             case "DELETE" -> {
-                servicoService.deletar(op.getId());
+                servicoService.deletar(op.getId().intValue());
                 yield sucesso(op, op.getId());
             }
             default -> erroIndividual(op, "Operação não suportada: " + op.getOperacao());
@@ -186,18 +186,18 @@ yield sucesso(op, response.idServico);
         ProdutoRequestDTO dto = converter(op.getPayload(), ProdutoRequestDTO.class);
 
         return switch (op.getOperacao().toUpperCase()) {
-      case "CREATE" -> {
-    var response = produtoService.criar(dto);
-    yield sucesso(op, response.getIdProduto());
-}
-case "UPDATE" -> {
-    produtoService.atualizar(op.getId(), dto);
-    yield sucesso(op, op.getId());
-}
-case "DELETE" -> {
-    produtoService.deletar(op.getId());
-    yield sucesso(op, op.getId());
-}
+            case "CREATE" -> {
+                var response = produtoService.criar(dto);
+                yield sucesso(op, (long) response.getIdProduto());
+            }
+            case "UPDATE" -> {
+                produtoService.atualizar(op.getId().intValue(), dto);
+                yield sucesso(op, op.getId());
+            }
+            case "DELETE" -> {
+                produtoService.deletar(op.getId().intValue());
+                yield sucesso(op, op.getId());
+            }
             default -> erroIndividual(op, "Operação não suportada: " + op.getOperacao());
         };
     }
@@ -207,27 +207,18 @@ case "DELETE" -> {
     // ══════════════════════════════════════════════════════════════════════
 
     private SyncResultadoDTO processarPedido(SyncOperacaoDTO op) {
-        PedidoRequestDTO dto = converter(op.getPayload(), PedidoRequestDTO.class);
-
         return switch (op.getOperacao().toUpperCase()) {
             case "CREATE" -> {
+                PedidoRequestDTO dto = converter(op.getPayload(), PedidoRequestDTO.class);
                 var response = pedidoService.criarPedido(dto);
-                yield sucesso(op, response.idPedido);
-            }
-            case "UPDATE" -> {
-                // UPDATE num pedido via sync usa FinalizarPedidoRequestDTO;
-                // se o Flutter enviar apenas alterações de cabeçalho, o
-                // campo operacao="UPDATE" com id preenchido faz sentido.
-                // Por ora delega no mesmo criarPedido mas com ID existente —
-                // adaptar conforme evolução do contrato Flutter↔backend.
-                log.warn("[Sync] UPDATE de pedido via batch não implementado — id={}", op.getId());
-                yield erroIndividual(op, "UPDATE de pedido via sync não suportado nesta versão");
+                yield sucesso(op, (long) response.idPedido);
             }
             case "DELETE" -> {
-                pedidoService.eliminar(op.getId());
+                pedidoService.eliminar(op.getId().intValue());
                 yield sucesso(op, op.getId());
             }
-            default -> erroIndividual(op, "Operação não suportada: " + op.getOperacao());
+            default -> erroIndividual(op,
+                    "Operação não suportada para pedido via sync: " + op.getOperacao());
         };
     }
 
@@ -239,13 +230,13 @@ case "DELETE" -> {
         return objectMapper.convertValue(payload, tipo);
     }
 
-    private SyncResultadoDTO sucesso(SyncOperacaoDTO op, Integer idReal) {
+    private SyncResultadoDTO sucesso(SyncOperacaoDTO op, Long idReal) {
         return SyncResultadoDTO.builder()
                 .localId(op.getLocalId())
                 .entidade(op.getEntidade())
                 .operacao(op.getOperacao())
                 .sucesso(true)
-                .idReal(idReal)
+                .idReal(idReal != null ? idReal.intValue() : null)
                 .build();
     }
 

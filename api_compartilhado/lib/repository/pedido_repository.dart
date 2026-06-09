@@ -262,9 +262,10 @@ await _dao.upsertItem(itemLocal);
 await _produtoDao.decrementarEstoque(dto.idProduto, dto.quantidade);
 
 await _syncQueueDao.enqueue('pedido', 'ADD_ITEM_PRODUTO', {
-  'idPedido':   idPedido,
-  'idProduto':  dto.idProduto,
-  'quantidade': dto.quantidade,
+  'idPedido':      idPedido.isNegative ? null        : idPedido,
+  'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
+  'idProduto':     dto.idProduto,
+  'quantidade':    dto.quantidade,
 });
 
     final row = await _dao.getById(idPedido);
@@ -285,12 +286,13 @@ await _syncQueueDao.enqueue('pedido', 'ADD_ITEM_PRODUTO', {
       return m;
     }
 
-    await _syncQueueDao.enqueue('pedido', 'ADD_ITEM_SERVICO', {
-      'idPedido':    idPedido,
-      'idServico':   dto.idServico,
-      'quantidade':  dto.quantidade,
-      'observacoes': dto.observacoes,
-    });
+await _syncQueueDao.enqueue('pedido', 'ADD_ITEM_SERVICO', {
+  'idPedido':      idPedido.isNegative ? null        : idPedido,
+  'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
+  'idServico':     dto.idServico,
+  'quantidade':    dto.quantidade,
+  'observacoes':   dto.observacoes,
+});
 
     final row = await _dao.getById(idPedido);
     return row != null
