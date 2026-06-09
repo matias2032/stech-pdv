@@ -37,6 +37,7 @@ import 'screens/documentos_list_screen.dart';
 import 'screens/documentos_form_screen.dart';
 import 'screens/extractos_list_screen.dart';
 import 'screens/extractos_form_screen.dart';
+import 'package:flutter/foundation.dart';
 
 
 void main() async {
@@ -47,11 +48,15 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // ← ORDEM IMPORTA: URL primeiro, depois BD, depois conectividade
   await ApiConfig.baseUrlAsync;
   ApiConfig.printConfig();
 
-  await LocalDatabase.instance.init();
+await LocalDatabase.instance.init();
+
+  if (kDebugMode) {
+    await SyncQueueDao().cancelarDeleteOrfao('categoria', 1410051756);
+  }
+
   final count = Sqflite.firstIntValue(
   await LocalDatabase.instance.db.rawQuery(
     'SELECT COUNT(*) FROM cliente',

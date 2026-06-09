@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../local_database.dart';
+import 'package:flutter/foundation.dart';
 
 /// Gere a fila de operações pendentes de sincronização com o backend.
 class SyncQueueDao {
@@ -68,6 +69,14 @@ Future<void> cancelarPorLocalId(String localId) async {
     r"DELETE FROM sync_queue WHERE json_extract(payload, '$.localId') = ?",
     [localId],
   );
+}
+
+Future<void> cancelarDeleteOrfao(String entidade, int idEntidade) async {
+  await _db.rawDelete(
+    r"DELETE FROM sync_queue WHERE entidade = ? AND operacao = 'DELETE' AND json_extract(payload, '$.id') = ?",
+    [entidade, idEntidade],
+  );
+  debugPrint('🧹 SyncQueueDao — DELETE órfão removido ($entidade id=$idEntidade)');
 }
 
 

@@ -16,7 +16,7 @@ timeout /t 20 /nobreak
 echo.
 echo [INFO] Iniciando Flutter Windows...
 cd "C:\pdv-stech engenharia\frontend\pdv_stech"
-start "FLUTTER WINDOWS" cmd /c "flutter run -d windows --no-pub"
+start "FLUTTER WINDOWS" cmd /c "flutter run -d windows -v --no-pub"
 
 echo.
 echo ========================================
