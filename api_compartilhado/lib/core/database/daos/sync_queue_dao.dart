@@ -71,13 +71,13 @@ Future<void> cancelarPorLocalId(String localId) async {
   );
 }
 
-Future<void> cancelarDeleteOrfao(String entidade, int idEntidade) async {
-  await _db.rawDelete(
-    r"DELETE FROM sync_queue WHERE entidade = ? AND operacao = 'DELETE' AND json_extract(payload, '$.id') = ?",
-    [entidade, idEntidade],
-  );
-  debugPrint('🧹 SyncQueueDao — DELETE órfão removido ($entidade id=$idEntidade)');
-}
+// Future<void> cancelarDeleteOrfao(String entidade, int idEntidade) async {
+//   await _db.rawDelete(
+//     r"DELETE FROM sync_queue WHERE entidade = ? AND operacao = 'DELETE' AND json_extract(payload, '$.id') = ?",
+//     [entidade, idEntidade],
+//   );
+//   debugPrint('🧹 SyncQueueDao — DELETE órfão removido ($entidade id=$idEntidade)');
+// }
 
 
   // ── Contar pendentes (para badge na UI) ───────────────────────────

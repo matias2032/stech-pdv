@@ -53,17 +53,17 @@ void main() async {
 
 await LocalDatabase.instance.init();
 
-  if (kDebugMode) {
-    await SyncQueueDao().cancelarDeleteOrfao('categoria', 1410051756);
-  }
+  // if (kDebugMode) {
+  //   await SyncQueueDao().cancelarDeleteOrfao('categoria', 1410051756);
+  // }
 
-  final count = Sqflite.firstIntValue(
-  await LocalDatabase.instance.db.rawQuery(
-    'SELECT COUNT(*) FROM cliente',
-  ),
-);
+//   final count = Sqflite.firstIntValue(
+//   await LocalDatabase.instance.db.rawQuery(
+//     'SELECT COUNT(*) FROM cliente',
+//   ),
+// );
 
-debugPrint('📦 Clientes no SQLite: $count');
+// debugPrint('📦 Clientes no SQLite: $count');
 
   await ConnectivityService.instance.init(); // ← usa o init() unificado
 
