@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 2,       
+  version: 3,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -37,6 +37,22 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await db.execute(
       'ALTER TABLE usuario ADD COLUMN telefone TEXT',
     );
+  }
+
+  if (oldVersion < 3) {
+    await db.execute('DROP TABLE IF EXISTS categoria');
+    await db.execute('''
+      CREATE TABLE categoria (
+        id             INTEGER PRIMARY KEY,
+        local_id       TEXT UNIQUE,
+        nome_categoria TEXT    NOT NULL DEFAULT '',
+        descricao      TEXT,
+        sync_status    TEXT    NOT NULL DEFAULT 'synced',
+        updated_at     TEXT
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_categoria_sync ON categoria(sync_status)');
   }
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
@@ -147,12 +163,12 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       // ── categoria ─────────────────────────────────────────────────
 await txn.execute('''
   CREATE TABLE categoria (
-    id          INTEGER PRIMARY KEY,
-    local_id    TEXT UNIQUE,
-    nome        TEXT    NOT NULL,
-    descricao   TEXT,
-    sync_status TEXT    NOT NULL DEFAULT 'synced',
-    updated_at  TEXT
+    id             INTEGER PRIMARY KEY,
+    local_id       TEXT UNIQUE,
+    nome_categoria TEXT    NOT NULL DEFAULT '',
+    descricao      TEXT,
+    sync_status    TEXT    NOT NULL DEFAULT 'synced',
+    updated_at     TEXT
   )
 ''');
 
