@@ -82,3 +82,4 @@ export 'repository/documento_fiscal_repository.dart';
 export 'repository/servico_repository.dart';
 export 'core/database/daos/servico_dao.dart';
 export 'core/database/daos/usuario_dao.dart';
+export 'controllers/pedido_ativo_controller.dart';

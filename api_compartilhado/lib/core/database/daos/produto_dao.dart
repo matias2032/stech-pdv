@@ -75,4 +75,18 @@ class ProdutoDao {
       whereArgs: [id],
     );
   }
+
+  Future<void> decrementarEstoque(int idProduto, int quantidade) async {
+  await _db.rawUpdate(
+    'UPDATE produto SET quantidade_estoque = MAX(0, quantidade_estoque - ?) WHERE id = ?',
+    [quantidade, idProduto],
+  );
+}
+
+Future<void> incrementarEstoque(int idProduto, int quantidade) async {
+  await _db.rawUpdate(
+    'UPDATE produto SET quantidade_estoque = quantidade_estoque + ? WHERE id = ?',
+    [quantidade, idProduto],
+  );
+}
 }

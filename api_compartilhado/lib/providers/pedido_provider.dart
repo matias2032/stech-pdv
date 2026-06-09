@@ -5,15 +5,24 @@ import 'package:flutter/foundation.dart';
 import '../models/pedido_model.dart';
 import '../services/pedido_service.dart';
 import '../repository/pedido_repository.dart';
+import 'produto_provider.dart';
+import '../core/database/daos/produto_dao.dart';
+import '../controllers/pedido_ativo_controller.dart';
 
 enum PedidoStatus { idle, loading, success, error }
 
 class PedidoProvider extends ChangeNotifier {
   // ── Dependência ──────────────────────────────────────────────────────────
   final PedidoRepository _repository;
+  final ProdutoProvider _produtoProvider;
+  
+PedidoProvider({
+  required PedidoRepository repository,
+  required ProdutoProvider produtoProvider,  // ← novo parâmetro
+}) : _repository = repository,
+     _produtoProvider = produtoProvider;
 
-  PedidoProvider({required PedidoRepository repository})
-      : _repository = repository;
+      
 
   // ── Estado ───────────────────────────────────────────────────────────────
   PedidoModel?                    _pedidoActual;
@@ -31,7 +40,7 @@ class PedidoProvider extends ChangeNotifier {
   List<TipoPagamentoResponseDTO> get tiposPagamento  => List.unmodifiable(_tiposPagamento);
   Map<String, dynamic>           get dashboardData   => Map.unmodifiable(_dashboardData);
   Map<String, dynamic>           get relatorioData   => Map.unmodifiable(_relatorioData);
-  PedidoStatus                   get status          => _status;
+  PedidoStatus                   get status         => _status;
   String?                        get errorMessage    => _errorMessage;
   bool                           get isLoading       => _status == PedidoStatus.loading;
 
@@ -68,20 +77,24 @@ class PedidoProvider extends ChangeNotifier {
   // ADICIONAR ITEM DE PRODUTO
   // ════════════════════════════════════════════════════════════════════════
 
-  Future<PedidoModel?> adicionarItemProduto(
-    int idPedido,
-    ItemPedidoRequestModel dto,
-  ) async {
-    final result = await _run(() => _repository.adicionarItemProduto(
-          idPedido,
-          ItemPedidoRequestDTO(
-            idProduto:  dto.idProduto,
-            quantidade: dto.quantidade,
-          ),
-        ));
-    if (result != null) _pedidoActual = result;
-    return result;
+Future<PedidoModel?> adicionarItemProduto(
+  int idPedido,
+  ItemPedidoRequestModel dto,
+) async {
+  final result = await _run(() => _repository.adicionarItemProduto(
+        idPedido,
+        ItemPedidoRequestDTO(
+          idProduto:  dto.idProduto,
+          quantidade: dto.quantidade,
+        ),
+      ));
+  if (result != null) {
+    _pedidoActual = result;
+    // Recarrega a lista de produtos para reflectir o novo estoque
+    await _produtoProvider.listarAtivos();
   }
+  return result;
+}
 
   // ════════════════════════════════════════════════════════════════════════
   // ADICIONAR ITEM DE SERVIÇO
@@ -168,42 +181,51 @@ class PedidoProvider extends ChangeNotifier {
   // ════════════════════════════════════════════════════════════════════════
 
   Future<PedidoModel?> finalizarPedido(
-    int idPedido,
-    FinalizarPedidoRequestModel dto,
-  ) async {
-    final result = await _run(() => _repository.finalizarPedido(
-          idPedido,
-          FinalizarPedidoRequestDTO(
-            idTipoPagamento:        dto.idTipoPagamento,
-            valorPago:              dto.valorPago,
-            observacoes:            dto.observacoes,
-            idCliente:              dto.idCliente,
-            nomeClienteSingular:    dto.nomeClienteSingular,
-            apelidoClienteSingular: dto.apelidoClienteSingular,
-          ),
-        ));
-    if (result != null) _pedidoActual = result;
-    return result;
-  }
+  int idPedido,
+  FinalizarPedidoRequestModel dto,
+) async {
+  final result = await _run(() => _repository.finalizarPedido(
+        idPedido,
+        FinalizarPedidoRequestDTO(
+          idTipoPagamento:        dto.idTipoPagamento,
+          valorPago:              dto.valorPago,
+          observacoes:            dto.observacoes,
+          idCliente:              dto.idCliente,
+          nomeClienteSingular:    dto.nomeClienteSingular,
+          apelidoClienteSingular: dto.apelidoClienteSingular,
+        ),
+      ));
+  // Após finalizar, limpa o pedido activo no provider
+  _pedidoActual = null;
+  notifyListeners();
+  return result;
+}
 
   // ════════════════════════════════════════════════════════════════════════
   // CANCELAR PEDIDO
   // ════════════════════════════════════════════════════════════════════════
 
-  Future<bool> cancelarPedido(
-    int idPedido,
-    CancelamentoPedidoRequestModel dto,
-  ) async {
-    await _run(() => _repository.cancelarPedido(
-          idPedido,
-          CancelamentoPedidoRequestDTO(
-            idUsuarioCancelou: dto.idUsuarioCancelou,
-            motivo:            dto.motivo,
-          ),
-        ));
-    return _status == PedidoStatus.success;
+Future<bool> cancelarPedido(
+  int idPedido,
+  CancelamentoPedidoRequestModel dto,
+) async {
+  await _run(() => _repository.cancelarPedido(
+        idPedido,
+        CancelamentoPedidoRequestDTO(
+          idUsuarioCancelou: dto.idUsuarioCancelou,
+          motivo:            dto.motivo,
+        ),
+      ));
+  if (_status == PedidoStatus.success) {
+    // Limpa o pedido activo se era este que foi cancelado
+    if (_pedidoActual?.idPedido == idPedido) {
+      _pedidoActual = null;
+      notifyListeners();
+    }
+    PedidoAtivoController.instance.limpar();
   }
-
+  return _status == PedidoStatus.success;
+}
   // ════════════════════════════════════════════════════════════════════════
   // CONSULTAS
   // ════════════════════════════════════════════════════════════════════════

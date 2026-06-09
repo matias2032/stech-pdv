@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:api_compartilhado/core/database/daos/usuario_dao.dart';
 import 'package:api_compartilhado/core/database/daos/produto_dao.dart';
 import 'package:api_compartilhado/core/database/daos/servico_dao.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:api_compartilhado/core/database/daos/cliente_dao.dart';
 
 // ── Paleta STech ─────────────────────────────────────────────────────
@@ -267,6 +268,34 @@ Future<void> _sincronizarCompleto() async {
     } catch (e) {
       debugPrint('⚠️ Splash sync clientes: $e');
     }
+
+    // ── Tipos de Pagamento ────────────────────────────────────────────
+_setStep('A sincronizar tipos de pagamento…', 0.97);
+try {
+  final resp = await client
+      .get(Uri.parse('$url/api/pedidos/tipos-pagamento'),
+           headers: ApiConfig.defaultHeaders)
+      .timeout(const Duration(seconds: 10));
+  if (resp.statusCode == 200) {
+    final lista = jsonDecode(resp.body) as List<dynamic>;
+    final db = LocalDatabase.instance.db;
+    final batch = db.batch();
+    for (final t in lista) {
+      batch.insert(
+        'tipo_pagamento',
+        {
+          'id':             (t['idTipoPagamento'] as num).toInt(),
+          'tipo_pagamento': t['tipoPagamento'] as String,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+    debugPrint('✅ Splash sync — ${lista.length} tipos de pagamento');
+  }
+} catch (e) {
+  debugPrint('⚠️ Splash sync tipos de pagamento: $e');
+}
 
     client.close();
   } catch (e) {

@@ -120,12 +120,13 @@ final marcaService     = MarcaService();
     connectivity: connectivity,
   );
 
-  final pedidoRepository = PedidoRepository(
-    service:      pedidoService,
-    dao:          PedidoDao(),
-    syncQueueDao: SyncQueueDao(),
-    connectivity: connectivity,
-  );
+final pedidoRepository = PedidoRepository(
+  service:      pedidoService,
+  dao:          PedidoDao(),
+  syncQueueDao: SyncQueueDao(),
+  connectivity: connectivity,
+  produtoDao:   ProdutoDao(),          // ← linha que faltava
+);
 
   final docFiscalRepository = DocumentoFiscalRepository(
     service:      docFiscalService,
@@ -205,9 +206,12 @@ SyncScheduler.instance.init(
       ),
 
       // ── Pedido ────────────────────────────────────────────────────
-      ChangeNotifierProvider(
-        create: (_) => PedidoProvider(repository: pedidoRepository),
-      ),
+   ChangeNotifierProvider(
+  create: (ctx) => PedidoProvider(
+    repository:      pedidoRepository,
+    produtoProvider: ctx.read<ProdutoProvider>(), // ← linha que faltava
+  ),
+),
 
       // ── Documento Fiscal ──────────────────────────────────────────
       ChangeNotifierProvider(

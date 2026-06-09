@@ -115,6 +115,8 @@ Future<void> _adicionarAoPedido() async {
 
     final provider = context.read<PedidoProvider>();
     if (provider.status == PedidoStatus.success) {
+        context.read<ProdutoProvider>().listarAtivos(); 
+        
       final resultado = provider.pedidoActual!;
       _snack(
         _temPedidoAtivo
