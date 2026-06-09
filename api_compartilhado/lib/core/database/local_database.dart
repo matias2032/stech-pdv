@@ -25,9 +25,9 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 2,
-  onCreate:   _onCreate,
-  onUpgrade:  _onUpgrade,  // ← ADICIONAR
+  version: 2,       
+  onCreate:    _onCreate,
+  onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
 );
   }

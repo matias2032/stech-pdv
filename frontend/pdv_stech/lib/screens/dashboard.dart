@@ -113,6 +113,8 @@ void initState() {
       vsync: this, duration: const Duration(milliseconds: 420));
   _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Dispara animação imediatamente — dados do cache já estão disponíveis
+    _fadeCtrl.forward();
     context.read<PedidoProvider>().listarPorStatus('finalizado');
   });
 }
@@ -211,9 +213,12 @@ List<PedidoModel> get _filtrados {
     return 'Operador #${p.idUsuario}';
   }
 
-  bool get _ehAdmin =>
-      SessaoService.instance.usuarioAtual?.nomePerfil.toLowerCase() == 'Administrador' ||
-      SessaoService.instance.usuarioAtual?.nomePerfil.toLowerCase() == 'admin';
+bool get _ehAdmin {
+  final perfil = SessaoService.instance.usuarioAtual?.nomePerfil
+      .toLowerCase()
+      .trim() ?? '';
+  return perfil == 'administrador' || perfil == 'admin';
+}
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -356,13 +361,12 @@ Widget _buildHeader(PedidoProvider provider) {
   // ── Body ──────────────────────────────────────────────────────────────────
 
 Widget _buildBody(PedidoProvider provider) {
-  if (provider.isLoading && provider.pedidos.isEmpty) {
-      return const Center(
-          child: CircularProgressIndicator(color: _kPrimary, strokeWidth: 2.5));
-    }
-
-  if (provider.errorMessage != null) {
-      return Center(
+    if (provider.isLoading && provider.pedidos.isEmpty) {
+    return const Center(
+        child: CircularProgressIndicator(color: _kPrimary, strokeWidth: 2.5));
+  }
+  if (provider.errorMessage != null && provider.pedidos.isEmpty) {
+    return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(

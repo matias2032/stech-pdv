@@ -4,6 +4,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'dart:convert';
+import 'package:api_compartilhado/core/database/daos/usuario_dao.dart';
+import 'package:api_compartilhado/core/database/daos/produto_dao.dart';
+import 'package:api_compartilhado/core/database/daos/servico_dao.dart';
+import 'package:api_compartilhado/core/database/daos/cliente_dao.dart';
 
 // ── Paleta STech ─────────────────────────────────────────────────────
 const _navy   = Color(0xFF1B2A6B);
@@ -111,9 +116,11 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     // 6. Verificar se há dados locais em modo offline
-if (!isBackendUp) {
-  _setStep('A verificar dados locais…', 0.85);
-  await _verificarDadosLocais(); // apenas para log/debug; nunca bloqueia
+_setStep('A sincronizar dados…', 0.80);
+if (isBackendUp) {
+  await _sincronizarCompleto();
+} else {
+  await _verificarDadosLocais();
 }
 
     // 7. Garantir tempo mínimo de splash
@@ -149,16 +156,122 @@ if (!isBackendUp) {
 Future<bool> _verificarDadosLocais() async {
   try {
     final db = LocalDatabase.instance.db;
-    final r = await db.rawQuery(
-        'SELECT COUNT(*) as total FROM usuario');
-    final total = (r.first['total'] as int?) ?? 0;
-    if (total > 0) return true;
-    // fallback: pode ter produtos sem utilizadores (edge case)
-    final r2 = await db.rawQuery(
-        'SELECT COUNT(*) as total FROM produto');
-    return ((r2.first['total'] as int?) ?? 0) > 0;
-  } catch (_) {
-    return false; // SQLite ainda não inicializado — deixa passar
+
+    final rUsuarios  = await db.rawQuery('SELECT COUNT(*) as t FROM usuario');
+    final rProdutos  = await db.rawQuery('SELECT COUNT(*) as t FROM produto');
+    final rServicos  = await db.rawQuery('SELECT COUNT(*) as t FROM servico');
+    final rClientes  = await db.rawQuery('SELECT COUNT(*) as t FROM cliente');
+    final rPedidos   = await db.rawQuery('SELECT COUNT(*) as t FROM pedido');
+    final rPendentes = await db.rawQuery(
+        "SELECT COUNT(*) as t FROM sync_queue WHERE tentativas < 5");
+
+    final nU = (rUsuarios.first['t']  as int?) ?? 0;
+    final nPr = (rProdutos.first['t'] as int?) ?? 0;
+    final nS = (rServicos.first['t']  as int?) ?? 0;
+    final nC = (rClientes.first['t']  as int?) ?? 0;
+    final nPe = (rPedidos.first['t']  as int?) ?? 0;
+    final nPend = (rPendentes.first['t'] as int?) ?? 0;
+
+    debugPrint('📦 Cache local:');
+    debugPrint('   👤 Utilizadores : $nU');
+    debugPrint('   📦 Produtos     : $nPr');
+    debugPrint('   🔧 Serviços     : $nS');
+    debugPrint('   🏢 Clientes     : $nC');
+    debugPrint('   🧾 Pedidos      : $nPe');
+    debugPrint('   ⏳ Sync pendente: $nPend operação(ões)');
+
+    return nU > 0 || nPr > 0;
+  } catch (e) {
+    debugPrint('⚠️ Splash — erro ao ler cache: $e');
+    return false;
+  }
+}
+
+Future<void> _sincronizarCompleto() async {
+  try {
+    final url = await ApiConfig.baseUrlAsync;
+    final client = http.Client();
+
+    // ── Utilizadores ──────────────────────────────────────────────
+    _setStep('A sincronizar utilizadores…', 0.82);
+    try {
+      final resp = await client
+          .get(Uri.parse('$url/api/usuarios'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => UsuarioModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = UsuarioDao();
+        await dao.upsertAll(lista.map((u) => u.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} utilizadores');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync utilizadores: $e');
+    }
+
+    // ── Produtos ──────────────────────────────────────────────────
+    _setStep('A sincronizar produtos…', 0.87);
+    try {
+      final resp = await client
+          .get(Uri.parse('$url/api/produtos'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => ProdutoModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = ProdutoDao();
+        await dao.upsertAll(lista.map((p) => p.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} produtos');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync produtos: $e');
+    }
+
+    // ── Serviços ──────────────────────────────────────────────────
+    _setStep('A sincronizar serviços…', 0.91);
+    try {
+      final resp = await client
+          .get(Uri.parse('$url/api/servicos'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => ServicoModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = ServicoDao();
+        await dao.upsertAll(lista.map((s) => s.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} serviços');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync serviços: $e');
+    }
+
+    // ── Clientes ──────────────────────────────────────────────────
+    _setStep('A sincronizar clientes…', 0.95);
+    try {
+      final resp = await client
+          .get(Uri.parse('$url/api/clientes'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => ClienteModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = ClienteDao();
+        await dao.upsertAll(lista.map((c) => c.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} clientes');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync clientes: $e');
+    }
+
+    client.close();
+  } catch (e) {
+    debugPrint('⚠️ _sincronizarCompleto falhou globalmente: $e');
+    // Nunca bloqueia a navegação — falha silenciosa
   }
 }
   // ── Helpers de estado ─────────────────────────────────────────────

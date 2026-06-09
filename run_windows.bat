@@ -7,7 +7,6 @@ echo  [1] LOCAL   — Backend local + Flutter local
 echo  [2] CLOUD   — Flutter aponta para Render
 echo  [3] ANDROID LOCAL  — Emulador + backend local
 echo  [4] ANDROID CLOUD  — Emulador + Render
-echo  [5] FULL-OFFLINE — Flutter sem backend (testa cache local)
 echo.
 set /p OPCAO="Escolha uma opcao (1/2/3/4): "
 
@@ -15,13 +14,13 @@ set /p OPCAO="Escolha uma opcao (1/2/3/4): "
 if "%OPCAO%"=="1" (
     echo.
     echo [INFO] Iniciando Backend Spring Boot local...
-    cd "E:\pdv-stech engenharia\pdv-backend"
+    cd "C:\pdv-stech engenharia\pdv-backend"
     start "BACKEND - SPRING BOOT" cmd /k "mvnw spring-boot:run"
 
     timeout /t 15 /nobreak
 
     echo [INFO] Iniciando Flutter Windows (LOCAL)...
-    cd "E:\pdv-stech engenharia\frontend\pdv_stech"
+    cd "C:\pdv-stech engenharia\frontend\pdv_stech"
     start "FLUTTER WINDOWS (LOCAL)" cmd /k "flutter run -d windows"
     goto FIM
 )
@@ -30,7 +29,7 @@ if "%OPCAO%"=="1" (
 if "%OPCAO%"=="2" (
     echo.
     echo [INFO] Iniciando Flutter Windows (CLOUD - Render)...
-    cd "E:\pdv-stech engenharia\frontend\pdv_stech"
+    cd "C:\pdv-stech engenharia\frontend\pdv_stech"
     start "FLUTTER WINDOWS (CLOUD)" cmd /k "flutter run -d windows -v --dart-define=API_BASE_URL=https://stech-pdv.onrender.com --dart-define=FORCE_PROD=true"
     goto FIM
 )
@@ -39,13 +38,13 @@ if "%OPCAO%"=="2" (
 if "%OPCAO%"=="3" (
     echo.
     echo [INFO] Iniciando Backend Spring Boot local...
-    cd "E:\pdv-stech engenharia\pdv-backend"
+    cd "C:\pdv-stech engenharia\pdv-backend"
     start "BACKEND - SPRING BOOT" cmd /k "mvnw spring-boot:run"
 
     timeout /t 15 /nobreak
 
     echo [INFO] Iniciando Flutter Android (LOCAL)...
-    cd "E:\pdv-stech engenharia\frontend\pdv_stech"
+    cd "C:\pdv-stech engenharia\frontend\pdv_stech"
     start "FLUTTER ANDROID (LOCAL)" cmd /k "flutter run"
     goto FIM
 )
@@ -54,25 +53,12 @@ if "%OPCAO%"=="3" (
 if "%OPCAO%"=="4" (
     echo.
     echo [INFO] Iniciando Flutter Android (CLOUD - Render)...
-    cd "E:\pdv-stech engenharia\frontend\pdv_stech"
+    cd "C:\pdv-stech engenharia\frontend\pdv_stech"
     start "FLUTTER ANDROID (CLOUD)" cmd /k "flutter run --dart-define=API_BASE_URL=https://stech-pdv.onrender.com --dart-define=FORCE_PROD=true"
     goto FIM
 )
 
-:: ── OPÇÃO 5 — Flutter LOCAL sem backend (testa full-offline) ────────
-if "%OPCAO%"=="5" (
-    echo.
-    echo [INFO] Iniciando Flutter Windows SEM backend (modo full-offline)...
-    cd "E:\pdv-stech engenharia\frontend\pdv_stech"
-    start "FLUTTER WINDOWS (FULL-OFFLINE)" cmd /k "flutter run -d windows"
-    echo.
-    echo [AVISO] Nenhum backend foi iniciado.
-    echo         A app deve arrancar com dados em cache.
-    echo         Quando iniciar o backend manualmente, o sync deve ocorrer.
-    goto FIM
-)
-
-echo [ERRO] Opcao invalida. Execute novamente e escolha 1, 2, 3, 4 ou 5.
+echo [ERRO] Opcao invalida. Execute novamente e escolha 1, 2, 3 ou 4.
 
 :FIM
 echo.

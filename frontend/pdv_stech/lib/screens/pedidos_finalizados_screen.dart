@@ -37,9 +37,6 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
   String            _pesquisa   = '';
 
 
-  late final AnimationController _entradaCtrl;
-  late final Animation<double>   _fadeAnim;
-  late final Animation<Offset>   _slideAnim;
 
 
   final _searchCtrl = TextEditingController();
@@ -47,25 +44,14 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
   @override
   void initState() {
     super.initState();
-    _entradaCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 450),
-    );
-    _fadeAnim  = CurvedAnimation(parent: _entradaCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _entradaCtrl, curve: Curves.easeOutCubic));
 
-WidgetsBinding.instance.addPostFrameCallback((_) {
-  context.read<PedidoProvider>().carregarTiposPagamento();
-  context.read<PedidoProvider>().listarPorStatus('finalizado');
-});
+
+WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
   }
 
 @override
 void dispose() {
-  _entradaCtrl.dispose();
+
   _searchCtrl.dispose();
   super.dispose();
 }
@@ -78,26 +64,14 @@ Future<void> _carregar() async {
     context.read<PedidoProvider>().listarPorStatus('finalizado'),
     context.read<PedidoProvider>().carregarTiposPagamento(),
   ]);
-
   if (!mounted) return;
-
   final provider = context.read<PedidoProvider>();
-
+  for (final t in provider.tiposPagamento) {
+    _tiposPagamento[t.idTipoPagamento] = t.tipoPagamento;
+  }
   if (provider.errorMessage != null) {
     _snack('Erro ao carregar pedidos: ${provider.errorMessage}', _kAccent);
-    return;
   }
-
-  // Actualiza o cache local de tipos de pagamento
-  setState(() {
-    for (final t in provider.tiposPagamento) {
-      _tiposPagamento[t.idTipoPagamento] = t.tipoPagamento;
-    }
-    // Reinicia o filtro com os dados novos
-    _filtrar(_pesquisa);
-  });
-
-  _entradaCtrl.forward(from: 0);
 }
 
 void _filtrar(String valor) {
@@ -146,29 +120,23 @@ Widget build(BuildContext context) {
         backgroundColor: _kBackground,
         drawer: const AppSidebar(currentRoute: '/pedidos_finalizados'),
         body: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: Column(
+  child: Column(
+    children: [
+      _buildHeader(),
+      Expanded(
+        child: provider.isLoading && provider.pedidos.isEmpty
+            ? _buildLoading()
+            : Column(
                 children: [
-                  _buildHeader(),
-                  Expanded(
-  child: provider.isLoading 
-                        ? _buildLoading()
-                        : Column(
-                            children: [
-_buildResumo(filtrados, totalGeral),
-                              _buildBarraPesquisa(),
-Expanded(child: _buildLista(filtrados)),
-                            ],
-                          ),
-                  ),
+                  _buildResumo(filtrados, totalGeral),
+                  _buildBarraPesquisa(),
+                  Expanded(child: _buildLista(filtrados)),
                 ],
               ),
-            ),
-          ),
-        ),
+      ),
+    ],
+  ),
+),
       ),
     );
   }

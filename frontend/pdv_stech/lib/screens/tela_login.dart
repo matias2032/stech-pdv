@@ -127,16 +127,17 @@ Future<void> _tentarLoginOffline(String credencial) async {
     final cred = credencial.toLowerCase().trim();
 
     Map<String, dynamic> match = {};
-    for (final r in rows) {
-      final email    = (r['email']    as String? ?? '').toLowerCase();
-      final apelido  = (r['apelido'] as String? ?? '').toLowerCase();
-      final telefone = (r['telefone'] as String? ?? '').toLowerCase();
+for (final r in rows) {
+  final email    = (r['email']    as String? ?? '').toLowerCase();
+  final apelido  = (r['apelido'] as String? ?? '').toLowerCase();
+  final telefone = (r['telefone'] as String? ?? '').toLowerCase();
+  final synced   = (r['sync_status'] as String? ?? '') == 'synced';
 
-      if (email == cred || apelido == cred || telefone == cred) {
-        match = r;
-        break;
-      }
-    }
+  if ((email == cred || apelido == cred || telefone == cred) && synced) {
+    match = r;
+    break;
+  }
+}
 
     if (match.isEmpty) {
       setState(() {
