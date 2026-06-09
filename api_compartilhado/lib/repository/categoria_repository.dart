@@ -112,7 +112,7 @@ class CategoriaRepository {
     return local;
   }
 
-  Future<void> excluir(int id) async {
+Future<void> excluir(int id) async {
     if (_connectivity.isOnline) {
       try {
         await _service.deletarCategoria(id);
@@ -123,6 +123,20 @@ class CategoriaRepository {
         rethrow;
       }
     }
+
+    // ID negativo → entidade criada offline, ainda não sincronizada.
+    // Cancela o CREATE pendente e descarta — nunca chegou ao backend.
+    if (id < 0) {
+      final row = await _dao.getById(id);
+      final localId = row?['local_id'] as String?;
+      if (localId != null) {
+        await _syncQueueDao.cancelarPorLocalId(localId);
+        debugPrint('📥 CategoriaRepository — CREATE pendente $localId cancelado (entidade nunca sincronizada)');
+      }
+      await _dao.delete(id);
+      return;
+    }
+
     await _syncQueueDao.enqueue('categoria', 'DELETE', {'id': id});
     await _dao.delete(id);
     debugPrint('📥 CategoriaRepository — categoria $id marcada para exclusão offline');

@@ -149,4 +149,6 @@ class UsuarioDao {
       whereArgs: [id],
     );
   }
+
+
 }

@@ -99,7 +99,13 @@ class ProdutoRepository {
     );
     final localRow = {...local.toLocalDb(), 'local_id': localId, 'sync_status': 'pending'};
     await _dao.upsert(localRow);
-    await _syncQueueDao.enqueue('produto', 'CREATE', {'localId': localId, ...dto.toJson()});
+    final payloadSemRelacoes = {
+  ...dto.toJson(),
+  'localId':   localId,
+  'categorias': <int>[],
+  'marcas':     <int>[],
+};
+await _syncQueueDao.enqueue('produto', 'CREATE', payloadSemRelacoes);
     debugPrint('📥 ProdutoRepository — produto criado offline (localId: $localId)');
     return local;
   }

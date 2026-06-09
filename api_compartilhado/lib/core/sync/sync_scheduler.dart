@@ -119,30 +119,32 @@ Future<void> flushQueue() async {
     debugPrint('⚙️ SyncScheduler — ${pendentes.length} operação(ões) a enviar via batch');
 
     // ── Montar payload do batch ───────────────────────────────────
-    final operacoes = <Map<String, dynamic>>[];
-for (final item in pendentes) {
-  var payload = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
-  final entidade = item['entidade'] as String;
-  final operacao = item['operacao'] as String;
+final operacoes = <Map<String, dynamic>>[];
+    final idsSaltados = <int>{};
 
-  if (entidade == 'pedido' &&
-      (operacao == 'ADD_ITEM_PRODUTO' || operacao == 'ADD_ITEM_SERVICO')) {
-    try {
-      payload = await _resolverIdsPedido(payload);
-    } catch (_) {
-      // Pedido pai ainda pendente — pula esta operação neste flush
-      continue;
+    for (final item in pendentes) {
+      var payload = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
+      final entidade = item['entidade'] as String;
+      final operacao = item['operacao'] as String;
+
+      if (entidade == 'pedido' &&
+          (operacao == 'ADD_ITEM_PRODUTO' || operacao == 'ADD_ITEM_SERVICO')) {
+        try {
+          payload = await _resolverIdsPedido(payload);
+        } catch (_) {
+          idsSaltados.add(item['id'] as int);
+          continue;
+        }
+      }
+
+      operacoes.add({
+        'entidade': entidade,
+        'operacao': operacao,
+        'localId':  payload['localId'] as String?,
+        'id':       payload['id'],
+        'payload':  payload,
+      });
     }
-  }
-
-  operacoes.add({
-    'entidade': entidade,
-    'operacao': operacao,
-    'localId':  payload['localId'] as String?,
-    'id':       payload['id'],
-    'payload':  payload,
-  });
-}
 
 if (operacoes.isEmpty) {
   debugPrint('⚙️ SyncScheduler — todas as operações pendentes adiadas');
@@ -215,6 +217,8 @@ if (operacoes.isEmpty) {
         await _syncQueueDao!.delete(queueId);
         debugPrint('✅ SyncScheduler — $entidade/$operacao sincronizado'
             '${idReal != null ? " (idReal: $idReal)" : ""}');
+      } else if (idsSaltados.contains(queueId)) {
+        debugPrint('⏭️ SyncScheduler — $entidade/$operacao adiado (pedido pai pendente)');
       } else {
         await _syncQueueDao!.incrementarTentativas(queueId);
         debugPrint('❌ SyncScheduler — $entidade/$operacao falhou: ${resultado?["erro"]}');

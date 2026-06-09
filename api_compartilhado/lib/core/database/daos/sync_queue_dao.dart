@@ -63,6 +63,14 @@ class SyncQueueDao {
     );
   }
 
+Future<void> cancelarPorLocalId(String localId) async {
+  await _db.rawDelete(
+    r"DELETE FROM sync_queue WHERE json_extract(payload, '$.localId') = ?",
+    [localId],
+  );
+}
+
+
   // ── Contar pendentes (para badge na UI) ───────────────────────────
 
   Future<int> countPending() async {
@@ -70,6 +78,7 @@ class SyncQueueDao {
       'SELECT COUNT(*) as total FROM sync_queue WHERE tentativas < ?',
       [_maxTentativas],
     );
+
     return (result.first['total'] as int?) ?? 0;
   }
 }
