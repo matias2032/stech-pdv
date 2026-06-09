@@ -1,6 +1,5 @@
-// lib/screens/servico_form_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 
 class ServicoFormScreen extends StatefulWidget {
@@ -14,21 +13,18 @@ class ServicoFormScreen extends StatefulWidget {
 
 class _ServicoFormScreenState extends State<ServicoFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final ServicoService _servicoService = ServicoService.instance;
 
   late TextEditingController _nomeController;
   late TextEditingController _descricaoController;
   late TextEditingController _precoController;
   late TextEditingController _unidadeController;
 
-  bool _isLoading = false;
   bool _houveAlteracoes = false;
   bool get _isEditMode => widget.servico != null;
 
   @override
   void initState() {
     super.initState();
-    
     _nomeController = TextEditingController(
       text: widget.servico?.nomeServico ?? '',
     );
@@ -39,7 +35,7 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
       text: widget.servico?.precoUnitario.toStringAsFixed(2) ?? '',
     );
     _unidadeController = TextEditingController(
-      text: widget.servico?.unidade ?? 'unidade', // Valor padrão de exemplo
+      text: widget.servico?.unidade ?? 'unidade',
     );
   }
 
@@ -53,69 +49,58 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
   }
 
   Future<void> _salvar() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
+    if (!_formKey.currentState!.validate()) return;
+
+    final precoString = _precoController.text.trim().replaceAll(',', '.');
+    final precoDouble = double.parse(precoString);
+
+    final dto = ServicoRequestModel(
+      nomeServico: _nomeController.text.trim(),
+      descricao: _descricaoController.text.trim().isEmpty
+          ? null
+          : _descricaoController.text.trim(),
+      precoUnitario: precoDouble,
+      unidade: _unidadeController.text.trim(),
+    );
+
+    if (_isEditMode) {
+      await context
+          .read<ServicoProvider>()
+          .actualizarServico(widget.servico!.idServico, dto);
+    } else {
+      await context.read<ServicoProvider>().criarServico(dto);
     }
 
-    setState(() => _isLoading = true);
+    if (!mounted) return;
 
-    try {
-      // Formata a string do preço: substitui vírgula por ponto para o parse
-      final precoString = _precoController.text.trim().replaceAll(',', '.');
-      final precoDouble = double.parse(precoString);
-
-      final dto = ServicoRequestModel(
-        nomeServico: _nomeController.text.trim(),
-        descricao: _descricaoController.text.trim().isEmpty 
-            ? null 
-            : _descricaoController.text.trim(),
-        precoUnitario: precoDouble,
-        unidade: _unidadeController.text.trim(),
-      );
-
-      if (_isEditMode) {
-        await _servicoService.actualizar(widget.servico!.idServico, dto);
-      } else {
-        await _servicoService.criar(dto);
-      }
-
+    final provider = context.read<ServicoProvider>();
+    if (provider.errorMessage == null) {
       _houveAlteracoes = true;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isEditMode
-                  ? 'Serviço atualizado com sucesso'
-                  : 'Serviço criado com sucesso',
-            ),
-            backgroundColor: Colors.green,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isEditMode
+                ? 'Serviço atualizado com sucesso'
+                : 'Serviço criado com sucesso',
           ),
-        );
-
-        // Volta para a lista retornando true, forçando o refresh na tela anterior
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao salvar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao salvar: ${provider.errorMessage}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Nota: Em versões mais recentes do Flutter, o WillPopScope foi substituído
-    // pelo PopScope, mas mantive o padrão exato do seu arquivo de referência.
+    final isLoading = context.watch<ServicoProvider>().isLoading;
+
     return WillPopScope(
       onWillPop: () async {
         Navigator.pop(context, _houveAlteracoes);
@@ -132,12 +117,12 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
           ),
         ),
         backgroundColor: const Color(0xFFF4F5F7),
-        body: _buildFormulario(),
+        body: _buildFormulario(isLoading),
       ),
     );
   }
 
-  Widget _buildFormulario() {
+  Widget _buildFormulario(bool isLoading) {
     return Form(
       key: _formKey,
       child: ListView(
@@ -167,7 +152,7 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
                     ],
                   ),
                   const Divider(height: 24),
-                  
+
                   // NOME DO SERVIÇO
                   TextFormField(
                     controller: _nomeController,
@@ -187,7 +172,7 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
                       }
                       return null;
                     },
-                    enabled: !_isLoading,
+                    enabled: !isLoading,
                   ),
                   const SizedBox(height: 16),
 
@@ -198,24 +183,26 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
                         flex: 3,
                         child: TextFormField(
                           controller: _precoController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           decoration: const InputDecoration(
-                            labelText: 'Preço (€) *',
+                            labelText: 'Preço (MZN) *',
                             hintText: '0.00',
-                            prefixIcon: Icon(Icons.euro),
+                            prefixIcon: Icon(Icons.money),
                             border: OutlineInputBorder(),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Informe o preço';
                             }
-                            final validDouble = double.tryParse(value.replaceAll(',', '.'));
+                            final validDouble =
+                                double.tryParse(value.replaceAll(',', '.'));
                             if (validDouble == null || validDouble < 0) {
                               return 'Preço inválido';
                             }
                             return null;
                           },
-                          enabled: !_isLoading,
+                          enabled: !isLoading,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -234,7 +221,7 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
                             }
                             return null;
                           },
-                          enabled: !_isLoading,
+                          enabled: !isLoading,
                         ),
                       ),
                     ],
@@ -252,20 +239,20 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
                     ),
                     maxLines: 3,
                     textCapitalization: TextCapitalization.sentences,
-                    enabled: !_isLoading,
+                    enabled: !isLoading,
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // BOTÕES DE AÇÃO
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isLoading
+                  onPressed: isLoading
                       ? null
                       : () => Navigator.pop(context, _houveAlteracoes),
                   icon: const Icon(Icons.cancel),
@@ -278,8 +265,8 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _salvar,
-                  icon: _isLoading
+                  onPressed: isLoading ? null : _salvar,
+                  icon: isLoading
                       ? const SizedBox(
                           width: 20,
                           height: 20,
@@ -292,7 +279,7 @@ class _ServicoFormScreenState extends State<ServicoFormScreen> {
                       : const Icon(Icons.save),
                   label: Text(_isEditMode ? 'Atualizar' : 'Salvar'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFC8102E), // kVermelho
+                    backgroundColor: const Color(0xFFC8102E),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),

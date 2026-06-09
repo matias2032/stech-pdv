@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import '../widgets/app_sidebar.dart';
+import 'package:provider/provider.dart';
 
 // ─── Paleta ───────────────────────────────────────────────────────────────────
 const _kPrimary    = Color(0xFF1B2A6B);
@@ -96,59 +97,46 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
-  final _pedidoService = PedidoService();
+
   final _currencyFmt   = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
 
   _Periodo _periodo = _Periodo.semana;
-  bool _carregando   = false;
-  List<PedidoModel> _pedidosFinalizados = [];
-  String? _erro;
+
 
   late final AnimationController _fadeCtrl;
   late final Animation<double>   _fadeAnim;
 
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 420));
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
-    _carregar();
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    _pedidoService.dispose();
-    super.dispose();
-  }
+@override
+void initState() {
+  super.initState();
+  _fadeCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 420));
+  _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    context.read<PedidoProvider>().listarPorStatus('finalizado');
+  });
+}
+@override
+void dispose() {
+  _fadeCtrl.dispose();
+  super.dispose();
+}
 
   // ── Dados ─────────────────────────────────────────────────────────────────
 
-  Future<void> _carregar() async {
-    setState(() { _carregando = true; _erro = null; });
-    try {
-      final lista = await _pedidoService.listarPorStatus('finalizado');
-      if (mounted) {
-        setState(() {
-          _pedidosFinalizados = lista;
-          _carregando = false;
-        });
-        _fadeCtrl.forward(from: 0);
-      }
-    } catch (e) {
-      if (mounted) setState(() { _erro = e.toString(); _carregando = false; });
-    }
-  }
+Future<void> _carregar() async {
+  await context.read<PedidoProvider>().listarPorStatus('finalizado');
+  if (mounted) _fadeCtrl.forward(from: 0);
+}
 
   // ── Filtragem ─────────────────────────────────────────────────────────────
 
-  List<PedidoModel> get _filtrados {
-    final corte = DateTime.now().subtract(Duration(days: _periodo.dias));
-    return _pedidosFinalizados
-        .where((p) => p.dataPedido.isAfter(corte))
-        .toList();
-  }
+List<PedidoModel> get _filtrados {
+  final corte = DateTime.now().subtract(Duration(days: _periodo.dias));
+  return context.read<PedidoProvider>().pedidos
+      .where((p) => p.dataPedido.isAfter(corte))
+      .toList();
+}
 
   // ── Métricas ──────────────────────────────────────────────────────────────
 
@@ -229,9 +217,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+@override
+Widget build(BuildContext context) {
+  // lê o provider — redesenha sempre que carregar/erro/lista mudar
+  final provider = context.watch<PedidoProvider>();
+
+  return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
@@ -242,9 +233,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         body: SafeArea(
           child: Column(
             children: [
-              _buildHeader(),
+       _buildHeader(provider),
               _buildSeletorPeriodo(),
-              Expanded(child: _buildBody()),
+       Expanded(child: _buildBody(provider)),
             ],
           ),
         ),
@@ -254,7 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── Header ────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader() {
+Widget _buildHeader(PedidoProvider provider) {
     return Container(
       color: _kPrimary,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
@@ -302,7 +293,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white.withOpacity(0.2)),
               ),
-              child: _carregando
+              child: provider.isLoading  
                   ? const Padding(
                       padding: EdgeInsets.all(10),
                       child: CircularProgressIndicator(
@@ -364,13 +355,13 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── Body ──────────────────────────────────────────────────────────────────
 
-  Widget _buildBody() {
-    if (_carregando && _pedidosFinalizados.isEmpty) {
+Widget _buildBody(PedidoProvider provider) {
+  if (provider.isLoading && provider.pedidos.isEmpty) {
       return const Center(
           child: CircularProgressIndicator(color: _kPrimary, strokeWidth: 2.5));
     }
 
-    if (_erro != null) {
+  if (provider.errorMessage != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -387,7 +378,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     color: _kAccent, size: 28),
               ),
               const SizedBox(height: 14),
-              Text(_erro!,
+                Text(provider.errorMessage!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 13, color: _kTextSub)),
               const SizedBox(height: 18),

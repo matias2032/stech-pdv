@@ -1,26 +1,30 @@
 // lib/screens/produto_list_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
-import 'package:api_compartilhado/api_config.dart';
 import 'package:intl/intl.dart';
 import '../widgets/app_sidebar.dart';
 import 'produto_form_screen.dart';
+import 'package:api_compartilhado/providers/produto_provider.dart';
+
+// ── Paleta STech ─────────────────────────────────────────────────────────────
+const _kVermelho   = Color(0xFFC8102E);
+const _kAzul       = Color(0xFF1B2A6B);
+const _kBranco     = Colors.white;
+const _kCinzaClaro = Color(0xFFF4F5F7);
+const _kCinzaTexto = Color(0xFF6B7280);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class ProdutoListScreen extends StatefulWidget {
-  const ProdutoListScreen({Key? key}) : super(key: key);
+  const ProdutoListScreen({super.key});
 
   @override
   State<ProdutoListScreen> createState() => _ProdutoListScreenState();
 }
 
 class _ProdutoListScreenState extends State<ProdutoListScreen> {
-  final ProdutoService _produtoService = ProdutoService.instance;
-
-  List<ProdutoModel> _produtos = [];
-  bool _isLoading = true;
-  String? _errorMessage;
-
   final NumberFormat _currencyFormat = NumberFormat.currency(
     locale: 'pt_PT',
     symbol: 'MZN',
@@ -29,48 +33,42 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
   @override
   void initState() {
     super.initState();
-    _carregarProdutos();
-  }
-
-  Future<void> _carregarProdutos() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProdutoProvider>().listar();
     });
-
-    try {
-      final produtos = await _produtoService.listar();
-      setState(() {
-        _produtos = produtos;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Erro ao carregar produtos: $e';
-        _isLoading = false;
-      });
-    }
   }
+
+  // ── Acções ────────────────────────────────────────────────────────────────
 
   Future<void> _toggleStatus(ProdutoModel produto) async {
     final novoStatus = produto.estaAtivo ? 'desativar' : 'ativar';
 
     final confirmar = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${produto.estaAtivo ? 'Desativar' : 'Ativar'} Produto'),
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          '${produto.estaAtivo ? 'Desativar' : 'Ativar'} Produto',
+          style: const TextStyle(
+              fontWeight: FontWeight.w700, color: _kAzul, fontSize: 17),
+        ),
         content: Text(
-            'Tem certeza que deseja $novoStatus o produto "${produto.nomeProduto}"?'),
+          'Tem certeza que deseja $novoStatus o produto "${produto.nomeProduto}"?',
+          style: const TextStyle(fontSize: 14, color: _kCinzaTexto),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar',
+                style: TextStyle(color: _kCinzaTexto)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor:
                   produto.estaAtivo ? Colors.orange : Colors.green,
-              foregroundColor: Colors.white,
+              foregroundColor: _kBranco,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(context, true),
             child: Text(produto.estaAtivo ? 'Desativar' : 'Ativar'),
@@ -79,167 +77,230 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
       ),
     );
 
-    if (confirmar != true) return;
+    if (confirmar != true || !mounted) return;
 
-    try {
-      await _produtoService.toggleAtivo(produto.idProduto);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Status do produto atualizado com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-      _carregarProdutos();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao atualizar status: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    final sucesso =
+        await context.read<ProdutoProvider>().toggleAtivo(produto.idProduto);
+
+    if (!mounted) return;
+
+    if (sucesso) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Estado do produto actualizado com sucesso.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      final erro =
+          context.read<ProdutoProvider>().errorMessage ?? 'Erro desconhecido';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao actualizar estado: $erro'),
+          backgroundColor: _kVermelho,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
-  void _navegarParaFormulario([ProdutoModel? produto]) async {
-    final houveAlteracao = await Navigator.push(
+  Future<void> _navegarParaFormulario([ProdutoModel? produto]) async {
+    final houveAlteracao = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => ProdutoFormScreen(produto: produto),
+        builder: (_) => ProdutoFormScreen(produto: produto),
       ),
     );
-
-    if (houveAlteracao == true) {
-      _carregarProdutos();
+    if (houveAlteracao == true && mounted) {
+      context.read<ProdutoProvider>().listar();
     }
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Produtos'),
-        backgroundColor: const Color(0xFF1B2A6B),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _carregarProdutos,
-          ),
-        ],
-      ),
+      backgroundColor: _kCinzaClaro,
+      appBar: _buildAppBar(),
       drawer: const AppSidebar(currentRoute: '/gerenciar_produtos'),
-      backgroundColor: const Color(0xFFF4F5F7),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _navegarParaFormulario(),
-        backgroundColor: const Color(0xFFC8102E),
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: _kVermelho,
+        child: const Icon(Icons.add, color: _kBranco),
       ),
     );
   }
 
-Widget _buildBody() {
-  if (_isLoading) {
-    return const Center(child: CircularProgressIndicator());
-  }
-
-  if (_errorMessage != null) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: Row(
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.red),
-          const SizedBox(height: 16),
-          Text(_errorMessage!, textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _carregarProdutos,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Tentar Novamente'),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _kVermelho,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.inventory_2_rounded,
+                color: _kBranco, size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Produtos',
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3),
           ),
         ],
       ),
-    );
-  }
-
-  if (_produtos.isEmpty) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text('Nenhum produto encontrado',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600])),
-        ],
-      ),
-    );
-  }
-
-  return RefreshIndicator(
-    onRefresh: _carregarProdutos,
-    child: Column(
-      children: [
-        // Cabeçalho da tabela
-        Container(
-          margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1B2A6B),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
-          ),
-          child: const Row(
-            children: [
-              Expanded(flex: 3,
-                  child: Text('Produto',
-                      style: TextStyle(color: Colors.white, fontSize: 12,
-                          fontWeight: FontWeight.w700))),
-              Expanded(flex: 2,
-                  child: Text('Preço',
-                      style: TextStyle(color: Colors.white, fontSize: 12,
-                          fontWeight: FontWeight.w700))),
-              Expanded(flex: 2,
-                  child: Text('Promoção',
-                      style: TextStyle(color: Colors.white, fontSize: 12,
-                          fontWeight: FontWeight.w700))),
-              Expanded(flex: 2,
-                  child: Text('Estoque',
-                      style: TextStyle(color: Colors.white, fontSize: 12,
-                          fontWeight: FontWeight.w700))),
-              Expanded(flex: 1,
-                  child: Text('Estado',
-                      style: TextStyle(color: Colors.white, fontSize: 12,
-                          fontWeight: FontWeight.w700))),
-              SizedBox(width: 100),
-            ],
+      backgroundColor: _kAzul,
+      foregroundColor: _kBranco,
+      elevation: 0,
+      actions: [
+        Consumer<ProdutoProvider>(
+          builder: (_, p, __) => IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Recarregar',
+            onPressed: p.isLoading ? null : p.listar,
           ),
         ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
-            itemCount: _produtos.length,
-            itemBuilder: (_, i) => _ProdutoLinhaTabela(
-              produto: _produtos[i],
-              currencyFmt: _currencyFormat,
-              isAlternate: i.isOdd,
-              onEditar: () => _navegarParaFormulario(_produtos[i]),
-              onToggle: () => _toggleStatus(_produtos[i]),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    final provider = context.watch<ProdutoProvider>();
+
+    if (provider.isLoading) {
+      return const Center(child: CircularProgressIndicator(color: _kAzul));
+    }
+
+    if (provider.errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: _kVermelho),
+            const SizedBox(height: 16),
+            Text(
+              provider.errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _kVermelho),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: provider.listar,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tentar Novamente'),
+              style: ElevatedButton.styleFrom(backgroundColor: _kAzul),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (provider.produtos.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inventory_2_outlined,
+                size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'Nenhum produto encontrado',
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: _kAzul,
+      onRefresh: () async => provider.listar(),
+      child: Column(
+        children: [
+          // ── Cabeçalho da tabela ──────────────────────────────────
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: const BoxDecoration(
+              color: _kAzul,
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(10)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(
+                    flex: 3,
+                    child: Text('Produto',
+                        style: TextStyle(
+                            color: _kBranco,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700))),
+                Expanded(
+                    flex: 2,
+                    child: Text('Preço',
+                        style: TextStyle(
+                            color: _kBranco,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700))),
+                Expanded(
+                    flex: 2,
+                    child: Text('Promoção',
+                        style: TextStyle(
+                            color: _kBranco,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700))),
+                Expanded(
+                    flex: 2,
+                    child: Text('Estoque',
+                        style: TextStyle(
+                            color: _kBranco,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700))),
+                Expanded(
+                    flex: 1,
+                    child: Text('Estado',
+                        style: TextStyle(
+                            color: _kBranco,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700))),
+                SizedBox(width: 100),
+              ],
             ),
           ),
-        ),
-      ],
-    ),
-  );
+          // ── Linhas ───────────────────────────────────────────────
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+              itemCount: provider.produtos.length,
+              itemBuilder: (_, i) => _ProdutoLinhaTabela(
+                produto: provider.produtos[i],
+                currencyFmt: _currencyFormat,
+                isAlternate: i.isOdd,
+                onEditar: () =>
+                    _navegarParaFormulario(provider.produtos[i]),
+                onToggle: () => _toggleStatus(provider.produtos[i]),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-
-
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Linha de tabela — sem alterações de lógica, apenas mantida
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ProdutoLinhaTabela extends StatelessWidget {
   const _ProdutoLinhaTabela({
@@ -250,11 +311,11 @@ class _ProdutoLinhaTabela extends StatelessWidget {
     required this.onToggle,
   });
 
-  final ProdutoModel produto;
-  final NumberFormat currencyFmt;
-  final bool isAlternate;
-  final VoidCallback onEditar;
-  final VoidCallback onToggle;
+  final ProdutoModel  produto;
+  final NumberFormat  currencyFmt;
+  final bool          isAlternate;
+  final VoidCallback  onEditar;
+  final VoidCallback  onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -263,7 +324,7 @@ class _ProdutoLinhaTabela extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isAlternate ? const Color(0xFFF0F2FA) : Colors.white,
+        color: isAlternate ? const Color(0xFFF0F2FA) : _kBranco,
         border: const Border(
           bottom: BorderSide(color: Color(0xFFE8EAF0)),
         ),
@@ -282,7 +343,7 @@ class _ProdutoLinhaTabela extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B2A6B),
+                  color: _kAzul,
                 ),
               ),
             ),
@@ -294,9 +355,10 @@ class _ProdutoLinhaTabela extends StatelessWidget {
                 currencyFmt.format(produto.preco),
                 style: TextStyle(
                   fontSize: 12,
-                  color: temPromo ? Colors.grey : const Color(0xFF1B2A6B),
+                  color: temPromo ? Colors.grey : _kAzul,
                   fontWeight: FontWeight.w500,
-                  decoration: temPromo ? TextDecoration.lineThrough : null,
+                  decoration:
+                      temPromo ? TextDecoration.lineThrough : null,
                 ),
               ),
             ),
@@ -311,7 +373,7 @@ class _ProdutoLinhaTabela extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFFC8102E),
+                          color: _kVermelho,
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -319,19 +381,19 @@ class _ProdutoLinhaTabela extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 4, vertical: 1),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFC8102E),
+                          color: _kVermelho,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text('PROMO',
                             style: TextStyle(
-                                color: Colors.white,
+                                color: _kBranco,
                                 fontSize: 8,
                                 fontWeight: FontWeight.w800)),
                       ),
                     ])
                   : Text('—',
-                      style: TextStyle(
-                          color: Colors.grey[400], fontSize: 12)),
+                      style:
+                          TextStyle(color: Colors.grey[400], fontSize: 12)),
             ),
 
             // Estoque
@@ -371,9 +433,8 @@ class _ProdutoLinhaTabela extends StatelessWidget {
                       : Colors.red[50],
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: produto.estaAtivo
-                        ? Colors.green
-                        : Colors.red,
+                    color:
+                        produto.estaAtivo ? Colors.green : Colors.red,
                   ),
                 ),
                 child: Text(
@@ -404,17 +465,18 @@ class _ProdutoLinhaTabela extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1B2A6B).withOpacity(0.08),
+                          color: _kAzul.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(Icons.edit_rounded,
-                            size: 16, color: Color(0xFF1B2A6B)),
+                            size: 16, color: _kAzul),
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Tooltip(
-                    message: produto.estaAtivo ? 'Desativar' : 'Ativar',
+                    message:
+                        produto.estaAtivo ? 'Desativar' : 'Ativar',
                     child: InkWell(
                       onTap: onToggle,
                       borderRadius: BorderRadius.circular(6),

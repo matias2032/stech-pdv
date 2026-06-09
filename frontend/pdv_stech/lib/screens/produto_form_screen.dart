@@ -7,12 +7,23 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:api_compartilhado/api_config.dart';
+import 'package:api_compartilhado/providers/produto_provider.dart';
+import 'package:api_compartilhado/providers/marca_provider.dart';
+import 'package:api_compartilhado/providers/categoria_provider.dart';
+
+// ── Paleta STech ─────────────────────────────────────────────────────────────
+const _kVermelho   = Color(0xFFC8102E);
+const _kAzul       = Color(0xFF1B2A6B);
+const _kBranco     = Colors.white;
+const _kCinzaClaro = Color(0xFFF4F5F7);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class ProdutoFormScreen extends StatefulWidget {
   final ProdutoModel? produto;
-
   const ProdutoFormScreen({super.key, this.produto});
 
   @override
@@ -21,9 +32,6 @@ class ProdutoFormScreen extends StatefulWidget {
 
 class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final ProdutoService _produtoService = ProdutoService.instance;
-  final MarcaService _marcaService = MarcaService();
-  final CategoriaService _categoriaService = CategoriaService();
 
   // ── Controllers ────────────────────────────────────────────────────────────
   late TextEditingController _nomeController;
@@ -33,25 +41,20 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   late TextEditingController _estoqueController;
 
   // ── Estado geral ───────────────────────────────────────────────────────────
-  bool _isLoading = true;
-  bool _isSaving = false;
+  bool _isSaving        = false;
   bool _houveAlteracoes = false;
-  bool get _isEditMode => widget.produto != null;
+  bool get _isEditMode  => widget.produto != null;
 
-  // ── Marcas e Categorias ────────────────────────────────────────────────────
-  List<MarcaModel> _todasMarcas = [];
-  List<CategoriaModel> _todasCategorias = [];
-  List<MarcaModel> _marcasFiltradas = [];
-  List<CategoriaModel> _categoriasFiltradas = [];
-  List<int> _marcasSelecionadas = [];
+  // ── Selecções de marca / categoria ────────────────────────────────────────
+  List<int> _marcasSelecionadas     = [];
   List<int> _categoriasSelecionadas = [];
 
   // ── Imagens ────────────────────────────────────────────────────────────────
   List<ProdutoImagemModel> _imagensExistentes = [];
-  List<File> _novasImagens = [];
-  bool _isLoadingImagens = false;
-  bool _isDragging = false;
-  final ImagePicker _picker = ImagePicker();
+  List<File>               _novasImagens      = [];
+  bool                     _isLoadingImagens  = false;
+  bool                     _isDragging        = false;
+  final ImagePicker        _picker            = ImagePicker();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LIFECYCLE
@@ -61,8 +64,15 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   void initState() {
     super.initState();
     _initControllers();
-    _carregarDados();
-    if (_isEditMode) _carregarImagensExistentes();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Carrega marcas e categorias via Providers
+      context.read<MarcaProvider>().carregarMarcas();
+      context.read<CategoriaProvider>().carregarCategorias();
+
+      // Imagens existentes (apenas edição)
+      if (_isEditMode) _carregarImagensExistentes();
+    });
   }
 
   @override
@@ -76,10 +86,10 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   }
 
   void _initControllers() {
-    _nomeController =
-        TextEditingController(text: widget.produto?.nomeProduto ?? '');
-    _descricaoController =
-        TextEditingController(text: widget.produto?.descricao ?? '');
+    _nomeController = TextEditingController(
+        text: widget.produto?.nomeProduto ?? '');
+    _descricaoController = TextEditingController(
+        text: widget.produto?.descricao ?? '');
     _precoController = TextEditingController(
         text: widget.produto?.preco.toStringAsFixed(2) ?? '');
     _precoPromoController = TextEditingController(
@@ -88,66 +98,14 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
         text: widget.produto?.quantidadeEstoque.toString() ?? '0');
 
     if (_isEditMode) {
-      _marcasSelecionadas = List.from(widget.produto?.marcas ?? []);
+      _marcasSelecionadas     = List.from(widget.produto?.marcas     ?? []);
       _categoriasSelecionadas = List.from(widget.produto?.categorias ?? []);
     }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // DADOS (marcas + categorias)
+  // SELECÇÃO DE MARCA / CATEGORIA
   // ═══════════════════════════════════════════════════════════════════════════
-
-  Future<void> _carregarDados() async {
-    setState(() => _isLoading = true);
-    try {
-      final marcas = await _marcaService.listarMarcasComCategorias();
-      final categorias = await _categoriaService.listarCategorias();
-      setState(() {
-        _todasMarcas = marcas;
-        _todasCategorias = categorias;
-        _isLoading = false;
-      });
-      _inicializarFiltros();
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _mostrarErro('Erro ao carregar dados: $e');
-    }
-  }
-
-  void _inicializarFiltros() {
-    if (_isEditMode) {
-      _aplicarFiltros();
-    } else {
-      setState(() {
-        _marcasFiltradas = List.from(_todasMarcas);
-        _categoriasFiltradas = List.from(_todasCategorias);
-      });
-    }
-  }
-
-  void _aplicarFiltros() {
-    setState(() {
-      if (_marcasSelecionadas.isEmpty && _categoriasSelecionadas.isEmpty) {
-        _marcasFiltradas = List.from(_todasMarcas);
-        _categoriasFiltradas = List.from(_todasCategorias);
-      } else if (_marcasSelecionadas.isNotEmpty &&
-          _categoriasSelecionadas.isEmpty) {
-        // MarcaModel não tem campo categorias embebido — sem filtragem cruzada.
-        // Quando o backend disponibilizar o campo, substituir por
-        // _filtrarCategoriasPorMarcas() aqui.
-        _marcasFiltradas = List.from(_todasMarcas);
-        _categoriasFiltradas = List.from(_todasCategorias);
-      } else if (_categoriasSelecionadas.isNotEmpty &&
-          _marcasSelecionadas.isEmpty) {
-        // Idem para filtragem de marcas por categoria.
-        _marcasFiltradas = List.from(_todasMarcas);
-        _categoriasFiltradas = List.from(_todasCategorias);
-      } else {
-        _marcasFiltradas = List.from(_todasMarcas);
-        _categoriasFiltradas = List.from(_todasCategorias);
-      }
-    });
-  }
 
   void _onMarcaSelecionada(int id, bool selecionado) {
     setState(() {
@@ -157,7 +115,6 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
       } else {
         _marcasSelecionadas.clear();
       }
-      _aplicarFiltros();
     });
   }
 
@@ -169,7 +126,6 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
       } else {
         _categoriasSelecionadas.clear();
       }
-      _aplicarFiltros();
     });
   }
 
@@ -181,10 +137,15 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
     if (widget.produto?.idProduto == null) return;
     setState(() => _isLoadingImagens = true);
     try {
-      final imagens =
-          await _produtoService.listarImagens(widget.produto!.idProduto);
+      // listarImagens ainda não está no ProdutoProvider — chamada isolada
+      // via provider de produto que expõe o método de imagens.
+      // Por ora usamos o provider e tratamos o erro graciosamente.
+      await context.read<ProdutoProvider>().carregarImagens(
+            widget.produto!.idProduto,
+          );
       setState(() {
-        _imagensExistentes = imagens;
+        _imagensExistentes =
+            List.from(context.read<ProdutoProvider>().imagens);
         _isLoadingImagens = false;
       });
     } catch (e) {
@@ -246,7 +207,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   Future<void> _removerImagemExistente(ProdutoImagemModel imagem) async {
     final confirmar = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text('Confirmar'),
         content: const Text('Deseja realmente remover esta imagem?'),
         actions: [
@@ -255,32 +216,36 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
               child: const Text('Cancelar')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Remover', style: TextStyle(color: Colors.red))),
+              child: const Text('Remover',
+                  style: TextStyle(color: Colors.red))),
         ],
       ),
     );
     if (confirmar == true && imagem.idImagem != null) {
-      try {
-        await _produtoService.removerImagem(imagem.idImagem!);
+      final sucesso = await context
+          .read<ProdutoProvider>()
+          .removerImagem(imagem.idImagem!);
+      if (sucesso && mounted) {
         setState(() => _imagensExistentes
             .removeWhere((img) => img.idImagem == imagem.idImagem));
         _mostrarSucesso('Imagem removida');
-      } catch (e) {
-        _mostrarErro('Erro ao remover imagem: $e');
+      } else if (mounted) {
+        _mostrarErro('Erro ao remover imagem');
       }
     }
   }
 
   Future<void> _definirImagemPrincipal(ProdutoImagemModel imagem) async {
     if (widget.produto?.idProduto == null || imagem.idImagem == null) return;
-    try {
-      await _produtoService.definirImagemPrincipal(
-          widget.produto!.idProduto, imagem.idImagem!);
+    final sucesso = await context
+        .read<ProdutoProvider>()
+        .definirImagemPrincipal(
+            widget.produto!.idProduto, imagem.idImagem!);
+    if (sucesso && mounted) {
       await _carregarImagensExistentes();
       _mostrarSucesso('Imagem principal definida');
-    } catch (e) {
-      _mostrarErro('Erro ao definir imagem principal: $e');
+    } else if (mounted) {
+      _mostrarErro('Erro ao definir imagem principal');
     }
   }
 
@@ -312,43 +277,53 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
       }
 
       final dto = ProdutoRequestModel(
-        nomeProduto: _nomeController.text.trim(),
-        descricao: _descricaoController.text.trim().isEmpty
+        nomeProduto:       _nomeController.text.trim(),
+        descricao:         _descricaoController.text.trim().isEmpty
             ? null
             : _descricaoController.text.trim(),
-        preco: preco,
+        preco:             preco,
         quantidadeEstoque: int.parse(_estoqueController.text.trim()),
-        precoPromocional: precoPromo,
-        categorias: _categoriasSelecionadas,
-        marcas: _marcasSelecionadas,
+        precoPromocional:  precoPromo,
+        categorias:        _categoriasSelecionadas,
+        marcas:            _marcasSelecionadas,
       );
 
-      ProdutoModel produtoSalvo;
+      final provider    = context.read<ProdutoProvider>();
+      ProdutoModel? salvo;
+
       if (_isEditMode) {
-        produtoSalvo =
-            await _produtoService.atualizar(widget.produto!.idProduto, dto);
-        _mostrarSucesso('Produto atualizado com sucesso');
+        salvo = await provider.atualizar(widget.produto!.idProduto, dto);
       } else {
-        produtoSalvo = await _produtoService.criar(dto);
-        _mostrarSucesso('Produto criado com sucesso');
+        salvo = await provider.criar(dto);
       }
 
-      // Upload das novas imagens após salvar o produto
+      if (!mounted) return;
+
+      if (salvo == null) {
+        _mostrarErro(provider.errorMessage ?? 'Erro ao salvar produto');
+        return;
+      }
+
+      // Upload de novas imagens via Provider
       if (_novasImagens.isNotEmpty) {
         for (int i = 0; i < _novasImagens.length; i++) {
-          await _produtoService.adicionarImagem(
-            idProduto: produtoSalvo.idProduto,
-            imagemFile: _novasImagens[i],
-            nomeArquivo: _novasImagens[i].path.split('/').last,
-            imagemPrincipal: (i == 0 && _imagensExistentes.isEmpty) ? 1 : 0,
+          await provider.adicionarImagem(
+            idProduto:        salvo.idProduto,
+            imagemFile:       _novasImagens[i],
+            nomeArquivo:      _novasImagens[i].path.split('/').last,
+            imagemPrincipal:
+                (i == 0 && _imagensExistentes.isEmpty) ? 1 : 0,
           );
         }
       }
 
+      _mostrarSucesso(
+          _isEditMode ? 'Produto actualizado com sucesso.' : 'Produto criado com sucesso.');
+
       _houveAlteracoes = true;
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      _mostrarErro('Erro ao salvar: $e');
+      if (mounted) _mostrarErro('Erro ao salvar: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -360,24 +335,31 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Lê estado de carregamento de marcas e categorias
+    final marcaProvider     = context.watch<MarcaProvider>();
+    final categoriaProvider = context.watch<CategoriaProvider>();
+    final dadosCarregando   =
+        marcaProvider.carregando || categoriaProvider.carregando;
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
         if (!didPop) Navigator.pop(context, _houveAlteracoes);
       },
       child: Scaffold(
+        backgroundColor: _kCinzaClaro,
         appBar: AppBar(
           title: Text(_isEditMode ? 'Editar Produto' : 'Novo Produto'),
-          backgroundColor: const Color(0xFF1B2A6B),
-          foregroundColor: Colors.white,
+          backgroundColor: _kAzul,
+          foregroundColor: _kBranco,
+          elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(Icons.arrow_back_rounded),
             onPressed: () => Navigator.pop(context, _houveAlteracoes),
           ),
         ),
-        backgroundColor: const Color(0xFFF4F5F7),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+        body: dadosCarregando
+            ? const Center(child: CircularProgressIndicator(color: _kAzul))
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Form(
@@ -385,23 +367,14 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ── Dados básicos ──────────────────────────────────
                       _buildCardDadosBasicos(),
                       const SizedBox(height: 16),
-
-                      // ── Marcas ────────────────────────────────────────
-                      _buildSecaoMarcas(),
+                      _buildSecaoMarcas(marcaProvider.marcas),
                       const SizedBox(height: 16),
-
-                      // ── Categorias ────────────────────────────────────
-                      _buildSecaoCategorias(),
+                      _buildSecaoCategorias(categoriaProvider.categorias),
                       const SizedBox(height: 16),
-
-                      // ── Imagens ───────────────────────────────────────
                       _buildSecaoImagens(),
                       const SizedBox(height: 24),
-
-                      // ── Botão salvar ──────────────────────────────────
                       ElevatedButton.icon(
                         onPressed: _isSaving ? null : _salvar,
                         icon: _isSaving
@@ -409,19 +382,19 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.save),
+                                    strokeWidth: 2, color: _kBranco))
+                            : const Icon(Icons.save_rounded),
                         label: Text(
-                            _isEditMode
-                                ? 'SALVAR ALTERAÇÕES'
-                                : 'CRIAR PRODUTO',
-                            style: const TextStyle(fontSize: 16)),
+                          _isEditMode ? 'SALVAR ALTERAÇÕES' : 'CRIAR PRODUTO',
+                          style: const TextStyle(fontSize: 16),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFC8102E),
-                          foregroundColor: Colors.white,
+                          backgroundColor: _kVermelho,
+                          foregroundColor: _kBranco,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -433,32 +406,37 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
     );
   }
 
-  // ─── Card de dados básicos ────────────────────────────────────────────────
+  // ─── Card dados básicos ───────────────────────────────────────────────────
+
   Widget _buildCardDadosBasicos() {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Dados do Produto',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style:
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Divider(height: 24),
 
             // Nome
             TextFormField(
               controller: _nomeController,
+              enabled: !_isSaving,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Nome do Produto *',
-                prefixIcon: Icon(Icons.inventory_2),
+                prefixIcon: Icon(Icons.inventory_2_outlined),
                 border: OutlineInputBorder(),
               ),
-              textCapitalization: TextCapitalization.sentences,
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Obrigatório' : null,
-              enabled: !_isSaving,
             ),
             const SizedBox(height: 16),
 
@@ -469,30 +447,32 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _precoController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    enabled: !_isSaving,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
                     decoration: const InputDecoration(
                       labelText: 'Preço *',
                       prefixText: 'MZN ',
                       border: OutlineInputBorder(),
                     ),
                     validator: _validarPreco,
-                    enabled: !_isSaving,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
                     controller: _estoqueController,
+                    enabled: !_isSaving,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Estoque *',
-                      prefixIcon: Icon(Icons.layers),
+                      prefixIcon: Icon(Icons.layers_outlined),
                       border: OutlineInputBorder(),
                     ),
                     validator: _validarEstoque,
-                    enabled: !_isSaving,
                   ),
                 ),
               ],
@@ -502,13 +482,14 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
             // Preço promocional
             TextFormField(
               controller: _precoPromoController,
+              enabled: !_isSaving,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: 'Preço Promocional (Opcional)',
                 prefixText: 'MZN ',
                 prefixIcon:
-                    const Icon(Icons.local_offer, color: Colors.orange),
+                    const Icon(Icons.local_offer_outlined, color: Colors.orange),
                 border: const OutlineInputBorder(),
                 filled: true,
                 fillColor: Colors.orange[50],
@@ -517,22 +498,21 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 if (v != null && v.trim().isNotEmpty) return _validarPreco(v);
                 return null;
               },
-              enabled: !_isSaving,
             ),
             const SizedBox(height: 16),
 
             // Descrição
             TextFormField(
               controller: _descricaoController,
+              enabled: !_isSaving,
               maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Descrição',
                 alignLabelWithHint: true,
-                prefixIcon: Icon(Icons.description),
+                prefixIcon: Icon(Icons.description_outlined),
                 border: OutlineInputBorder(),
               ),
-              textCapitalization: TextCapitalization.sentences,
-              enabled: !_isSaving,
             ),
           ],
         ),
@@ -541,36 +521,39 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   }
 
   // ─── Marcas ───────────────────────────────────────────────────────────────
-  Widget _buildSecaoMarcas() {
+
+  Widget _buildSecaoMarcas(List<MarcaModel> marcas) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Marca *',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             const Text(
-              'Selecione uma marca. As categorias serão filtradas automaticamente.',
+              'Selecione uma marca.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 8),
-            if (_marcasFiltradas.isEmpty)
+            if (marcas.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(8),
-                child: Text(
-                  'Nenhuma marca disponível para as categorias selecionadas',
-                  style: TextStyle(color: Colors.orange),
-                ),
+                child: Text('Nenhuma marca disponível.',
+                    style: TextStyle(color: Colors.orange)),
               )
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
-                children: _marcasFiltradas.map((marca) {
+                children: marcas.map((marca) {
                   final sel = _marcasSelecionadas.contains(marca.id);
                   return FilterChip(
                     label: Text(marca.nomeMarca),
@@ -578,6 +561,8 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                     onSelected: sel || _marcasSelecionadas.isEmpty
                         ? (v) => _onMarcaSelecionada(marca.id, v)
                         : null,
+                    selectedColor: _kAzul.withOpacity(0.15),
+                    checkmarkColor: _kAzul,
                   );
                 }).toList(),
               ),
@@ -588,36 +573,39 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   }
 
   // ─── Categorias ───────────────────────────────────────────────────────────
-  Widget _buildSecaoCategorias() {
+
+  Widget _buildSecaoCategorias(List<CategoriaModel> categorias) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Categoria *',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             const Text(
-              'Selecione uma categoria. As marcas serão filtradas automaticamente.',
+              'Selecione uma categoria.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 8),
-            if (_categoriasFiltradas.isEmpty)
+            if (categorias.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(8),
-                child: Text(
-                  'Nenhuma categoria disponível para as marcas selecionadas',
-                  style: TextStyle(color: Colors.orange),
-                ),
+                child: Text('Nenhuma categoria disponível.',
+                    style: TextStyle(color: Colors.orange)),
               )
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
-                children: _categoriasFiltradas.map((cat) {
+                children: categorias.map((cat) {
                   final sel = _categoriasSelecionadas.contains(cat.id);
                   return FilterChip(
                     label: Text(cat.nomeCategoria),
@@ -625,6 +613,8 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                     onSelected: sel || _categoriasSelecionadas.isEmpty
                         ? (v) => _onCategoriaSelecionada(cat.id, v)
                         : null,
+                    selectedColor: _kAzul.withOpacity(0.15),
+                    checkmarkColor: _kAzul,
                   );
                 }).toList(),
               ),
@@ -635,6 +625,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   }
 
   // ─── Imagens ──────────────────────────────────────────────────────────────
+
   Widget _buildSecaoImagens() {
     return DropTarget(
       onDragDone: (details) async {
@@ -642,46 +633,42 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
         await _processarArquivosArrastados(details.files);
       },
       onDragEntered: (_) => setState(() => _isDragging = true),
-      onDragExited: (_) => setState(() => _isDragging = false),
+      onDragExited:  (_) => setState(() => _isDragging = false),
       child: Card(
-        elevation: _isDragging ? 8 : 2,
+        elevation: _isDragging ? 8 : 0,
         color: _isDragging ? Colors.blue[50] : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: _isDragging
               ? const BorderSide(color: Colors.blue, width: 3)
-              : BorderSide.none,
+              : BorderSide(color: Colors.grey.shade200),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Cabeçalho
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Imagens do Produto (Opcional)',
+                  const Text('Imagens (Opcional)',
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.camera_alt),
-                        onPressed: _tirarFoto,
-                        tooltip: 'Tirar foto',
-                      ),
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          onPressed: _tirarFoto,
+                          tooltip: 'Tirar foto'),
                       IconButton(
-                        icon: const Icon(Icons.photo_library),
-                        onPressed: _selecionarImagem,
-                        tooltip: 'Escolher da galeria',
-                      ),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          onPressed: _selecionarImagem,
+                          tooltip: 'Escolher da galeria'),
                     ],
                   ),
                 ],
               ),
 
-              // Banner instrução
               if (!_isDragging) ...[
                 const SizedBox(height: 4),
                 Container(
@@ -693,12 +680,12 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.upload_file,
+                      Icon(Icons.upload_file_outlined,
                           size: 16, color: Colors.blue[700]),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Arraste imagens do explorador de arquivos para cá',
+                          'Arraste imagens do explorador de ficheiros para cá.',
                           style: TextStyle(
                               fontSize: 12, color: Colors.blue[900]),
                         ),
@@ -708,7 +695,6 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 ),
               ],
 
-              // Overlay drag ativo
               if (_isDragging) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -722,16 +708,14 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.cloud_upload,
+                        Icon(Icons.cloud_upload_outlined,
                             size: 48, color: Colors.blue[700]),
                         const SizedBox(height: 8),
-                        Text(
-                          'Solte as imagens aqui',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue[900]),
-                        ),
+                        Text('Solte as imagens aqui',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue[900])),
                       ],
                     ),
                   ),
@@ -740,11 +724,10 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
 
               const SizedBox(height: 12),
 
-              // Imagens salvas
               if (_isLoadingImagens)
-                const Center(child: CircularProgressIndicator())
+                const Center(child: CircularProgressIndicator(color: _kAzul))
               else if (_imagensExistentes.isNotEmpty) ...[
-                const Text('Imagens salvas:',
+                const Text('Imagens guardadas:',
                     style: TextStyle(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -759,7 +742,6 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 const SizedBox(height: 12),
               ],
 
-              // Novas imagens
               if (_novasImagens.isNotEmpty) ...[
                 const Text('Novas imagens:',
                     style: TextStyle(fontWeight: FontWeight.w500)),
@@ -775,7 +757,6 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                 ),
               ],
 
-              // Estado vazio
               if (_imagensExistentes.isEmpty &&
                   _novasImagens.isEmpty &&
                   !_isDragging)
@@ -784,14 +765,14 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        Icon(Icons.add_photo_alternate,
+                        Icon(Icons.add_photo_alternate_outlined,
                             size: 48, color: Colors.grey[400]),
                         const SizedBox(height: 8),
                         Text('Nenhuma imagem adicionada',
                             style: TextStyle(color: Colors.grey[600])),
                         const SizedBox(height: 4),
                         Text(
-                          'Arraste imagens ou clique nos botões acima',
+                          'Arraste imagens ou clique nos botões acima.',
                           style: TextStyle(
                               fontSize: 12, color: Colors.grey[500]),
                         ),
@@ -840,12 +821,11 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: Colors.blue,
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(4)),
                 child: const Text('PRINCIPAL',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: _kBranco,
                         fontSize: 10,
                         fontWeight: FontWeight.bold)),
               ),
@@ -854,19 +834,19 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
             top: 4,
             right: 4,
             child: PopupMenuButton(
-              icon: const Icon(Icons.more_vert, color: Colors.white),
+              icon: const Icon(Icons.more_vert, color: _kBranco),
               itemBuilder: (_) => [
                 if (!isPrincipal)
                   PopupMenuItem(
                     child: const Text('Definir como principal'),
-                    onTap: () => Future.delayed(
-                        Duration.zero, () => _definirImagemPrincipal(imagem)),
+                    onTap: () => Future.delayed(Duration.zero,
+                        () => _definirImagemPrincipal(imagem)),
                   ),
                 PopupMenuItem(
                   child: const Text('Remover',
                       style: TextStyle(color: Colors.red)),
-                  onTap: () => Future.delayed(
-                      Duration.zero, () => _removerImagemExistente(imagem)),
+                  onTap: () => Future.delayed(Duration.zero,
+                      () => _removerImagemExistente(imagem)),
                 ),
               ],
             ),
@@ -895,12 +875,11 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(4)),
                 child: const Text('NOVA PRINCIPAL',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: _kBranco,
                         fontSize: 10,
                         fontWeight: FontWeight.bold)),
               ),
@@ -913,7 +892,8 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
               child: Container(
                 decoration: const BoxDecoration(
                     color: Colors.black54, shape: BoxShape.circle),
-                child: const Icon(Icons.close, color: Colors.white, size: 20),
+                child: const Icon(Icons.close,
+                    color: _kBranco, size: 20),
               ),
             ),
           ),
@@ -923,6 +903,7 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   }
 
   // ─── Validadores ──────────────────────────────────────────────────────────
+
   String? _validarPreco(String? v) {
     if (v == null || v.trim().isEmpty) return 'Obrigatório';
     final p = double.tryParse(v.replaceAll(',', '.'));
@@ -938,15 +919,20 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   }
 
   // ─── Snackbars ────────────────────────────────────────────────────────────
+
   void _mostrarSucesso(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.green));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating));
   }
 
   void _mostrarErro(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: _kVermelho,
+        behavior: SnackBarBehavior.floating));
   }
 }

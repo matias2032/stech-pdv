@@ -164,7 +164,9 @@ SyncScheduler.instance.init(
   return MultiProvider(
     providers: [
       // ── Utilizador ────────────────────────────────────────────────
-      ChangeNotifierProvider(create: (_) => UsuarioProvider()),
+     ChangeNotifierProvider(
+  create: (_) => UsuarioProvider(repository: usuarioRepository),
+),
 
       // ── Cliente ───────────────────────────────────────────────────
       ChangeNotifierProvider(

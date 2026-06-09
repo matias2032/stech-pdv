@@ -68,109 +68,105 @@ class _DocumentosListScreenState extends State<DocumentosListScreen> {
   //   3. Resolve o nome do tipo de pagamento via PedidoService
   //   4. Gera o PDF
 
-  Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
-    // Indicador de carregamento enquanto buscamos os dados
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: const [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
-            ),
-            SizedBox(width: 12),
-            Text('A preparar PDF…'),
-          ],
-        ),
-        backgroundColor: _kAzul,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        duration: const Duration(seconds: 30), // será removido manualmente
+Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Row(
+        children: const [
+          SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+          ),
+          SizedBox(width: 12),
+          Text('A preparar PDF…'),
+        ],
       ),
-    );
+      backgroundColor: _kAzul,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      duration: const Duration(seconds: 30),
+    ),
+  );
 
-    try {
-      final pedidoService = PedidoService();
+  try {
+    // 1. Buscar o pedido pelo id
+    await context.read<PedidoProvider>().buscarPorId(doc.idPedido);
+    if (!mounted) return;
+    final pedido = context.read<PedidoProvider>().pedidoActual;
+    if (pedido == null) throw Exception('Pedido não encontrado');
 
-      // 1. Buscar o pedido pelo id
-      final pedido = await pedidoService.buscarPorId(doc.idPedido);
-
-      // 2. Buscar o cliente
-      ClienteModel? cliente;
-      if (pedido.idCliente != null) {
-        try {
-          final clienteProvider = context.read<ClienteListaProvider>();
-          // Tenta encontrar na lista já carregada
-          final encontrado = clienteProvider.clientes
+    // 2. Buscar o cliente
+    ClienteModel? cliente;
+    if (pedido.idCliente != null) {
+      try {
+        final clienteProvider = context.read<ClienteListaProvider>();
+        final encontrado = clienteProvider.clientes
+            .cast<ClienteModel?>()
+            .firstWhere(
+              (c) => c?.id == pedido.idCliente,
+              orElse: () => null,
+            );
+        if (encontrado != null) {
+          cliente = encontrado;
+        } else {
+          await clienteProvider.filtrarPorPerfil(1);
+          if (!mounted) return;
+          cliente = context
+              .read<ClienteListaProvider>()
+              .clientes
               .cast<ClienteModel?>()
               .firstWhere(
                 (c) => c?.id == pedido.idCliente,
                 orElse: () => null,
               );
-          if (encontrado != null) {
-            cliente = encontrado;
-          } else {
-            // Se não estiver em memória, força o carregamento
-            await clienteProvider.filtrarPorPerfil(1);
-            cliente = clienteProvider.clientes
-                .cast<ClienteModel?>()
-                .firstWhere(
-                  (c) => c?.id == pedido.idCliente,
-                  orElse: () => null,
-                );
-          }
-        } catch (_) {
-          // cliente permanece null — usaremos fallback abaixo
         }
-      }
+      } catch (_) {}
+    }
 
-      // 3. Resolver tipo de pagamento usando PedidoService directamente
-      //    (evita o conflito TipoPagamentoResponseDTO vs TipoPagamentoModel)
-      String nomeTipoPag = 'Dinheiro em espécie';
-      try {
-        final tipos = await pedidoService.listarTiposPagamento();
-        final match = tipos.cast<TipoPagamentoResponseDTO?>().firstWhere(
-          (t) => t?.idTipoPagamento == pedido.idTipoPagamento,
-          orElse: () => null,
-        );
-        if (match != null) nomeTipoPag = match.tipoPagamento;
-      } catch (_) {
-        // mantém fallback
-      }
+    // 3. Resolver tipo de pagamento
+    String nomeTipoPag = 'Dinheiro em espécie';
+    try {
+      await context.read<PedidoProvider>().carregarTiposPagamento();
+      if (!mounted) return;
+      final tipos = context.read<PedidoProvider>().tiposPagamento;
+      final match = tipos.cast<TipoPagamentoResponseDTO?>().firstWhere(
+        (t) => t?.idTipoPagamento == pedido.idTipoPagamento,
+        orElse: () => null,
+      );
+      if (match != null) nomeTipoPag = match.tipoPagamento;
+    } catch (_) {}
 
-      // 4. Construir ClienteModel mínimo se não foi encontrado
-cliente ??= ClienteModel(
-  id:         pedido.idCliente ?? 0,
-  nome:       pedido.idCliente != null ? 'Cliente #${pedido.idCliente}' : 'Cliente',
-  apelido:    'Avulso',
-  idPerfil:   1,
-  nomePerfil: 'Sem perfil',
-);
+    // 4. ClienteModel mínimo se não encontrado
+    cliente ??= ClienteModel(
+      id:         pedido.idCliente ?? 0,
+      nome:       pedido.idCliente != null
+          ? 'Cliente #${pedido.idCliente}'
+          : 'Cliente',
+      apelido:    'Avulso',
+      idPerfil:   1,
+      nomePerfil: 'Sem perfil',
+    );
 
-      // 5. Gerar PDF
-   final pdfService = PdfService();
-final pdfDoc = DocumentoPdfModel.deApiModelMultiplos(
-  apiModel:      doc,
-  pedidos:       [pedido],
-  cliente:       cliente,           // ← agora é ClienteModel (non-null, garantido pelo ??= acima)
-  tipoPagamento: nomeTipoPag,
-);
+    // 5. Gerar PDF
+    final pdfService = PdfService();
+    final pdfDoc = DocumentoPdfModel.deApiModelMultiplos(
+      apiModel:      doc,
+      pedidos:       [pedido],
+      cliente:       cliente,
+      tipoPagamento: nomeTipoPag,
+    );
 
-      final arquivo = await pdfService.gerarDocumentoFiscal(pdfDoc);
+    final arquivo = await pdfService.gerarDocumentoFiscal(pdfDoc);
+    if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
+    await pdfService.abrirPdf(arquivo);
 
-      // Remove o snack de carregamento
-      if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
-
-      await pdfService.abrirPdf(arquivo);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        _mostrarSnack('Erro ao gerar PDF: $e', erro: true);
-      }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      _mostrarSnack('Erro ao gerar PDF: $e', erro: true);
     }
   }
+}
 
   // ── Anular documento ──────────────────────────────────────────────────────
 

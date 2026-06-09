@@ -73,39 +73,36 @@ class _CriarUsuarioScreenState extends State<CriarUsuarioScreen> {
 
   // ── Submissão ─────────────────────────────────────────────────────────────
 
-  Future<void> _salvar() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_perfilSelecionado == null) {
-      _snack('Seleccione um perfil.', erro: true);
-      return;
-    }
-
-    setState(() => _salvando = true);
-
-    try {
-      await context.read<UsuarioProvider>().criarUsuario({
-        'nome'     : _nomeCtrl.text.trim(),
-        'apelido'  : _apelidoCtrl.text.trim().isEmpty
-                       ? null
-                       : _apelidoCtrl.text.trim(),
-        'email'    : _emailCtrl.text.trim(),
-        'telefone' : _telefoneCtrl.text.trim().isEmpty
-                       ? null
-                       : _telefoneCtrl.text.trim(),
-        'idPerfil' : _perfilSelecionado!.id,
-        // senha não é enviada → backend usa "12345678" por padrão
-      });
-
-      if (mounted) {
-        _snack('Usuário criado! Senha inicial: 12345678');
-        Navigator.of(context).pop(true); // devolve true → lista recarrega
-      }
-    } catch (e) {
-      if (mounted) _snack('Erro: $e', erro: true);
-    } finally {
-      if (mounted) setState(() => _salvando = false);
-    }
+Future<void> _salvar() async {
+  if (!_formKey.currentState!.validate()) return;
+  if (_perfilSelecionado == null) {
+    _snack('Seleccione um perfil.', erro: true);
+    return;
   }
+
+  setState(() => _salvando = true);
+
+  try {
+    final dto = UsuarioRequestDTO(
+      nome:      _nomeCtrl.text.trim(),
+      apelido:   _apelidoCtrl.text.trim().isEmpty ? null : _apelidoCtrl.text.trim(),
+      email:     _emailCtrl.text.trim(),
+      telefone:  _telefoneCtrl.text.trim().isEmpty ? null : _telefoneCtrl.text.trim(),
+      idPerfil:  _perfilSelecionado!.id,
+    );
+
+    await context.read<UsuarioProvider>().criarUsuario(dto);
+
+    if (mounted) {
+      _snack('Usuário criado! Senha inicial: 12345678');
+      Navigator.of(context).pop(true);
+    }
+  } catch (e) {
+    if (mounted) _snack('Erro: $e', erro: true);
+  } finally {
+    if (mounted) setState(() => _salvando = false);
+  }
+}
 
   void _snack(String msg, {bool erro = false}) {
     ScaffoldMessenger.of(context).showSnackBar(

@@ -10,14 +10,8 @@ import 'package:api_compartilhado/api_compartilhado.dart';
 class ServicoProvider with ChangeNotifier {
   final ServicoRepository _repository;
 
-  ServicoProvider({ServicoRepository? repository})
-      : _repository = repository ??
-            ServicoRepository(
-              service:      ServicoService.instance,
-              dao:          ServicoDao(),
-              syncQueueDao: SyncQueueDao(),
-              connectivity: ConnectivityService.instance,
-            );
+ServicoProvider({required ServicoRepository repository})
+    : _repository = repository;
 
   // ── Estado ────────────────────────────────────────────────────────
 

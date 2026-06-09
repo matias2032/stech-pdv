@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:provider/provider.dart';
 
 const _kPrimary    = Color.fromARGB(255, 27, 42, 107);
 const _kAccent     = Color.fromARGB(255, 200, 16, 46);
@@ -16,7 +17,6 @@ class AlterarSenhaScreen extends StatefulWidget {
 class _AlterarSenhaScreenState extends State<AlterarSenhaScreen> {
   final _formKey = GlobalKey<FormState>();
 
-final _usuarioService = UsuarioService();
   final TextEditingController _senhaAtualController = TextEditingController();
   final TextEditingController _novaSenhaController = TextEditingController();
   final TextEditingController _confirmacaoSenhaController =
@@ -25,9 +25,9 @@ final _usuarioService = UsuarioService();
   bool _obscureSenhaAtual = true;
   bool _obscureNovaSenha = true;
   bool _obscureConfirmacao = true;
-  bool _isLoading = false;
 
-  String? _errorMessage;
+
+
 
 
   @override
@@ -38,49 +38,62 @@ final _usuarioService = UsuarioService();
     super.dispose();
   }
 
-  Future<void> _alterarSenha() async {
-  setState(() => _errorMessage = null);
+Future<void> _alterarSenha() async {
+
   if (!_formKey.currentState!.validate()) return;
 
   if (_novaSenhaController.text != _confirmacaoSenhaController.text) {
-    setState(() => _errorMessage = 'A nova senha e a confirmação não coincidem.');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('A nova senha e a confirmação não coincidem.'),
+        backgroundColor: Colors.red,
+      ),
+    );
     return;
   }
 
-  setState(() => _isLoading = true);
+  final usuario = SessaoService.instance.usuarioAtual;
+  if (usuario == null) return;
+
+  final dto = AlterarSenhaDTO(
+    senhaAtual: _senhaAtualController.text,
+    novaSenha:  _novaSenhaController.text,
+  );
+
   try {
-    final usuario = SessaoService.instance.usuarioAtual;
-    if (usuario == null) throw Exception('Usuário não encontrado na sessão.');
+    await context.read<UsuarioProvider>().alterarSenha(usuario.id, dto);
+  } catch (_) {}
 
-    await _usuarioService.alterarSenha(
-      usuario.id,
-      _senhaAtualController.text,
-      _novaSenhaController.text,
+  if (!mounted) return;
+
+  final provider = context.read<UsuarioProvider>();
+  if (provider.erro == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Senha alterada com sucesso! Você será deslogado.'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
     );
-
+    await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Senha alterada com sucesso! Você será deslogado.'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) {
-        SessaoService.instance.limparSessao();
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
-      }
+      SessaoService.instance.limparSessao();
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
     }
-  } catch (e) {
-    setState(() => _errorMessage = e.toString());
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(provider.erro!),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 }
 
   @override
   Widget build(BuildContext context) {
+      final provider = context.watch<UsuarioProvider>();
+  final isLoading = provider.carregando;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Alterar Senha'),
@@ -175,7 +188,7 @@ final _usuarioService = UsuarioService();
                     const SizedBox(height: 30),
 
                     // Mensagem de erro
-                    if (_errorMessage != null)
+                    if (provider.erro != null)
                       Container(
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 20),
@@ -191,7 +204,7 @@ final _usuarioService = UsuarioService();
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                _errorMessage!,
+                                provider.erro!,
                                 style: TextStyle(
                                   color:   Color.fromARGB(255, 200, 16, 46),
                                   fontWeight: FontWeight.w500,
@@ -360,7 +373,7 @@ final _usuarioService = UsuarioService();
                     const SizedBox(height: 30),
 
                     ElevatedButton(
-                      onPressed: _isLoading ? null : _alterarSenha,
+                      onPressed: isLoading ? null : _alterarSenha,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor:  Color.fromARGB(255, 27, 42, 107),
@@ -368,7 +381,7 @@ final _usuarioService = UsuarioService();
                             borderRadius: BorderRadius.circular(12)),
                         elevation: 2,
                       ),
-                      child: _isLoading
+                      child: isLoading
                           ? const SizedBox(
                               height: 24,
                               width: 24,
@@ -388,7 +401,7 @@ final _usuarioService = UsuarioService();
 
                     TextButton(
                       onPressed:
-                          _isLoading ? null : () => Navigator.of(context).pop(),
+                          isLoading ? null : () => Navigator.of(context).pop(),
                       child: const Text('Cancelar',
                           style:
                               TextStyle(fontSize: 16, color: Colors.grey)),

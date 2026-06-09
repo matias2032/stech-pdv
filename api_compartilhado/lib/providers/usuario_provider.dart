@@ -1,35 +1,32 @@
 // lib/providers/usuario_provider.dart
 
 import 'package:flutter/foundation.dart';
-import 'package:api_compartilhado/api_compartilhado.dart'
-    show UsuarioModel, UsuarioService; // ← só o necessário, sem ciclo
+import 'package:api_compartilhado/models/usuario_model.dart';
+import '../repository/usuario_repository.dart';
 
 enum FiltroStatus { todos, ativos, inativos }
 
 class UsuarioProvider extends ChangeNotifier {
-  final UsuarioService _service;
+  final UsuarioRepository _repository;
 
-  UsuarioProvider({UsuarioService? service})
-      : _service = service ?? UsuarioService();
+  UsuarioProvider({required UsuarioRepository repository})
+      : _repository = repository;
 
-  List<UsuarioModel> _usuarios = [];
-  FiltroStatus _filtro = FiltroStatus.todos;
-  bool _carregando = false;
-  String? _erro;
+  List<UsuarioModel> _usuarios  = [];
+  FiltroStatus       _filtro    = FiltroStatus.todos;
+  bool               _carregando = false;
+  String?            _erro;
 
-  List<UsuarioModel> get usuarios => _usuarios;
-  FiltroStatus get filtro => _filtro;
-  bool get carregando => _carregando;
-  String? get erro => _erro;
+  List<UsuarioModel> get usuarios    => _usuarios;
+  FiltroStatus       get filtro      => _filtro;
+  bool               get carregando  => _carregando;
+  String?            get erro        => _erro;
 
   List<UsuarioModel> get usuariosFiltrados {
     switch (_filtro) {
-      case FiltroStatus.ativos:
-        return _usuarios.where((u) => u.ativo).toList();
-      case FiltroStatus.inativos:
-        return _usuarios.where((u) => !u.ativo).toList();
-      case FiltroStatus.todos:
-        return List.unmodifiable(_usuarios);
+      case FiltroStatus.ativos:   return _usuarios.where((u) =>  u.ativo).toList();
+      case FiltroStatus.inativos: return _usuarios.where((u) => !u.ativo).toList();
+      case FiltroStatus.todos:    return List.unmodifiable(_usuarios);
     }
   }
 
@@ -37,7 +34,7 @@ class UsuarioProvider extends ChangeNotifier {
     _setCarregando(true);
     _erro = null;
     try {
-      _usuarios = await _service.listar();
+      _usuarios = await _repository.listarTodos();
       notifyListeners();
     } catch (e) {
       _erro = e.toString();
@@ -55,7 +52,7 @@ class UsuarioProvider extends ChangeNotifier {
 
   Future<void> toggleAtivo(int id) async {
     try {
-      final atualizado = await _service.toggleAtivo(id);
+      final atualizado = await _repository.toggleAtivo(id);
       final idx = _usuarios.indexWhere((u) => u.id == id);
       if (idx != -1) {
         _usuarios[idx] = atualizado;
@@ -70,7 +67,7 @@ class UsuarioProvider extends ChangeNotifier {
 
   Future<void> resetarSenha(int id) async {
     try {
-      await _service.resetarSenha(id);
+      await _repository.resetarSenha(id);
     } catch (e) {
       _erro = e.toString();
       notifyListeners();
@@ -78,14 +75,30 @@ class UsuarioProvider extends ChangeNotifier {
     }
   }
 
-  // Adicionar após resetarSenha():
+  Future<UsuarioModel> criarUsuario(UsuarioRequestDTO dto) async {
+    try {
+      final novo = await _repository.criar(dto);
+      _usuarios.add(novo);
+      notifyListeners();
+      return novo;
+    } catch (e) {
+      _erro = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
 
-Future<UsuarioModel> criarUsuario(Map<String, dynamic> dados) async {
+  Future<UsuarioModel> atualizarUsuario(int id, UsuarioRequestDTO dto) async {
   try {
-    final novo = await _service.criar(dados);
-    _usuarios.add(novo);
+    final atualizado = await _repository.atualizar(id, dto);
+    final idx = _usuarios.indexWhere((u) => u.id == id);
+    if (idx != -1) {
+      _usuarios[idx] = atualizado;
+    } else {
+      _usuarios.add(atualizado);
+    }
     notifyListeners();
-    return novo;
+    return atualizado;
   } catch (e) {
     _erro = e.toString();
     notifyListeners();
@@ -93,16 +106,17 @@ Future<UsuarioModel> criarUsuario(Map<String, dynamic> dados) async {
   }
 }
 
-Future<void> alterarSenha(
-    int id, String senhaAtual, String novaSenha) async {
-  try {
-    await _service.alterarSenha(id, senhaAtual, novaSenha);
-  } catch (e) {
-    _erro = e.toString();
-    notifyListeners();
-    rethrow;
+
+
+  Future<void> alterarSenha(int id, AlterarSenhaDTO dto) async {
+    try {
+      await _repository.alterarSenha(id, dto);
+    } catch (e) {
+      _erro = e.toString();
+      notifyListeners();
+      rethrow;
+    }
   }
-}
 
   void _setCarregando(bool valor) {
     _carregando = valor;

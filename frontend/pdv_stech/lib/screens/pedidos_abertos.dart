@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:api_compartilhado/services/pdf_service.dart';
 import 'finalizar_pedido.dart';
+import 'package:provider/provider.dart';
+
 
 // ─── Paleta (igual a detalhes_produto.dart) ───────────────────────────────────
 const _kPrimary    = Color(0xFF1B2A6B);
@@ -19,75 +21,70 @@ class PedidosAbertosScreen extends StatefulWidget {
 }
 
 class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
-  final _pedidoService = PedidoService();
+  
   final _currencyFmt   = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
 
-  List<PedidoModel> _pedidos = [];
-  bool _isLoading = true;
-  String? _erro;
+
   bool _operacaoEmAndamento = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _carregar();
-  }
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    context.read<PedidoProvider>().listarPorStatus('aberto');
+  });
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // DADOS
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<void> _carregar() async {
-    setState(() { _isLoading = true; _erro = null; });
-    try {
-      final lista = await _pedidoService.listarPorStatus('aberto');
-      if (mounted) setState(() { _pedidos = lista; _isLoading = false; });
-    } catch (e) {
-      if (mounted) setState(() { _erro = 'Erro ao carregar: $e'; _isLoading = false; });
-    }
-  }
+Future<void> _carregar() async {
+  await context.read<PedidoProvider>().listarPorStatus('aberto');
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // ACÇÕES
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<void> _cancelarPedido(PedidoModel pedido) async {
-    if (_operacaoEmAndamento) return;
-    final ok = await _dialogoCancelamento(pedido);
-    if (!ok) return;
+Future<void> _cancelarPedido(PedidoModel pedido) async {
+  if (_operacaoEmAndamento) return;
+  final ok = await _dialogoCancelamento(pedido);
+  if (!ok) return;
 
-    setState(() => _operacaoEmAndamento = true);
-    try {
-      await _pedidoService.cancelarPedido(
-        pedido.idPedido,
-        CancelamentoPedidoRequestDTO(
-          idUsuarioCancelou: SessaoService.instance.idUsuario,
-          motivo: 'Cancelado pelo operador',
-        ),
-      );
-      if (PedidoAtivoController.instance.pedidoAtivo.value?.idPedido ==
-          pedido.idPedido) {
-        PedidoAtivoController.instance.limpar();
-      }
+  setState(() => _operacaoEmAndamento = true);
+  try {
+    await context.read<PedidoProvider>().cancelarPedido(
+      pedido.idPedido,
+      CancelamentoPedidoRequestModel(
+        idUsuarioCancelou: SessaoService.instance.idUsuario,
+        motivo: 'Cancelado pelo operador',
+      ),
+    );
+
+    if (!mounted) return;
+
+    final provider = context.read<PedidoProvider>();
+    if (provider.status == PedidoStatus.success) {
       _snack('Pedido ${pedido.referencia} cancelado', Colors.orange);
       await _carregar();
-    } catch (e) {
-      _snack('Erro ao cancelar: $e', _kAccent);
-    } finally {
-      if (mounted) setState(() => _operacaoEmAndamento = false);
+    } else {
+      _snack('Erro ao cancelar: ${provider.errorMessage}', _kAccent);
     }
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
   }
+}
 
-  Future<void> _abrirFinalizar(PedidoModel pedido) async {
-    final finalizado = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => FinalizarPedidoScreen(pedido: pedido)),
-    );
-    if (finalizado == true && mounted) {
-      PedidoAtivoController.instance.limpar();
-      await _carregar();
-    }
+Future<void> _abrirFinalizar(PedidoModel pedido) async {
+  final finalizado = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(builder: (_) => FinalizarPedidoScreen(pedido: pedido)),
+  );
+  if (finalizado == true && mounted) {
+    await _carregar();
   }
+}
 
   Future<bool> _dialogoCancelamento(PedidoModel pedido) async {
     return await showDialog<bool>(
@@ -148,14 +145,16 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
   // BUILD
   // ══════════════════════════════════════════════════════════════════════════
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+@override
+Widget build(BuildContext context) {
+  final provider = context.watch<PedidoProvider>();
+
+  return Scaffold(
       backgroundColor: _kBackground,
       body: CustomScrollView(
         slivers: [
-          _buildAppBar(),
-          SliverToBoxAdapter(child: _buildBody()),
+_buildAppBar(provider),   
+    SliverToBoxAdapter(child: _buildBody(provider)),
         ],
       ),
     );
@@ -163,7 +162,7 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
 
   // ─── SliverAppBar (padrão detalhes_produto) ────────────────────────────────
 
-  Widget _buildAppBar() {
+Widget _buildAppBar(PedidoProvider provider) {
     return SliverAppBar(
       pinned: true,
       backgroundColor: _kPrimary,
@@ -184,7 +183,7 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Atualizar',
-          onPressed: _isLoading ? null : _carregar,
+        onPressed: provider.isLoading ? null : _carregar,
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -220,10 +219,10 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.bold)),
-                      Text(
-                        _isLoading
-                            ? 'A carregar…'
-                            : '${_pedidos.length} pedido(s)',
+                   Text(
+    provider.isLoading
+        ? 'A carregar…'
+        : '${provider.pedidos.length} pedido(s)',
                         style: TextStyle(
                             color: Colors.white.withOpacity(0.75), fontSize: 13),
                       ),
@@ -240,8 +239,8 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
 
   // ─── Corpo ─────────────────────────────────────────────────────────────────
 
-  Widget _buildBody() {
-    if (_isLoading) {
+Widget _buildBody(PedidoProvider provider) {
+  if (provider.isLoading) {
       return const SizedBox(
         height: 300,
         child: Center(
@@ -257,7 +256,7 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
       );
     }
 
-    if (_erro != null) {
+  if (provider.errorMessage != null) {
       return SizedBox(
         height: 300,
         child: Center(
@@ -268,7 +267,7 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
               children: [
                 Icon(Icons.error_outline, size: 64, color: _kAccent),
                 const SizedBox(height: 16),
-                Text(_erro!, textAlign: TextAlign.center,
+           Text(provider.errorMessage!, textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.grey)),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
@@ -285,7 +284,7 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
       );
     }
 
-    if (_pedidos.isEmpty) {
+    if (provider.pedidos.isEmpty) {
       return SizedBox(
         height: 300,
         child: Center(
@@ -313,8 +312,8 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        itemCount: _pedidos.length,
-        itemBuilder: (_, i) => _buildCard(_pedidos[i]),
+           itemCount: provider.pedidos.length,
+         itemBuilder: (_, i) => _buildCard(provider.pedidos[i]),
       ),
     );
   }
@@ -323,9 +322,9 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
   // CARD DO PEDIDO
   // ══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildCard(PedidoModel pedido) {
-    final isAtivo = PedidoAtivoController.instance.pedidoAtivo.value?.idPedido ==
-        pedido.idPedido;
+Widget _buildCard(PedidoModel pedido) {
+  final isAtivo = context.read<PedidoProvider>().pedidoActual?.idPedido ==
+      pedido.idPedido;
     final totalItens =
         pedido.itensProduto.length + pedido.itensServico.length;
 

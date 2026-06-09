@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:intl/intl.dart';
 import 'package:api_compartilhado/api_config.dart';
+import 'package:provider/provider.dart';
 
 const _kPrimary    = Color(0xFF1B2A6B);
 const _kAccent     = Color.fromARGB(255, 200, 16, 46);
@@ -16,8 +17,7 @@ class DetalhesServicoScreen extends StatefulWidget {
 }
 
 class _DetalhesServicoScreenState extends State<DetalhesServicoScreen> {
-  final _pedidoService = PedidoService();
-  final _currencyFmt   = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
+    final _currencyFmt   = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
   final _obsCtrl       = TextEditingController();
 
   int  _quantidade    = 1;
@@ -25,8 +25,8 @@ class _DetalhesServicoScreenState extends State<DetalhesServicoScreen> {
 
   ServicoModel get servico      => widget.servico;
   double get totalParcial       => servico.precoUnitario * _quantidade;
-  PedidoModel? get _pedidoAtivo => PedidoAtivoController.instance.pedidoAtivo.value;
-  bool   get _temPedidoAtivo    => _pedidoAtivo != null;
+PedidoModel? get _pedidoAtivo => context.read<PedidoProvider>().pedidoActual;
+bool get _temPedidoAtivo      => _pedidoAtivo != null;
 
   @override
   void dispose() { _obsCtrl.dispose(); super.dispose(); }
@@ -35,46 +35,59 @@ class _DetalhesServicoScreenState extends State<DetalhesServicoScreen> {
   void _decrementar()        { if (_quantidade > 1) setState(() => _quantidade--); }
   void _setQuantidade(int v) { if (v >= 1) setState(() => _quantidade = v); }
 
-  Future<void> _adicionarAoPedido() async {
-    if (_criandoPedido) return;
-    final ok = await _dialogConfirmacao();
-    if (!ok) return;
+  // SUBSTITUI O MÉTODO INTEIRO:
 
-    setState(() => _criandoPedido = true);
-    try {
-      PedidoModel resultado;
-      if (_temPedidoAtivo) {
-        final item = ItemServicoRequestDTO(
-          idServico: servico.idServico,
-          quantidade: _quantidade,
+Future<void> _adicionarAoPedido() async {
+  if (_criandoPedido) return;
+  final ok = await _dialogConfirmacao();
+  if (!ok) return;
+
+  setState(() => _criandoPedido = true);
+  try {
+    if (_temPedidoAtivo) {
+      await context.read<PedidoProvider>().adicionarItemServico(
+        _pedidoAtivo!.idPedido,
+        ItemServicoRequestModel(
+          idServico:   servico.idServico,
+          quantidade:  _quantidade,
           observacoes: _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
-        );
-        resultado = await _pedidoService.adicionarItemServico(_pedidoAtivo!.idPedido, item);
-        PedidoAtivoController.instance.definir(resultado);
-        _snack('✅ Serviço adicionado ao pedido ${resultado.referencia}', Colors.green);
-      } else {
-        final novoPedido = PedidoRequestModel(
-          idUsuario: SessaoService.instance.idUsuario,
+        ),
+      );
+    } else {
+      await context.read<PedidoProvider>().criarPedido(
+        PedidoRequestModel(
+          idUsuario:       SessaoService.instance.idUsuario,
           idTipoPagamento: 1,
           itensServico: [
             ItemServicoRequestModel(
-              idServico: servico.idServico,
-              quantidade: _quantidade,
+              idServico:   servico.idServico,
+              quantidade:  _quantidade,
               observacoes: _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
             ),
           ],
-        );
-        resultado = await _pedidoService.criarPedido(novoPedido);
-        PedidoAtivoController.instance.definir(resultado);
-        _snack('✅ Pedido ${resultado.referencia} criado!', Colors.green);
-      }
-      if (mounted) Navigator.pop(context, resultado);
-    } catch (e) {
-      _snack('Erro: $e', _kAccent);
-    } finally {
-      if (mounted) setState(() => _criandoPedido = false);
+        ),
+      );
     }
+
+    if (!mounted) return;
+
+    final provider = context.read<PedidoProvider>();
+    if (provider.status == PedidoStatus.success) {
+      final resultado = provider.pedidoActual!;
+      _snack(
+        _temPedidoAtivo
+            ? '✅ Serviço adicionado ao pedido ${resultado.referencia}'
+            : '✅ Pedido ${resultado.referencia} criado!',
+        Colors.green,
+      );
+      Navigator.pop(context, resultado);
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
+    }
+  } finally {
+    if (mounted) setState(() => _criandoPedido = false);
   }
+}
 
   Future<bool> _dialogConfirmacao() async {
     final adicionando = _temPedidoAtivo;
@@ -416,40 +429,44 @@ class _DetalhesServicoScreenState extends State<DetalhesServicoScreen> {
     );
   }
 
-  Widget _buildBotao() {
-    return ValueListenableBuilder<PedidoModel?>(
-      valueListenable: PedidoAtivoController.instance.pedidoAtivo,
-      builder: (context, pedidoAtivo, _) {
-        final adicionando = pedidoAtivo != null;
-        final label = _criandoPedido
-            ? (adicionando ? 'A adicionar...' : 'A criar pedido...')
-            : adicionando
-                ? 'Adicionar ao ${pedidoAtivo.referencia}'
-                : 'Criar Pedido';
+  // SUBSTITUI O MÉTODO INTEIRO:
 
-        final icone = _criandoPedido
-            ? const SizedBox(width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Icon(adicionando ? Icons.add_shopping_cart : Icons.shopping_cart_checkout);
+Widget _buildBotao() {
+  final pedidoActual = context.watch<PedidoProvider>().pedidoActual;
+  final adicionando  = pedidoActual != null;
 
-        return SizedBox(
-          width: double.infinity,
-          height: 48, // ← era 56
-          child: ElevatedButton.icon(
-            onPressed: _criandoPedido ? null : _adicionarAoPedido,
-            icon: icone,
-            label: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: adicionando ? Colors.green[700] : _kPrimary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 3,
-            ),
-          ),
-        );
-      },
-    );
-  }
+  final label = _criandoPedido
+      ? (adicionando ? 'A adicionar...' : 'A criar pedido...')
+      : adicionando
+          ? 'Adicionar ao ${pedidoActual.referencia}'
+          : 'Criar Pedido';
+
+  final icone = _criandoPedido
+      ? const SizedBox(
+          width: 18, height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        )
+      : Icon(adicionando
+          ? Icons.add_shopping_cart
+          : Icons.shopping_cart_checkout);
+
+  return SizedBox(
+    width: double.infinity,
+    height: 48,
+    child: ElevatedButton.icon(
+      onPressed: _criandoPedido ? null : _adicionarAoPedido,
+      icon: icone,
+      label: Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: adicionando ? Colors.green[700] : _kPrimary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 3,
+      ),
+    ),
+  );
+}
 
   Widget _card({required Widget child}) {
     return Card(

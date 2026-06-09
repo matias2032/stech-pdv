@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:api_compartilhado/api_config.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 const _kPrimary    = Color(0xFF1B2A6B);
 const _kAccent     = Color(0xFFC8102E);
@@ -28,7 +29,7 @@ class DetalhesProdutoScreen extends StatefulWidget {
 }
 
 class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
-  final _pedidoService = PedidoService();
+  
   final _currencyFmt   = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
 
   int  _quantidade    = 1;
@@ -39,8 +40,8 @@ class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
   double get totalParcial       => precoEfetivo * _quantidade;
   bool   get temPromocao        => produto.precoPromocional != null;
   bool   get semEstoque         => produto.quantidadeEstoque == 0;
-  PedidoModel? get _pedidoAtivo => PedidoAtivoController.instance.pedidoAtivo.value;
-  bool   get _temPedidoAtivo    => _pedidoAtivo != null;
+PedidoModel? get _pedidoAtivo => context.read<PedidoProvider>().pedidoActual;
+bool get _temPedidoAtivo      => _pedidoAtivo != null;
 
   String get nomesMarcas {
     if (produto.marcas.isEmpty) return 'Sem marca';
@@ -78,36 +79,57 @@ class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
     setState(() => _quantidade = v);
   }
 
-  Future<void> _adicionarAoPedido() async {
-    if (_criandoPedido) return;
-    final ok = await _dialogConfirmacao();
-    if (!ok) return;
+// SUBSTITUI O MÉTODO INTEIRO:
 
-    setState(() => _criandoPedido = true);
-    try {
-      PedidoModel resultado;
-      if (_temPedidoAtivo) {
-        final item = ItemPedidoRequestDTO(idProduto: produto.idProduto, quantidade: _quantidade);
-        resultado = await _pedidoService.adicionarItemProduto(_pedidoAtivo!.idPedido, item);
-        PedidoAtivoController.instance.definir(resultado);
-        _snack('✅ Item adicionado ao pedido ${resultado.referencia}', Colors.green);
-      } else {
-        final novoPedido = PedidoRequestModel(
-          idUsuario: SessaoService.instance.idUsuario,
+Future<void> _adicionarAoPedido() async {
+  if (_criandoPedido) return;
+  final ok = await _dialogConfirmacao();
+  if (!ok) return;
+
+  setState(() => _criandoPedido = true);
+  try {
+    if (_temPedidoAtivo) {
+      await context.read<PedidoProvider>().adicionarItemProduto(
+        _pedidoAtivo!.idPedido,
+        ItemPedidoRequestModel(
+          idProduto:  produto.idProduto,
+          quantidade: _quantidade,
+        ),
+      );
+    } else {
+      await context.read<PedidoProvider>().criarPedido(
+        PedidoRequestModel(
+          idUsuario:       SessaoService.instance.idUsuario,
           idTipoPagamento: 1,
-          itensProduto: [ItemPedidoRequestModel(idProduto: produto.idProduto, quantidade: _quantidade)],
-        );
-        resultado = await _pedidoService.criarPedido(novoPedido);
-        PedidoAtivoController.instance.definir(resultado);
-        _snack('✅ Pedido ${resultado.referencia} criado!', Colors.green);
-      }
-      if (mounted) Navigator.pop(context, resultado);
-    } catch (e) {
-      _snack('Erro: $e', _kAccent);
-    } finally {
-      if (mounted) setState(() => _criandoPedido = false);
+          itensProduto: [
+            ItemPedidoRequestModel(
+              idProduto:  produto.idProduto,
+              quantidade: _quantidade,
+            ),
+          ],
+        ),
+      );
     }
+
+    if (!mounted) return;
+
+    final provider = context.read<PedidoProvider>();
+    if (provider.status == PedidoStatus.success) {
+      final resultado = provider.pedidoActual!;
+      _snack(
+        _temPedidoAtivo
+            ? '✅ Item adicionado ao pedido ${resultado.referencia}'
+            : '✅ Pedido ${resultado.referencia} criado!',
+        Colors.green,
+      );
+      Navigator.pop(context, resultado);
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
+    }
+  } finally {
+    if (mounted) setState(() => _criandoPedido = false);
   }
+}
 
   Future<bool> _dialogConfirmacao() async {
     final adicionando = _temPedidoAtivo;
@@ -450,42 +472,53 @@ class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
     );
   }
 
-  Widget _buildBotao() {
-    return ValueListenableBuilder<PedidoModel?>(
-      valueListenable: PedidoAtivoController.instance.pedidoAtivo,
-      builder: (context, pedidoAtivo, _) {
-        final adicionando = pedidoAtivo != null;
-        final label = _criandoPedido
-            ? (adicionando ? 'A adicionar...' : 'A criar pedido...')
-            : semEstoque
-                ? 'Produto Indisponível'
-                : adicionando
-                    ? 'Adicionar ao ${pedidoAtivo.referencia}'
-                    : 'Criar Pedido';
+  // SUBSTITUI O MÉTODO INTEIRO:
 
-        final icone = _criandoPedido
-            ? const SizedBox(width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Icon(semEstoque ? Icons.block : adicionando ? Icons.add_shopping_cart : Icons.shopping_cart_checkout);
+Widget _buildBotao() {
+  // context.watch → redesenha o botão sempre que o Provider mudar
+  final pedidoActual = context.watch<PedidoProvider>().pedidoActual;
+  final adicionando  = pedidoActual != null;
 
-        return SizedBox(
-          width: double.infinity,
-          height: 48, // ← era 56
-          child: ElevatedButton.icon(
-            onPressed: semEstoque || _criandoPedido ? null : _adicionarAoPedido,
-            icon: icone,
-            label: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: semEstoque ? Colors.grey : adicionando ? Colors.green[700] : _kPrimary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: semEstoque ? 0 : 3,
-            ),
-          ),
-        );
-      },
-    );
-  }
+  final label = _criandoPedido
+      ? (adicionando ? 'A adicionar...' : 'A criar pedido...')
+      : semEstoque
+          ? 'Produto Indisponível'
+          : adicionando
+              ? 'Adicionar ao ${pedidoActual.referencia}'
+              : 'Criar Pedido';
+
+  final icone = _criandoPedido
+      ? const SizedBox(
+          width: 18, height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        )
+      : Icon(semEstoque
+          ? Icons.block
+          : adicionando
+              ? Icons.add_shopping_cart
+              : Icons.shopping_cart_checkout);
+
+  return SizedBox(
+    width: double.infinity,
+    height: 48,
+    child: ElevatedButton.icon(
+      onPressed: semEstoque || _criandoPedido ? null : _adicionarAoPedido,
+      icon: icone,
+      label: Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: semEstoque
+            ? Colors.grey
+            : adicionando
+                ? Colors.green[700]
+                : _kPrimary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: semEstoque ? 0 : 3,
+      ),
+    ),
+  );
+}
 
   Widget _card({required Widget child}) {
     return Card(
@@ -496,3 +529,4 @@ class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
     );
   }
 }
+

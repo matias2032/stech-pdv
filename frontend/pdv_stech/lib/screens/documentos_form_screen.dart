@@ -100,32 +100,38 @@ Periodicidade _periodicidade = Periodicidade.hoje;
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _carregarPedidosFiltrados() async {
-    if (_clienteSelecionado == null) return;
-    if (_carregandoPedidos) return;
+  if (_clienteSelecionado == null) return;
+  if (_carregandoPedidos) return;
 
-    setState(() {
-      _carregandoPedidos = true;
-      _pedidosFiltrados  = [];
-    });
+  setState(() {
+    _carregandoPedidos = true;
+    _pedidosFiltrados  = [];
+  });
 
-    try {
-      final pedidoService = PedidoService();
-      final todos = await pedidoService.listarPorStatus('finalizado');
-      final agora = DateTime.now();
+  try {
+    await context.read<PedidoProvider>().listarPorStatus('finalizado');
+    if (!mounted) return;
 
-      final filtrados = todos.where((p) {
-        return p.idCliente != null &&
-            p.idCliente == _clienteSelecionado!.id &&
-            _periodicidade.pedidoDentroDoPeriodo(p.dataPedido, agora);
-      }).toList();
-
-      if (mounted) setState(() => _pedidosFiltrados = filtrados);
-    } catch (e) {
-      if (mounted) _mostrarSnack('Erro ao carregar pedidos: $e', erro: true);
-    } finally {
-      if (mounted) setState(() => _carregandoPedidos = false);
+    final provider = context.read<PedidoProvider>();
+    if (provider.errorMessage != null) {
+      _mostrarSnack('Erro ao carregar pedidos: ${provider.errorMessage}', erro: true);
+      return;
     }
+
+    final agora = DateTime.now();
+    final filtrados = provider.pedidos.where((p) {
+      return p.idCliente != null &&
+          p.idCliente == _clienteSelecionado!.id &&
+          _periodicidade.pedidoDentroDoPeriodo(p.dataPedido, agora);
+    }).toList();
+
+    if (mounted) setState(() => _pedidosFiltrados = filtrados);
+  } catch (e) {
+    if (mounted) _mostrarSnack('Erro ao carregar pedidos: $e', erro: true);
+  } finally {
+    if (mounted) setState(() => _carregandoPedidos = false);
   }
+}
 
   // ─────────────────────────────────────────────────────────────────────────
   // RESOLVER TIPO DE PAGAMENTO
@@ -134,20 +140,20 @@ Periodicidade _periodicidade = Periodicidade.hoje;
   /// Usa PedidoService directamente para evitar conflito de tipos entre
   /// TipoPagamentoResponseDTO (do PedidoService) e TipoPagamentoModel
   /// (do PedidoProvider).  Retorna o nome ou um fallback.
-  Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
-    try {
-      final pedidoService = PedidoService();
-      final tipos = await pedidoService.listarTiposPagamento();
-      final match = tipos.cast<TipoPagamentoResponseDTO?>().firstWhere(
-        (t) => t?.idTipoPagamento == idTipoPagamento,
-        orElse: () => null,
-      );
-      return match?.tipoPagamento ?? 'Dinheiro em espécie';
-    } catch (_) {
-      return 'Dinheiro em espécie';
-    }
+Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
+  try {
+    await context.read<PedidoProvider>().carregarTiposPagamento();
+    if (!mounted) return 'Dinheiro em espécie';
+    final tipos = context.read<PedidoProvider>().tiposPagamento;
+    final match = tipos.cast<TipoPagamentoResponseDTO?>().firstWhere(
+      (t) => t?.idTipoPagamento == idTipoPagamento,
+      orElse: () => null,
+    );
+    return match?.tipoPagamento ?? 'Dinheiro em espécie';
+  } catch (_) {
+    return 'Dinheiro em espécie';
   }
-
+}
   // ─────────────────────────────────────────────────────────────────────────
   // EMITIR DOCUMENTOS
   // ─────────────────────────────────────────────────────────────────────────

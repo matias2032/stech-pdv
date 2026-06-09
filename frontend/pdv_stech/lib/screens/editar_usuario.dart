@@ -1,13 +1,11 @@
-
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:provider/provider.dart';
 
 const _kPrimary    = Color.fromARGB(255, 27, 42, 107);
 const _kAccent     = Color.fromARGB(255, 200, 16, 46);
 const _kBackground = Color(0xFFF4F5F7);
 const _kCardBg     = Colors.white;
-
-
 
 class EditarUsuarioScreen extends StatefulWidget {
   const EditarUsuarioScreen({super.key});
@@ -19,24 +17,20 @@ class EditarUsuarioScreen extends StatefulWidget {
 class _EditarUsuarioScreenState extends State<EditarUsuarioScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _nomeController = TextEditingController();
-  final TextEditingController _apelidoController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _nomeController     = TextEditingController();
+  final TextEditingController _apelidoController  = TextEditingController();
+  final TextEditingController _emailController    = TextEditingController();
   final TextEditingController _telefoneController = TextEditingController();
-  final _usuarioService = UsuarioService();
 
-
-
-
-  UsuarioModel? _usuarioAtual;
-  bool _isLoading = true;
-  bool _isModoEdicao = false;
-  bool _isSaving = false;
+  bool _isModoEdicao   = false;
+  bool _controllersPreenchidos = false;
 
   @override
   void initState() {
     super.initState();
-    _carregarDadosUsuario();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<UsuarioProvider>().carregarUsuarios();
+    });
   }
 
   @override
@@ -48,46 +42,35 @@ class _EditarUsuarioScreenState extends State<EditarUsuarioScreen> {
     super.dispose();
   }
 
-Future<void> _carregarDadosUsuario() async {
-  setState(() => _isLoading = true);
-  try {
-    final sessao = SessaoService.instance.usuarioAtual;
-    if (sessao == null) throw Exception('Sessão inválida.');
-
-    final usuario = await _usuarioService.buscarPorId(sessao.id);
-    setState(() {
-      _usuarioAtual = usuario;
-      _nomeController.text    = usuario.nome;
-      _apelidoController.text = usuario.apelido ?? '';
-      _emailController.text   = usuario.email;
-      _telefoneController.text = usuario.telefone ?? '';
-      _isLoading = false;
-    });
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar dados: $e'),
-                 backgroundColor: Colors.red),
-      );
-      setState(() => _isLoading = false);
-    }
+  void _preencherControllers(UsuarioModel u) {
+    _nomeController.text     = u.nome;
+    _apelidoController.text  = u.apelido ?? '';
+    _emailController.text    = u.email;
+    _telefoneController.text = u.telefone ?? '';
+    _controllersPreenchidos  = true;
   }
-}
 
-  /// Envia alterações ao backend (PUT /api/usuarios/{id})
-Future<void> _salvarAlteracoes() async {
-  if (!_formKey.currentState!.validate()) return;
-  setState(() => _isSaving = true);
-  try {
-    await _usuarioService.atualizar(_usuarioAtual!.id, {
-      'nome':     _usuarioAtual!.nome,
-      'apelido':  _usuarioAtual!.apelido,
-      'email':    _emailController.text.trim(),
-      'telefone': _telefoneController.text.trim().isNotEmpty
+  Future<void> _salvarAlteracoes(UsuarioModel usuario) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final dto = UsuarioRequestDTO(
+      nome:     usuario.nome,
+      apelido:  usuario.apelido,
+      email:    _emailController.text.trim(),
+      telefone: _telefoneController.text.trim().isNotEmpty
           ? _telefoneController.text.trim()
           : null,
-    });
-    if (mounted) {
+      idPerfil: usuario.idPerfil,
+    );
+
+    try {
+      await context.read<UsuarioProvider>().atualizarUsuario(usuario.id, dto);
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    final provider = context.read<UsuarioProvider>();
+    if (provider.erro == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Dados atualizados com sucesso! Você será deslogado.'),
@@ -100,38 +83,50 @@ Future<void> _salvarAlteracoes() async {
         SessaoService.instance.limparSessao();
         Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
       }
-    }
-  } catch (e) {
-    if (mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao atualizar dados: $e'),
-                 backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Erro ao atualizar dados: ${provider.erro}'),
+          backgroundColor: Colors.red,
+        ),
       );
-      setState(() => _isSaving = false);
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
+    final provider  = context.watch<UsuarioProvider>();
+    final sessaoId  = SessaoService.instance.usuarioAtual?.id;
+    final usuario   = provider.usuarios
+        .where((u) => u.id == sessaoId)
+        .firstOrNull;
+
+    // Preenche os controllers uma única vez quando o utilizador fica disponível
+    if (usuario != null && !_controllersPreenchidos) {
+      _preencherControllers(usuario);
+    }
+
+    final isLoading = provider.carregando;
+    final isSaving  = provider.carregando;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Meus Dados'),
-        backgroundColor:Color.fromARGB(255, 27, 42, 107),
+        backgroundColor: _kPrimary,
         elevation: 0,
       ),
-      body: _isLoading
+      body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // Header com avatar
+                  // ── Header com avatar ──────────────────────────────
                   Container(
                     width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Color.fromARGB(255, 27, 42, 107),
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
+                    decoration: const BoxDecoration(
+                      color: _kPrimary,
+                      borderRadius: BorderRadius.only(
+                        bottomLeft:  Radius.circular(30),
                         bottomRight: Radius.circular(30),
                       ),
                     ),
@@ -146,34 +141,32 @@ Future<void> _salvarAlteracoes() async {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color:      Colors.black.withOpacity(0.2),
                                 blurRadius: 10,
-                                offset: const Offset(0, 5),
+                                offset:     const Offset(0, 5),
                               ),
                             ],
                           ),
                           child: CircleAvatar(
                             radius: 50,
-                            backgroundColor: Color.fromARGB(255, 174, 189, 255),
+                            backgroundColor:
+                                const Color.fromARGB(255, 174, 189, 255),
                             child: Text(
-                              _usuarioAtual?.nome
-                                      .substring(0, 1)
-                                      .toUpperCase() ??
-                                  'U',
+                              usuario?.nome.substring(0, 1).toUpperCase() ?? 'U',
                               style: const TextStyle(
-                                fontSize: 40,
+                                fontSize:   40,
                                 fontWeight: FontWeight.bold,
-                                color: Color.fromARGB(255, 27, 42, 107),
+                                color:      _kPrimary,
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          '${_usuarioAtual?.nome ?? ''} ${_usuarioAtual?.apelido ?? ''}',
+                          '${usuario?.nome ?? ''} ${usuario?.apelido ?? ''}',
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
+                            color:      Colors.white,
+                            fontSize:   24,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -182,15 +175,14 @@ Future<void> _salvarAlteracoes() async {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color:        Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-
-_usuarioAtual?.nomePerfil ?? 'Usuário',
+                            usuario?.nomePerfil ?? 'Usuário',
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
+                              color:      Colors.white,
+                              fontSize:   14,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -199,7 +191,7 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                     ),
                   ),
 
-                  // Formulário
+                  // ── Formulário ─────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Form(
@@ -210,18 +202,18 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                           // Informações Básicas (read-only)
                           _buildInfoCard(
                             title: 'Informações Básicas',
-                            icon: Icons.person_outline,
+                            icon:  Icons.person_outline,
                             children: [
                               _buildReadOnlyField(
                                 label: 'Nome',
-                                value: _usuarioAtual?.nome ?? '',
-                                icon: Icons.person,
+                                value: usuario?.nome ?? '',
+                                icon:  Icons.person,
                               ),
                               const SizedBox(height: 16),
                               _buildReadOnlyField(
                                 label: 'Apelido',
-                                value: _usuarioAtual?.apelido ?? '',
-                                icon: Icons.badge,
+                                value: usuario?.apelido ?? '',
+                                icon:  Icons.badge,
                               ),
                             ],
                           ),
@@ -231,18 +223,18 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                           // Informações de Contato (editável)
                           _buildInfoCard(
                             title: 'Informações de Contato',
-                            icon: Icons.contact_phone,
+                            icon:  Icons.contact_phone,
                             children: [
                               TextFormField(
                                 controller: _emailController,
-                                enabled: _isModoEdicao,
+                                enabled:    _isModoEdicao,
                                 decoration: InputDecoration(
-                                  labelText: 'Email',
+                                  labelText:  'Email',
                                   prefixIcon: const Icon(Icons.email),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  filled: true,
+                                  filled:    true,
                                   fillColor: _isModoEdicao
                                       ? Colors.white
                                       : Colors.grey[100],
@@ -261,14 +253,14 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                               const SizedBox(height: 16),
                               TextFormField(
                                 controller: _telefoneController,
-                                enabled: _isModoEdicao,
+                                enabled:    _isModoEdicao,
                                 decoration: InputDecoration(
-                                  labelText: 'Telefone',
+                                  labelText:  'Telefone',
                                   prefixIcon: const Icon(Icons.phone),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  filled: true,
+                                  filled:    true,
                                   fillColor: _isModoEdicao
                                       ? Colors.white
                                       : Colors.grey[100],
@@ -283,58 +275,56 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                           // Informações da Conta (read-only)
                           _buildInfoCard(
                             title: 'Informações da Conta',
-                            icon: Icons.info_outline,
+                            icon:  Icons.info_outline,
                             children: [
                               _buildReadOnlyField(
                                 label: 'Data de Cadastro',
-                                // 🔥 ADAPTAÇÃO: dataCadastro é DateTime em UsuarioModel
-                         value: _formatarData(_usuarioAtual?.criadoEm),
-                                icon: Icons.calendar_today,
+                                value: _formatarData(usuario?.criadoEm),
+                                icon:  Icons.calendar_today,
                               ),
                               const SizedBox(height: 16),
                               _buildReadOnlyField(
-                                label: 'Status',
-                               value: (_usuarioAtual?.ativo ?? false) ? 'Ativo' : 'Inativo',
-                                icon: Icons.check_circle,
-                                valueColor: (_usuarioAtual?.ativo ?? false) ? Colors.green : Colors.red,
+                                label:      'Status',
+                                value:      (usuario?.ativo ?? false) ? 'Ativo' : 'Inativo',
+                                icon:       Icons.check_circle,
+                                valueColor: (usuario?.ativo ?? false)
+                                    ? Colors.green
+                                    : Colors.red,
                               ),
                             ],
                           ),
 
                           const SizedBox(height: 30),
 
-                          // Botões
+                          // ── Botões ───────────────────────────────
                           if (_isModoEdicao) ...[
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: _isSaving
+                                    onPressed: isSaving
                                         ? null
                                         : () {
                                             setState(() {
                                               _isModoEdicao = false;
                                               _emailController.text =
-                                                  _usuarioAtual!.email;
+                                                  usuario?.email ?? '';
                                               _telefoneController.text =
-                                                  _usuarioAtual!.telefone ??
-                                                      '';
+                                                  usuario?.telefone ?? '';
                                             });
                                           },
-                                    icon: const Icon(Icons.close,
+                                    icon:  const Icon(Icons.close,
                                         color: Colors.grey),
                                     label: const Text('Cancelar',
                                         style: TextStyle(
                                             fontSize: 16,
-                                            color: Colors.grey)),
+                                            color:    Colors.grey)),
                                     style: OutlinedButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 16),
-                                      side: const BorderSide(
-                                          color: Colors.grey),
+                                      side:  const BorderSide(color: Colors.grey),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
                                   ),
@@ -342,37 +332,34 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: ElevatedButton.icon(
-                                    onPressed: _isSaving
+                                    onPressed: isSaving || usuario == null
                                         ? null
-                                        : _salvarAlteracoes,
-                                    icon: _isSaving
+                                        : () => _salvarAlteracoes(usuario),
+                                    icon: isSaving
                                         ? const SizedBox(
                                             height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
+                                            width:  20,
+                                            child:  CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              color: Colors.white,
+                                              color:       Colors.white,
                                             ),
                                           )
                                         : const Icon(Icons.save,
                                             color: Colors.white),
                                     label: Text(
-                                      _isSaving
-                                          ? 'Salvando...'
-                                          : 'Salvar Alterações',
+                                      isSaving ? 'Salvando...' : 'Salvar Alterações',
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize:   16,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                        color:      Colors.white,
                                       ),
                                     ),
                                     style: ElevatedButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 16),
-                                      backgroundColor: Color.fromARGB(255, 27, 42, 107),
+                                      backgroundColor: _kPrimary,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
                                   ),
@@ -382,19 +369,13 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                           ] else ...[
                             Container(
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color.fromARGB(255, 27, 42, 107),
-                                    Color.fromARGB(255, 27, 42, 107),
-                                  ],
-                                ),
+                                color:        _kPrimary,
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
-                                    color:
-                                        Color.fromARGB(255, 27, 42, 107).withOpacity(0.3),
+                                    color:      _kPrimary.withOpacity(0.3),
                                     blurRadius: 8,
-                                    offset: const Offset(0, 4),
+                                    offset:     const Offset(0, 4),
                                   ),
                                 ],
                               ),
@@ -406,9 +387,9 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                                 label: const Text(
                                   'Editar Meus Dados',
                                   style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    fontSize:      18,
+                                    fontWeight:    FontWeight.bold,
+                                    color:         Colors.white,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -416,7 +397,7 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 18),
                                   backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
+                                  shadowColor:     Colors.transparent,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -434,15 +415,16 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
     );
   }
 
+  // ── Helpers de UI ────────────────────────────────────────────────
+
   Widget _buildInfoCard({
-    required String title,
-    required IconData icon,
+    required String       title,
+    required IconData     icon,
     required List<Widget> children,
   }) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -450,13 +432,13 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
           children: [
             Row(
               children: [
-                Icon(icon, color: Color.fromARGB(255, 27, 42, 107), size: 24),
+                Icon(icon, color: _kPrimary, size: 24),
                 const SizedBox(width: 12),
                 Text(title,
                     style: const TextStyle(
-                        fontSize: 18,
+                        fontSize:   18,
                         fontWeight: FontWeight.bold,
-                        color: Color.fromARGB(255, 27, 42, 107))),
+                        color:      _kPrimary)),
               ],
             ),
             const SizedBox(height: 20),
@@ -482,32 +464,29 @@ _usuarioAtual?.nomePerfil ?? 'Usuário',
             const SizedBox(width: 8),
             Text(label,
                 style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
+                    fontSize:   14,
+                    color:      Colors.grey[600],
                     fontWeight: FontWeight.w500)),
           ],
         ),
         const SizedBox(height: 8),
         Container(
-          width: double.infinity,
+          width:   double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color:        Colors.grey[100],
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(value,
               style: TextStyle(
-                  fontSize: 16,
-                  color: valueColor ?? Colors.black87,
+                  fontSize:   16,
+                  color:      valueColor ?? Colors.black87,
                   fontWeight: FontWeight.w500)),
         ),
       ],
     );
   }
 
-String _getPerfilNome(String? nomePerfil) => nomePerfil ?? 'Usuário';
-
-  // 🔥 ADAPTAÇÃO: recebe DateTime? em vez de String
   String _formatarData(DateTime? data) {
     if (data == null) return '';
     return '${data.day.toString().padLeft(2, '0')}/'

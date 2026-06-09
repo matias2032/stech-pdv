@@ -1,15 +1,20 @@
 // lib/screens/marcas_list_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:api_compartilhado/api_compartilhado.dart';
 import 'marca_form_screen.dart';
 import '../widgets/app_sidebar.dart';
-import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:api_compartilhado/providers/marca_provider.dart';
 
-const _kVermelho = Color(0xFFC8102E);
-const _kAzul = Color(0xFF1B2A6B);
-const _kBranco = Colors.white;
+// ── Paleta STech ─────────────────────────────────────────────────────────────
+const _kVermelho   = Color(0xFFC8102E);
+const _kAzul       = Color(0xFF1B2A6B);
+const _kBranco     = Colors.white;
 const _kCinzaClaro = Color(0xFFF4F5F7);
 const _kCinzaTexto = Color(0xFF6B7280);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MarcasListScreen extends StatefulWidget {
   const MarcasListScreen({super.key});
@@ -19,342 +24,320 @@ class MarcasListScreen extends StatefulWidget {
 }
 
 class _MarcasListScreenState extends State<MarcasListScreen> {
-  final MarcaService _marcaService = MarcaService();
-
-  List<MarcaModel> _marcas = [];
-  // Cache de categorias por marca — populado quando o backend
-  // disponibilizar endpoint de categorias-por-marca.
-  Map<int, List<CategoriaModel>> _categoriasPorMarca = {};
-  bool _isLoading = false;
-  String? _errorMessage;
-
   @override
   void initState() {
     super.initState();
-    _carregarMarcas();
-  }
-
-  Future<void> _carregarMarcas() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<MarcaProvider>().carregarMarcas();
     });
-
-    try {
-      final marcas = await _marcaService.listarMarcasComCategorias();
-      setState(() {
-        _marcas = marcas;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Erro ao carregar marcas: $e';
-        _isLoading = false;
-      });
-    }
   }
+
+  // ── Acções ────────────────────────────────────────────────────────────────
 
   Future<void> _deletarMarca(MarcaModel marca) async {
-    // MarcaModel não tem campo categorias — usa mapa externo.
-    // Quando o backend disponibilizar endpoint de categorias-por-marca,
-    // popular _categoriasPorMarca em _carregarMarcas().
-    final categorias = _categoriasPorMarca[marca.id] ?? [];
-
     final confirmar = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Deseja realmente excluir a marca "${marca.nomeMarca}"?',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[300]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange[700]),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      categorias.isEmpty
-                          ? 'Esta marca não está associada a nenhuma categoria.'
-                          : 'As ${categorias.length} categoria(s) associada(s) NÃO serão excluídas.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.orange[900],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Excluir'),
-          ),
-        ],
+      builder: (_) => _DialogoConfirmacao(
+        titulo: 'Confirmar Exclusão',
+        mensagem:
+            'Deseja realmente excluir a marca "${marca.nomeMarca}"?\n\n'
+            'As categorias associadas NÃO serão excluídas.',
+        corBotao: _kVermelho,
+        labelBotao: 'Excluir',
       ),
     );
 
-    if (confirmar == true) {
+    if (confirmar == true && mounted) {
       try {
-        await _marcaService.deletarMarca(marca.id);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Marca "${marca.nomeMarca}" excluída'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          _carregarMarcas();
-        }
+        await context.read<MarcaProvider>().excluir(marca.id);
+        if (mounted) _snack('Marca "${marca.nomeMarca}" excluída.');
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao excluir: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        if (mounted) _snack('Erro ao excluir: $e', erro: true);
       }
     }
   }
 
-  void _navegarParaFormulario({MarcaModel? marca}) async {
-    final resultado = await Navigator.push(
+  Future<void> _navegarParaFormulario({MarcaModel? marca}) async {
+    final resultado = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => MarcaFormScreen(marca: marca),
+        builder: (_) => MarcaFormScreen(marca: marca),
       ),
     );
-
-    if (resultado == true) {
-      _carregarMarcas();
+    if (resultado == true && mounted) {
+      context.read<MarcaProvider>().carregarMarcas();
     }
   }
+
+  void _snack(String msg, {bool erro = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: erro ? _kVermelho : _kAzul,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Marcas'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _carregarMarcas,
-            tooltip: 'Atualizar',
-          ),
-        ],
-      ),
+      backgroundColor: _kCinzaClaro,
+      appBar: _buildAppBar(),
       drawer: const AppSidebar(currentRoute: '/gerenciar_marcas'),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navegarParaFormulario(),
+        backgroundColor: _kAzul,
+        foregroundColor: _kBranco,
         icon: const Icon(Icons.add),
         label: const Text('Nova Marca'),
       ),
     );
   }
 
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: _kAzul,
+      foregroundColor: _kBranco,
+      elevation: 0,
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _kVermelho,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.label_rounded, color: _kBranco, size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Marcas',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: 0.3),
+          ),
+        ],
+      ),
+      actions: [
+        Consumer<MarcaProvider>(
+          builder: (_, p, __) => IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Recarregar',
+            onPressed: p.carregando ? null : p.carregarMarcas,
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+    final provider = context.watch<MarcaProvider>();
+
+    if (provider.carregando) {
+      return const Center(child: CircularProgressIndicator(color: _kAzul));
     }
 
-    if (_errorMessage != null) {
+    if (provider.erro != null) {
       return Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_errorMessage!, textAlign: TextAlign.center),
+            const Icon(Icons.error_outline, color: _kVermelho, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              provider.erro!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _kVermelho),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: _carregarMarcas,
+              onPressed: provider.carregarMarcas,
               icon: const Icon(Icons.refresh),
               label: const Text('Tentar Novamente'),
+              style: ElevatedButton.styleFrom(backgroundColor: _kAzul),
             ),
           ],
         ),
       );
     }
 
-    if (_marcas.isEmpty) {
+    if (provider.marcas.isEmpty) {
       return Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.label_off_outlined, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            Text(
-              'Nenhuma marca cadastrada',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
+            Text('Nenhuma marca cadastrada',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600])),
             const SizedBox(height: 8),
-            Text(
-              'Toque no botão + para adicionar',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            ),
+            Text('Toque no botão + para adicionar',
+                style: TextStyle(fontSize: 14, color: Colors.grey[500])),
           ],
         ),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: _carregarMarcas,
+      color: _kAzul,
+      onRefresh: () async => provider.carregarMarcas(),
       child: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: _marcas.length,
-        itemBuilder: (context, index) {
-          final marca = _marcas[index];
-          return _buildMarcaCard(marca);
-        },
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 80),
+        itemCount: provider.marcas.length,
+        itemBuilder: (_, i) => _buildMarcaCard(provider.marcas[i]),
       ),
     );
   }
 
   Widget _buildMarcaCard(MarcaModel marca) {
-    // MarcaModel não tem campo categorias — usa mapa externo.
-    final categorias = _categoriasPorMarca[marca.id] ?? [];
-
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).primaryColor,
+          backgroundColor: _kAzul.withOpacity(0.12),
           child: Text(
             marca.nomeMarca[0].toUpperCase(),
             style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+                color: _kAzul, fontWeight: FontWeight.w700),
           ),
         ),
         title: Text(
           marca.nomeMarca,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: const TextStyle(
+              fontWeight: FontWeight.w600, color: _kAzul, fontSize: 14),
         ),
         subtitle: Text(
-          categorias.isEmpty
-              ? 'Nenhuma categoria associada'
-              : '${categorias.length} categoria(s) associada(s)',
-          style: TextStyle(
-            color: categorias.isEmpty ? Colors.grey : Colors.blue[700],
-            fontSize: 13,
-          ),
+          'ID: ${marca.id}  ·  ${marca.syncStatus}',
+          style: const TextStyle(fontSize: 12, color: _kCinzaTexto),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Badge sync pendente
+            if (marca.isPending)
+              Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: Text(
+                  'Pendente',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue),
-              onPressed: () => _navegarParaFormulario(marca: marca),
+              icon: const Icon(Icons.edit_rounded, color: _kAzul, size: 20),
               tooltip: 'Editar',
+              onPressed: () => _navegarParaFormulario(marca: marca),
             ),
             IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deletarMarca(marca),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  color: _kVermelho, size: 20),
               tooltip: 'Excluir',
+              onPressed: () => _deletarMarca(marca),
             ),
           ],
         ),
         children: [
-          if (categorias.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Icon(Icons.category_outlined,
-                      size: 48, color: Colors.grey[400]),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Esta marca ainda não está associada a nenhuma categoria',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontStyle: FontStyle.italic,
-                      color: Colors.grey[600],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Divider(),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.sync_rounded, size: 14, color: _kCinzaTexto),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Estado de sincronização: ${marca.syncStatus}',
+                      style:
+                          const TextStyle(fontSize: 12, color: _kCinzaTexto),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () => _navegarParaFormulario(marca: marca),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Associar Categorias'),
-                  ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.category, size: 20, color: Colors.blue[700]),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Categorias Associadas:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: categorias.map((categoria) {
-                      return Chip(
-                        avatar: CircleAvatar(
-                          backgroundColor: Colors.blue,
-                          child: Text(
-                            categoria.nomeCategoria[0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        label: Text(categoria.nomeCategoria),
-                        backgroundColor: Colors.blue[50],
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _navegarParaFormulario(marca: marca),
+                      icon: const Icon(Icons.category_outlined, size: 16),
+                      label: const Text('Gerir Categorias'),
+                      style: TextButton.styleFrom(foregroundColor: _kAzul),
+                    ),
+                  ],
+                ),
+              ],
             ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diálogo de Confirmação
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DialogoConfirmacao extends StatelessWidget {
+  final String titulo;
+  final String mensagem;
+  final Color corBotao;
+  final String labelBotao;
+
+  const _DialogoConfirmacao({
+    required this.titulo,
+    required this.mensagem,
+    required this.corBotao,
+    required this.labelBotao,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(titulo,
+          style: const TextStyle(
+              fontWeight: FontWeight.w700, color: _kAzul, fontSize: 17)),
+      content: Text(mensagem,
+          style: const TextStyle(fontSize: 14, color: _kCinzaTexto)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child:
+              const Text('Cancelar', style: TextStyle(color: _kCinzaTexto)),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: corBotao,
+            foregroundColor: _kBranco,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
+          ),
+          child: Text(labelBotao),
+        ),
+      ],
     );
   }
 }

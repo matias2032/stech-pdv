@@ -8,6 +8,7 @@ import 'package:api_compartilhado/services/pdf_service.dart';
 import '../widgets/app_sidebar.dart';
 import 'package:http/http.dart' as http;
 import 'package:api_compartilhado/api_config.dart';
+import 'package:provider/provider.dart';
 
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 const _kPrimary    = Color(0xFF1B2A6B);
@@ -26,21 +27,20 @@ class PedidosFinalizadosScreen extends StatefulWidget {
 
 class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
     with SingleTickerProviderStateMixin {
-  final _pedidoService = PedidoService();
+
   final _currencyFmt   = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
   final _dateFmt       = DateFormat('dd/MM/yyyy HH:mm');
   final _pdfService = PdfService.instance;
    final Map<int, String> _tiposPagamento = {};
 
-  List<PedidoModel> _pedidos    = [];
-  List<PedidoModel> _filtrados  = [];
-  bool              _carregando = true;
+
   String            _pesquisa   = '';
 
 
   late final AnimationController _entradaCtrl;
   late final Animation<double>   _fadeAnim;
   late final Animation<Offset>   _slideAnim;
+
 
   final _searchCtrl = TextEditingController();
 
@@ -57,53 +57,55 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entradaCtrl, curve: Curves.easeOutCubic));
 
-    _carregar();
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  context.read<PedidoProvider>().carregarTiposPagamento();
+  context.read<PedidoProvider>().listarPorStatus('finalizado');
+});
   }
 
-  @override
-  void dispose() {
-    _entradaCtrl.dispose();
-    _searchCtrl.dispose();
-    _pedidoService.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _entradaCtrl.dispose();
+  _searchCtrl.dispose();
+  super.dispose();
+}
 
   // ── Lógica ───────────────────────────────────────────────────────────────
 
     
-  Future<void> _carregar() async {
-  setState(() => _carregando = true);
-  try {
-    final resultados = await Future.wait([
-      _pedidoService.listarPorStatus('finalizado'),
-      _pedidoService.listarTiposPagamento(),
-    ]);
-    final lista   = resultados[0] as List<PedidoModel>;
-    final tipos   = resultados[1] as List<TipoPagamentoResponseDTO>;
-    setState(() {
-      _pedidos   = lista;
-      _filtrados = lista;
-      _carregando = false;
-      for (final t in tipos) {
-        _tiposPagamento[t.idTipoPagamento] = t.tipoPagamento;
-      }
-    });
-    _entradaCtrl.forward(from: 0);
-  } catch (e) {
-    setState(() => _carregando = false);
-    _snack('Erro ao carregar pedidos: $e', _kAccent);
+Future<void> _carregar() async {
+  await Future.wait([
+    context.read<PedidoProvider>().listarPorStatus('finalizado'),
+    context.read<PedidoProvider>().carregarTiposPagamento(),
+  ]);
+
+  if (!mounted) return;
+
+  final provider = context.read<PedidoProvider>();
+
+  if (provider.errorMessage != null) {
+    _snack('Erro ao carregar pedidos: ${provider.errorMessage}', _kAccent);
+    return;
   }
+
+  // Actualiza o cache local de tipos de pagamento
+  setState(() {
+    for (final t in provider.tiposPagamento) {
+      _tiposPagamento[t.idTipoPagamento] = t.tipoPagamento;
+    }
+    // Reinicia o filtro com os dados novos
+    _filtrar(_pesquisa);
+  });
+
+  _entradaCtrl.forward(from: 0);
 }
 
-  void _filtrar(String valor) {
-    setState(() {
-      _pesquisa = valor.toLowerCase();
-      _filtrados = _pedidos.where((p) {
-        return p.referencia.toLowerCase().contains(_pesquisa) ||
-            _currencyFmt.format(p.total).toLowerCase().contains(_pesquisa);
-      }).toList();
-    });
-  }
+void _filtrar(String valor) {
+  setState(() {
+    _pesquisa = valor.toLowerCase();
+    // lê directamente do Provider — sem variável local
+  });
+}
 
   void _snack(String msg, Color cor) {
     if (!mounted) return;
@@ -118,15 +120,23 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
 
   // ── Totais ────────────────────────────────────────────────────────────────
 
-  double get _totalGeral =>
-      _filtrados.fold(0.0, (acc, p) => acc + p.total);
+
 
 
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
+@override
+Widget build(BuildContext context) {
+  final provider = context.watch<PedidoProvider>();
+
+  // Filtragem calculada na hora a partir do Provider
+  final filtrados = provider.pedidos.where((p) {
+    return p.referencia.toLowerCase().contains(_pesquisa) ||
+        _currencyFmt.format(p.total).toLowerCase().contains(_pesquisa);
+  }).toList();
+
+  final totalGeral = filtrados.fold(0.0, (acc, p) => acc + p.total);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -144,13 +154,13 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
                 children: [
                   _buildHeader(),
                   Expanded(
-                    child: _carregando
+  child: provider.isLoading 
                         ? _buildLoading()
                         : Column(
                             children: [
-                              _buildResumo(),
+_buildResumo(filtrados, totalGeral),
                               _buildBarraPesquisa(),
-                              Expanded(child: _buildLista()),
+Expanded(child: _buildLista(filtrados)),
                             ],
                           ),
                   ),
@@ -237,7 +247,7 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
 
   // ── Resumo ────────────────────────────────────────────────────────────────
 
-  Widget _buildResumo() {
+Widget _buildResumo(List<PedidoModel> filtrados, double totalGeral) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Row(
@@ -246,7 +256,7 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
             child: _ResumoCard(
               icone: Icons.receipt_long_outlined,
               label: 'Total de pedidos',
-              valor: '${_filtrados.length}',
+  valor: '${filtrados.length}',
               cor: _kPrimary,
             ),
           ),
@@ -255,7 +265,7 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
             child: _ResumoCard(
               icone: Icons.payments_outlined,
               label: 'Valor total',
-              valor: _currencyFmt.format(_totalGeral),
+  valor: _currencyFmt.format(totalGeral), 
               cor: _kSuccess,
             ),
           ),
@@ -299,18 +309,18 @@ class _PedidosFinalizadosScreenState extends State<PedidosFinalizadosScreen>
 
   // ── Lista ─────────────────────────────────────────────────────────────────
 
-  Widget _buildLista() {
-    if (_filtrados.isEmpty) return _buildListaVazia();
+Widget _buildLista(List<PedidoModel> filtrados) {
+  if (filtrados.isEmpty) return _buildListaVazia(); 
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-      itemCount: _filtrados.length,
+itemCount: filtrados.length,       
       separatorBuilder: (_, __) => const SizedBox(height: 10),
 itemBuilder: (_, i) => _PedidoCard(
-  pedido: _filtrados[i],
+      pedido: filtrados[i],    
   currencyFmt: _currencyFmt,
   dateFmt: _dateFmt,
-  tipoPagamento: _tiposPagamento[_filtrados[i].idTipoPagamento] ?? 'Desconhecido',
+  tipoPagamento: _tiposPagamento[filtrados[i].idTipoPagamento] ?? 'Desconhecido',
   pdfService: _pdfService,
 ),
     );

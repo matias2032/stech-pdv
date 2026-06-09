@@ -1,11 +1,22 @@
 // lib/screens/marca_form_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:api_compartilhado/providers/marca_provider.dart';
+import 'package:api_compartilhado/providers/categoria_provider.dart';
+
+// ── Paleta STech ─────────────────────────────────────────────────────────────
+const _kVermelho   = Color(0xFFC8102E);
+const _kAzul       = Color(0xFF1B2A6B);
+const _kBranco     = Colors.white;
+const _kCinzaClaro = Color(0xFFF4F5F7);
+const _kCinzaTexto = Color(0xFF6B7280);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MarcaFormScreen extends StatefulWidget {
   final MarcaModel? marca;
-
   const MarcaFormScreen({super.key, this.marca});
 
   @override
@@ -14,64 +25,32 @@ class MarcaFormScreen extends StatefulWidget {
 
 class _MarcaFormScreenState extends State<MarcaFormScreen>
     with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  final MarcaService _marcaService = MarcaService();
-  final CategoriaService _categoriaService = CategoriaService();
 
-  late TextEditingController _nomeController;
-  late TabController _tabController;
+  final _formKey                   = GlobalKey<FormState>();
+  late final TextEditingController _nomeController;
+  late final TabController          _tabController;
 
-  bool _isLoading = false;
-  bool _isLoadingCategorias = false;
-  bool _houveAlteracoes = false;
   bool get _isEditMode => widget.marca != null;
 
-  List<CategoriaModel> _todasCategorias = [];
+  // ID da marca depois de salva — liberta a aba de categorias
+  int?     _marcaIdSalva;
   Set<int> _categoriasSelecionadas = {};
-  int? _marcaIdSalva;
+
+  // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController  = TabController(length: 2, vsync: this);
     _nomeController = TextEditingController(
-      text: widget.marca?.nomeMarca ?? '',
-    );
+        text: widget.marca?.nomeMarca ?? '');
 
-    _carregarDados();
-  }
+    if (_isEditMode) _marcaIdSalva = widget.marca!.id;
 
-  Future<void> _carregarDados() async {
-    await _carregarCategorias();
-    if (_isEditMode) {
-      _marcaIdSalva = widget.marca!.id;
-      // MarcaModel não tem campo categorias embebido.
-      // Inicia com set vazio — utilizador gere associações manualmente.
-      // Quando o backend disponibilizar endpoint de categorias-por-marca,
-      // substituir aqui pela chamada correspondente.
-      setState(() => _categoriasSelecionadas = {});
-    }
-  }
-
-  Future<void> _carregarCategorias() async {
-    setState(() => _isLoadingCategorias = true);
-    try {
-      final categorias = await _categoriaService.listarCategorias();
-      setState(() {
-        _todasCategorias = categorias;
-        _isLoadingCategorias = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingCategorias = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao carregar categorias: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    // Carrega categorias via Provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CategoriaProvider>().carregarCategorias();
+    });
   }
 
   @override
@@ -81,306 +60,326 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
     super.dispose();
   }
 
-  Future<void> _salvar() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  // ── Salvar ────────────────────────────────────────────────────────────────
 
-    setState(() => _isLoading = true);
+  Future<void> _salvar() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final dto = MarcaRequestDTO(nomeMarca: _nomeController.text.trim());
+    final provider = context.read<MarcaProvider>();
 
     try {
-      final dto = MarcaRequestDTO(
-        nomeMarca: _nomeController.text.trim(),
-      );
-
-      MarcaModel marcaSalva;
-
+      final MarcaModel salva;
       if (_isEditMode) {
-        marcaSalva = await _marcaService.atualizarMarca(
-          widget.marca!.id,
-          dto,
-        );
+        salva = await provider.editar(widget.marca!.id, dto);
       } else {
-        marcaSalva = await _marcaService.criarMarca(dto);
+        salva = await provider.criar(dto);
       }
 
-      _marcaIdSalva = marcaSalva.id;
-      _houveAlteracoes = true;
+      if (!mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isEditMode
-                  ? 'Marca atualizada com sucesso'
-                  : 'Marca criada com sucesso',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
+      setState(() => _marcaIdSalva = salva.id);
 
-        if (!_isEditMode) {
-          setState(() {});
-        }
-      }
+      _snack(_isEditMode
+          ? 'Marca actualizada com sucesso.'
+          : 'Marca criada com sucesso.');
+
+      // Se foi criação, vai directamente para a aba de categorias
+      if (!_isEditMode) _tabController.animateTo(1);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao salvar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) _snack('Erro ao salvar: $e', erro: true);
     }
   }
+
+  // ── Toggle de categoria ───────────────────────────────────────────────────
 
   Future<void> _toggleCategoria(int idCategoria, bool? valor) async {
     if (_marcaIdSalva == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Salve a marca antes de associar categorias'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _snack('Salve a marca antes de associar categorias.', erro: true);
       return;
     }
 
+    final provider = context.read<MarcaProvider>();
+
     try {
       if (valor == true) {
-        await _marcaService.associarCategoria(_marcaIdSalva!, idCategoria);
-        setState(() {
-          _categoriasSelecionadas.add(idCategoria);
-          _houveAlteracoes = true;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Categoria associada'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
+        await provider.associarCategoria(_marcaIdSalva!, idCategoria);
+        setState(() => _categoriasSelecionadas.add(idCategoria));
+        if (mounted) _snack('Categoria associada.', duracao: 1);
       } else {
-        await _marcaService.desassociarCategoria(_marcaIdSalva!, idCategoria);
-        setState(() {
-          _categoriasSelecionadas.remove(idCategoria);
-          _houveAlteracoes = true;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Categoria desassociada'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
+        await provider.desassociarCategoria(_marcaIdSalva!, idCategoria);
+        setState(() => _categoriasSelecionadas.remove(idCategoria));
+        if (mounted) _snack('Categoria desassociada.', duracao: 1);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) _snack('Erro: $e', erro: true);
     }
   }
+
+  void _snack(String msg, {bool erro = false, int duracao = 3}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: erro ? _kVermelho : _kAzul,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: duracao),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
-        if (!didPop) Navigator.pop(context, _houveAlteracoes);
+        if (!didPop) Navigator.pop(context, true);
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(_isEditMode ? 'Editar Marca' : 'Nova Marca'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, _houveAlteracoes),
-          ),
-          actions: [
-            if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(icon: Icon(Icons.info), text: 'Informações'),
-              Tab(icon: Icon(Icons.category), text: 'Categorias'),
-            ],
-          ),
-        ),
+        backgroundColor: _kCinzaClaro,
+        appBar: _buildAppBar(),
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildInformacoesTab(),
-            _buildCategoriasTab(),
+            _buildAbaInformacoes(),
+            _buildAbaCategorias(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInformacoesTab() {
-    return Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: _kAzul,
+      foregroundColor: _kBranco,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded),
+        onPressed: () => Navigator.pop(context, true),
+      ),
+      title: Row(
         children: [
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.label,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Informações da Marca',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  TextFormField(
-                    controller: _nomeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nome da Marca *',
-                      hintText: 'Ex: Samsung, Apple, Xiaomi...',
-                      prefixIcon: Icon(Icons.business),
-                      border: OutlineInputBorder(),
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Por favor, informe o nome da marca';
-                      }
-                      if (value.trim().length < 2) {
-                        return 'O nome deve ter pelo menos 2 caracteres';
-                      }
-                      if (value.trim().length > 100) {
-                        return 'O nome deve ter no máximo 100 caracteres';
-                      }
-                      return null;
-                    },
-                    enabled: !_isLoading,
-                  ),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _kVermelho,
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: const Icon(Icons.label_rounded, color: _kBranco, size: 20),
           ),
-          const SizedBox(height: 16),
-          if (_marcaIdSalva == null)
-            Card(
-              color: Colors.blue[50],
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(Icons.lightbulb_outline, color: Colors.blue[700]),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Salve a marca primeiro para poder associar categorias.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.blue[900],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading
-                      ? null
-                      : () => Navigator.pop(context, _houveAlteracoes),
-                  icon: const Icon(Icons.cancel),
-                  label: const Text('Cancelar'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _salvar,
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(_isEditMode ? 'Atualizar' : 'Salvar'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(width: 10),
+          Text(
+            _isEditMode ? 'Editar Marca' : 'Nova Marca',
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3),
           ),
+        ],
+      ),
+      bottom: TabBar(
+        controller: _tabController,
+        indicatorColor: _kVermelho,
+        labelColor: _kBranco,
+        unselectedLabelColor: _kBranco.withOpacity(0.6),
+        tabs: const [
+          Tab(icon: Icon(Icons.info_outline_rounded),   text: 'Informações'),
+          Tab(icon: Icon(Icons.category_outlined),      text: 'Categorias'),
         ],
       ),
     );
   }
 
-  Widget _buildCategoriasTab() {
+  // ── Aba 1: Informações ────────────────────────────────────────────────────
+
+  Widget _buildAbaInformacoes() {
+    return Consumer<MarcaProvider>(
+      builder: (_, provider, __) {
+        final salvando = provider.carregando;
+
+        return Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── Aviso offline se pendente ──────────────────────────
+              if (_isEditMode && widget.marca!.isPending)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.sync_problem_rounded,
+                          color: Colors.orange.shade700, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Esta marca ainda não foi sincronizada com o servidor.',
+                          style: TextStyle(
+                              fontSize: 13, color: Colors.orange.shade800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // ── Card dados ─────────────────────────────────────────
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _TituloSecao(
+                          icon: Icons.label_rounded,
+                          label: 'Dados da Marca'),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _nomeController,
+                        enabled: !salvando,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: _inputDecoration(
+                          label: 'Nome da Marca *',
+                          hint: 'Ex: Samsung, Apple, Xiaomi...',
+                          icon: Icons.business_outlined,
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Campo obrigatório';
+                          }
+                          if (v.trim().length < 2) {
+                            return 'Mínimo 2 caracteres';
+                          }
+                          if (v.trim().length > 100) {
+                            return 'Máximo 100 caracteres';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ── Aviso categorias ───────────────────────────────────
+              if (_marcaIdSalva == null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.lightbulb_outline_rounded,
+                          color: Colors.blue.shade700, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Salve a marca para poder associar categorias.',
+                          style: TextStyle(
+                              fontSize: 13, color: Colors.blue.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 24),
+
+              // ── Botões ─────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: salvando
+                          ? null
+                          : () => Navigator.pop(context, true),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _kCinzaTexto,
+                        side: BorderSide(color: Colors.grey.shade300),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: salvando ? null : _salvar,
+                      icon: salvando
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  color: _kBranco, strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_rounded, size: 20),
+                      label: Text(
+                        salvando
+                            ? 'A guardar...'
+                            : _isEditMode
+                                ? 'Actualizar'
+                                : 'Salvar',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kVermelho,
+                        foregroundColor: _kBranco,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Aba 2: Categorias ─────────────────────────────────────────────────────
+
+  Widget _buildAbaCategorias() {
     if (_marcaIdSalva == null) {
       return Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.save_outlined, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            Text(
-              'Salve a marca primeiro',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
+            Text('Salve a marca primeiro',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600])),
             const SizedBox(height: 8),
             Text(
-              'Volte para a aba "Informações" e clique em Salvar',
+              'Volte à aba "Informações" e clique em Salvar',
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
@@ -389,115 +388,187 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
       );
     }
 
-    if (_isLoadingCategorias) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    return Consumer<CategoriaProvider>(
+      builder: (_, categoriaProvider, __) {
+        if (categoriaProvider.carregando) {
+          return const Center(
+              child: CircularProgressIndicator(color: _kAzul));
+        }
 
-    if (_todasCategorias.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.category_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Nenhuma categoria cadastrada',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Cadastre categorias primeiro para associá-las',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+        if (categoriaProvider.categorias.isEmpty) {
+          return Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.category,
-                        color: Theme.of(context).primaryColor),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Categorias Disponíveis',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                Icon(Icons.category_outlined,
+                    size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text('Nenhuma categoria cadastrada',
+                    style:
+                        TextStyle(fontSize: 16, color: Colors.grey[600])),
                 const SizedBox(height: 8),
                 Text(
-                  'Selecione as categorias nas quais esta marca pode operar',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  'Cadastre categorias primeiro para as associar.',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                 ),
-                const Divider(height: 24),
-                ..._todasCategorias.map((categoria) {
-                  final isSelected =
-                      _categoriasSelecionadas.contains(categoria.id);
-                  return CheckboxListTile(
-                    value: isSelected,
-                    onChanged: (valor) =>
-                        _toggleCategoria(categoria.id, valor),
-                    title: Text(categoria.nomeCategoria),
-                    subtitle: categoria.descricao != null &&
-                            categoria.descricao!.isNotEmpty
-                        ? Text(
-                            categoria.descricao!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          )
-                        : null,
-                    secondary: CircleAvatar(
-                      backgroundColor: isSelected ? Colors.green : Colors.grey,
-                      child: Text(
-                        categoria.nomeCategoria[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    activeColor: Theme.of(context).primaryColor,
-                  );
-                }),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          color: Colors.green[50],
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.green[700]),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Categorias selecionadas: ${_categoriasSelecionadas.length}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.green[900],
-                      fontWeight: FontWeight.bold,
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TituloSecao(
+                        icon: Icons.category_rounded,
+                        label: 'Categorias Disponíveis'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Seleccione as categorias nas quais esta marca pode operar.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
+                    const Divider(height: 24),
+                    ...categoriaProvider.categorias.map((categoria) {
+                      final isSelected =
+                          _categoriasSelecionadas.contains(categoria.id);
+                      return CheckboxListTile(
+                        value: isSelected,
+                        onChanged: (v) =>
+                            _toggleCategoria(categoria.id, v),
+                        title: Text(categoria.nomeCategoria,
+                            style: const TextStyle(
+                                fontSize: 14, color: _kAzul)),
+                        subtitle: categoria.descricao != null &&
+                                categoria.descricao!.isNotEmpty
+                            ? Text(
+                                categoria.descricao!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              )
+                            : null,
+                        secondary: CircleAvatar(
+                          backgroundColor: isSelected
+                              ? _kAzul
+                              : Colors.grey.shade300,
+                          child: Text(
+                            categoria.nomeCategoria[0].toUpperCase(),
+                            style: const TextStyle(
+                                color: _kBranco,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        activeColor: _kAzul,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Contador
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _kAzul.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _kAzul.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline_rounded,
+                      color: _kAzul, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Categorias seleccionadas: ${_categoriasSelecionadas.length}',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: _kAzul,
+                        fontWeight: FontWeight.w600),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── Helpers de UI ─────────────────────────────────────────────────────────
+
+  InputDecoration _inputDecoration({
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      hintStyle:
+          TextStyle(color: _kCinzaTexto.withOpacity(0.6), fontSize: 12),
+      prefixIcon: Icon(icon, color: _kAzul, size: 20),
+      filled: true,
+      fillColor: _kBranco,
+      contentPadding:
+          const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _kAzul, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _kVermelho),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _kVermelho, width: 1.5),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget auxiliar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TituloSecao extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _TituloSecao({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: _kAzul, size: 20),
+        const SizedBox(width: 8),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _kAzul)),
       ],
     );
   }
