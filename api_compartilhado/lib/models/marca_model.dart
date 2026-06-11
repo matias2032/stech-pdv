@@ -1,4 +1,5 @@
 // lib/features/marca/model/marca_model.dart
+import 'package:api_compartilhado/models/categoria_model.dart';
 
 class MarcaModel {
   final int id;
@@ -6,6 +7,7 @@ class MarcaModel {
   final String syncStatus;
   final String? localId;
   final String? updatedAt;
+  final List<CategoriaModel> categorias; // ← novo campo
 
   const MarcaModel({
     required this.id,
@@ -13,6 +15,7 @@ class MarcaModel {
     this.syncStatus = 'synced',
     this.localId,
     this.updatedAt,
+    this.categorias = const [], // ← valor por defeito
   });
 
   bool get isPending  => syncStatus == 'pending';
@@ -20,12 +23,15 @@ class MarcaModel {
   bool get isConflict => syncStatus == 'conflict';
   bool get isOffline  => isPending;
 
-  factory MarcaModel.fromJson(Map<String, dynamic> json) => MarcaModel(
-        id:         json['idMarca']   as int,
-        nomeMarca:  json['nomeMarca'] as String,
-        syncStatus: (json['syncStatus'] as String?)?.toLowerCase() ?? 'synced',
-        updatedAt:  json['updatedAt']  as String?,
-      );
+factory MarcaModel.fromJson(Map<String, dynamic> json) => MarcaModel(
+      id:         json['idMarca']   as int,
+      nomeMarca:  json['nomeMarca'] as String,
+      syncStatus: (json['syncStatus'] as String?)?.toLowerCase() ?? 'synced',
+      updatedAt:  json['updatedAt']  as String?,
+      categorias: (json['categorias'] as List<dynamic>? ?? [])
+          .map((c) => CategoriaModel.fromJson(c as Map<String, dynamic>))
+          .toList(), // ← lê o array vindo de MarcaComCategoriasDTO
+    );
 
   factory MarcaModel.fromLocalDb(Map<String, dynamic> row) => MarcaModel(
         id:         row['id']          as int,
@@ -47,19 +53,21 @@ class MarcaModel {
         'updated_at':  updatedAt,
       };
 
-  MarcaModel copyWith({
-    int?    id,
-    String? nomeMarca,
-    String? syncStatus,
-    String? localId,
-    String? updatedAt,
-  }) => MarcaModel(
-        id:         id         ?? this.id,
-        nomeMarca:  nomeMarca  ?? this.nomeMarca,
-        syncStatus: syncStatus ?? this.syncStatus,
-        localId:    localId    ?? this.localId,
-        updatedAt:  updatedAt  ?? this.updatedAt,
-      );
+MarcaModel copyWith({
+  int?               id,
+  String?            nomeMarca,
+  String?            syncStatus,
+  String?            localId,
+  String?            updatedAt,
+  List<CategoriaModel>? categorias,
+}) => MarcaModel(
+      id:         id         ?? this.id,
+      nomeMarca:  nomeMarca  ?? this.nomeMarca,
+      syncStatus: syncStatus ?? this.syncStatus,
+      localId:    localId    ?? this.localId,
+      updatedAt:  updatedAt  ?? this.updatedAt,
+      categorias: categorias ?? this.categorias,
+    );
 
   @override
   bool operator ==(Object other) => other is MarcaModel && other.id == id;

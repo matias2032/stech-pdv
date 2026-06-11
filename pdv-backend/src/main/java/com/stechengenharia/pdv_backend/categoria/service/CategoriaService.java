@@ -170,11 +170,17 @@ public CategoriaResponseDTO buscarPorId(Integer id) {
     
     // ===== MÉTODOS AUXILIARES =====
     
-    private CategoriaResponseDTO mapToResponseDTO(Categoria categoria) {
-        CategoriaResponseDTO dto = new CategoriaResponseDTO();
-        dto.setIdCategoria(categoria.getIdCategoria());
-        dto.setNomeCategoria(categoria.getNomeCategoria());
-        dto.setDescricao(categoria.getDescricao());
-        return dto;
-    }
+  private CategoriaResponseDTO mapToResponseDTO(Categoria categoria) {
+    CategoriaResponseDTO dto = new CategoriaResponseDTO();
+    dto.setIdCategoria(categoria.getIdCategoria());
+    dto.setNomeCategoria(categoria.getNomeCategoria());
+    dto.setDescricao(categoria.getDescricao());
+    dto.setMarcas(
+        categoriaMarcaRepository.findByIdCategoria(categoria.getIdCategoria())
+            .stream()
+            .map(CategoriaMarca::getIdMarca)
+            .collect(Collectors.toList())
+    );
+    return dto;
+}
 }

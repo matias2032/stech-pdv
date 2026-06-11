@@ -1,5 +1,6 @@
 // lib/features/categoria/model/categoria_model.dart
 
+// DEPOIS
 class CategoriaModel {
   final int id;
   final String nomeCategoria;
@@ -7,6 +8,7 @@ class CategoriaModel {
   final String syncStatus;
   final String? localId;
   final String? updatedAt;
+  final List<int> marcas; // ← IDs das marcas associadas
 
   const CategoriaModel({
     required this.id,
@@ -15,6 +17,7 @@ class CategoriaModel {
     this.syncStatus = 'synced',
     this.localId,
     this.updatedAt,
+    this.marcas = const [],
   });
 
   bool get isPending  => syncStatus == 'pending';
@@ -22,13 +25,16 @@ class CategoriaModel {
   bool get isConflict => syncStatus == 'conflict';
   bool get isOffline  => isPending;
 
-  factory CategoriaModel.fromJson(Map<String, dynamic> json) => CategoriaModel(
-        id:            json['idCategoria']   as int,
-        nomeCategoria: json['nomeCategoria'] as String,
-        descricao:     json['descricao']     as String?,
-        syncStatus:    (json['syncStatus'] as String?)?.toLowerCase() ?? 'synced',
-        updatedAt:     json['updatedAt']     as String?,
-      );
+factory CategoriaModel.fromJson(Map<String, dynamic> json) => CategoriaModel(
+      id:            json['idCategoria']   as int,
+      nomeCategoria: json['nomeCategoria'] as String,
+      descricao:     json['descricao']     as String?,
+      syncStatus:    (json['syncStatus'] as String?)?.toLowerCase() ?? 'synced',
+      updatedAt:     json['updatedAt']     as String?,
+      marcas:        (json['marcas'] as List<dynamic>? ?? [])
+                         .map((e) => e as int)
+                         .toList(),
+    );
 
   factory CategoriaModel.fromLocalDb(Map<String, dynamic> row) => CategoriaModel(
         id:            row['id']             as int,
@@ -60,6 +66,8 @@ class CategoriaModel {
     String? syncStatus,
     String? localId,
     String? updatedAt,
+      List<int>? marcas,
+
   }) => CategoriaModel(
         id:            id            ?? this.id,
         nomeCategoria: nomeCategoria ?? this.nomeCategoria,
@@ -67,6 +75,7 @@ class CategoriaModel {
         syncStatus:    syncStatus    ?? this.syncStatus,
         localId:       localId       ?? this.localId,
         updatedAt:     updatedAt     ?? this.updatedAt,
+        marcas: marcas ?? this.marcas,
       );
 
   @override

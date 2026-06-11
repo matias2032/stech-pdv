@@ -50,9 +50,10 @@ class _CategoriaFormScreenState extends State<CategoriaFormScreen>
     _descricaoController = TextEditingController(
         text: widget.categoria?.descricao ?? '');
 
-    if (_isEditMode) {
-      _categoriaIdSalva = widget.categoria!.id;
-    }
+if (_isEditMode) {
+  _categoriaIdSalva    = widget.categoria!.id;
+  _marcasSelecionadas  = Set<int>.from(widget.categoria!.marcas); // ← carrega estado real
+}
 
     // Carrega marcas via Provider
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -29,13 +29,14 @@ class MarcaRepository {
 
   // ── Leitura ───────────────────────────────────────────────────────
 
-  Future<List<MarcaModel>> listarTodos() async {
-    if (_connectivity.isOnline) {
-      try {
-        final lista = await _service.listarMarcas();
-   final models = lista.map((m) => m).toList();
-        await _dao.upsertAll(models.map((m) => m.toLocalDb()).toList());
-        return models;
+Future<List<MarcaModel>> listarTodos() async {
+  if (_connectivity.isOnline) {
+    try {
+      final lista = await _service.listarMarcasComCategorias(); // ← /marcas/com-categorias
+      await _dao.upsertAll(lista.map((m) => m.toLocalDb()).toList());
+      return lista;
+
+
       } catch (e) {
         debugPrint('⚠️ MarcaRepository.listarTodos HTTP falhou — usando cache: $e');
       }

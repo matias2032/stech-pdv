@@ -45,7 +45,12 @@ class _MarcaFormScreenState extends State<MarcaFormScreen>
     _nomeController = TextEditingController(
         text: widget.marca?.nomeMarca ?? '');
 
-    if (_isEditMode) _marcaIdSalva = widget.marca!.id;
+if (_isEditMode) {
+  _marcaIdSalva           = widget.marca!.id;
+  _categoriasSelecionadas = Set<int>.from(      // ← carrega estado real
+      widget.marca!.categorias.map((c) => c.id)
+  );
+}
 
     // Carrega categorias via Provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
