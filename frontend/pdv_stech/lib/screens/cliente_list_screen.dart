@@ -26,6 +26,7 @@ class ClienteListScreen extends StatefulWidget {
 }
 
 class _ClienteListScreenState extends State<ClienteListScreen> {
+
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -114,6 +115,36 @@ class _ClienteListScreenState extends State<ClienteListScreen> {
     }
   }
 
+  PopupMenuItem<OrdemAlfabetica> _itemOrdem(
+  String label,
+  OrdemAlfabetica valor,
+  OrdemAlfabetica atual,
+  IconData icon,
+) {
+  final ativo = atual == valor;
+  return PopupMenuItem(
+    value: valor,
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: ativo ? _kAzul : _kCinzaTexto),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: ativo ? _kAzul : _kCinzaTexto,
+            fontWeight: ativo ? FontWeight.w700 : FontWeight.normal,
+          ),
+        ),
+        if (ativo) ...[
+          const Spacer(),
+          const Icon(Icons.check_rounded, size: 16, color: _kAzul),
+        ],
+      ],
+    ),
+  );
+}
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -142,47 +173,64 @@ class _ClienteListScreenState extends State<ClienteListScreen> {
   }
 
   PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: _kAzul,
-      foregroundColor: _kBranco,
-      elevation: 0,
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: _kVermelho,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.business_rounded,
-                color: _kBranco, size: 20),
+  return AppBar(
+    backgroundColor: _kAzul,
+    foregroundColor: _kBranco,
+    elevation: 0,
+    title: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: _kVermelho,
+            borderRadius: BorderRadius.circular(8),
           ),
-          const SizedBox(width: 10),
-          const Text(
-            'Clientes — Empresas',
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.add_business_rounded),
-          tooltip: 'Nova Empresa',
-          onPressed: () => _abrirFormulario(),
+          child: const Icon(Icons.business_rounded, color: _kBranco, size: 20),
         ),
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded),
-          tooltip: 'Recarregar',
-          onPressed: () =>
-              context.read<ClienteListaProvider>().filtrarPorPerfil(_kIdPerfilEmpresa),
+        const SizedBox(width: 10),
+        const Text(
+          'Clientes — Empresas',
+          style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: 0.3),
         ),
-        const SizedBox(width: 8),
       ],
-    );
-  }
+    ),
+    actions: [
+      IconButton(
+        icon: const Icon(Icons.add_business_rounded),
+        tooltip: 'Nova Empresa',
+        onPressed: () => _abrirFormulario(),
+      ),
+      // ── Ordenação ──────────────────────────────────────────────────
+      Consumer<ClienteListaProvider>(
+        builder: (_, p, __) {
+          final ativo = p.ordem != OrdemAlfabetica.nenhuma;
+          return PopupMenuButton<OrdemAlfabetica>(
+            tooltip: 'Ordenar',
+            icon: Icon(
+              Icons.sort_by_alpha_rounded,
+              color: ativo ? Colors.amber : _kBranco,
+            ),
+            onSelected: p.alterarOrdem,
+            itemBuilder: (_) => [
+              _itemOrdem('A → Z', OrdemAlfabetica.az,   p.ordem, Icons.arrow_downward_rounded),
+              _itemOrdem('Z → A', OrdemAlfabetica.za,   p.ordem, Icons.arrow_upward_rounded),
+              _itemOrdem('Padrão', OrdemAlfabetica.nenhuma, p.ordem, Icons.clear_rounded),
+            ],
+          );
+        },
+      ),
+      // ──────────────────────────────────────────────────────────────
+      IconButton(
+        icon: const Icon(Icons.refresh_rounded),
+        tooltip: 'Recarregar',
+        onPressed: () =>
+            context.read<ClienteListaProvider>().filtrarPorPerfil(_kIdPerfilEmpresa),
+      ),
+      const SizedBox(width: 8),
+    ],
+  );
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

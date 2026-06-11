@@ -3,10 +3,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:api_compartilhado/api_config.dart';
 import 'package:api_compartilhado/models/cliente_model.dart';
-import 'package:api_compartilhado/models/cliente_model.dart';
 import 'package:api_compartilhado/services/cliente_service.dart';
 import '../repository/cliente_repository.dart';
 import '../../../core/connectivity/connectivity_service.dart';
+
+// ═══════════════════════════════════════════════════════════════════
+// Enum de ordenação alfabética
+// ═══════════════════════════════════════════════════════════════════
+
+enum OrdemAlfabetica { nenhuma, az, za }
 
 // ═══════════════════════════════════════════════════════════════════
 // Estado da listagem
@@ -26,23 +31,37 @@ class ClienteListaProvider extends ChangeNotifier {
 
   // ── Estado ────────────────────────────────────────────────────────
 
-  ClienteListaStatus _status       = ClienteListaStatus.inicial;
-  List<ClienteModel> _clientes     = [];
+  ClienteListaStatus _status        = ClienteListaStatus.inicial;
+  List<ClienteModel> _clientes      = [];
   String?            _erro;
   String             _termoPesquisa = '';
   int?               _filtroPerfil;
-  bool               _modoOffline  = false;
+  bool               _modoOffline   = false;
+  OrdemAlfabetica    _ordem         = OrdemAlfabetica.nenhuma;
 
   // ── Getters ───────────────────────────────────────────────────────
 
-  ClienteListaStatus get status       => _status;
-  List<ClienteModel> get clientes     => _clientes;
-  String?            get erro         => _erro;
-  bool               get carregando   => _status == ClienteListaStatus.carregando;
-  bool               get temErro      => _status == ClienteListaStatus.erro;
+  ClienteListaStatus get status      => _status;
+  String?            get erro        => _erro;
+  bool               get carregando  => _status == ClienteListaStatus.carregando;
+  bool               get temErro     => _status == ClienteListaStatus.erro;
+  bool               get modoOffline => _modoOffline;
+  OrdemAlfabetica    get ordem       => _ordem;
 
-  /// True quando os dados vêm do cache local (sem internet).
-  bool               get modoOffline  => _modoOffline;
+  /// Devolve a lista com a ordenação actualmente seleccionada aplicada.
+  /// Os dados originais em [_clientes] nunca são mutados — pesquisa e
+  /// filtro por perfil continuam a funcionar em paralelo.
+  List<ClienteModel> get clientes {
+    final lista = List<ClienteModel>.from(_clientes);
+    if (_ordem == OrdemAlfabetica.az) {
+      lista.sort((a, b) =>
+          a.nomeCompleto.toLowerCase().compareTo(b.nomeCompleto.toLowerCase()));
+    } else if (_ordem == OrdemAlfabetica.za) {
+      lista.sort((a, b) =>
+          b.nomeCompleto.toLowerCase().compareTo(a.nomeCompleto.toLowerCase()));
+    }
+    return lista;
+  }
 
   // ── CARREGAR ──────────────────────────────────────────────────────
 
@@ -60,8 +79,6 @@ class ClienteListaProvider extends ChangeNotifier {
       _erro        = null;
       _setStatus(ClienteListaStatus.sucesso);
     } catch (e) {
-      // O repositório só propaga excepções em escritas online que falham.
-      // Em leituras, o fallback é silencioso.
       _erro = 'Erro inesperado: $e';
       _setStatus(ClienteListaStatus.erro);
     }
@@ -87,6 +104,15 @@ class ClienteListaProvider extends ChangeNotifier {
     _filtroPerfil  = idPerfil;
     _termoPesquisa = '';
     await carregar();
+  }
+
+  // ── ORDENAÇÃO ALFABÉTICA ──────────────────────────────────────────
+
+  /// Altera a ordenação da listagem e notifica os listeners.
+  /// Não relança nenhum pedido HTTP — ordena os dados já carregados.
+  void alterarOrdem(OrdemAlfabetica novaOrdem) {
+    _ordem = novaOrdem;
+    notifyListeners();
   }
 
   // ── UPSERT LOCAL após criação/edição confirmada ───────────────────
