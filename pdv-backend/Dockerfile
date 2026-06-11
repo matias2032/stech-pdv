@@ -5,12 +5,12 @@ FROM maven:3.9.6-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
-# Copia o pom.xml primeiro (aproveita cache do Docker se as deps não mudarem)
-COPY pdv-backend/pom.xml .
+# pom.xml está na raiz do contexto (pdv-backend/)
+COPY pom.xml .
 RUN mvn dependency:go-offline -q
 
-# Copia o código fonte e faz o build (sem testes)
-COPY pdv-backend/src ./src
+# src/ está na raiz do contexto (pdv-backend/src)
+COPY src ./src
 RUN mvn package -DskipTests -q
 
 # ─────────────────────────────────────────
@@ -20,18 +20,17 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Cria utilizador não-root (boa prática de segurança)
 RUN addgroup -S spring && adduser -S spring -G spring
 
-# Copia apenas o JAR gerado no stage anterior
 COPY --from=builder /app/target/*.jar app.jar
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD wget -qO- http://localhost:8080/actuator/health || exit 1
 
 USER spring
 
-# O Render injeta a variável PORT automaticamente
 EXPOSE 8080
 
-# Flags JVM optimizadas para containers (evita OOM no free tier)
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \

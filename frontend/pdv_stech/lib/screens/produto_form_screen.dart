@@ -107,27 +107,69 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
   // SELECÇÃO DE MARCA / CATEGORIA
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void _onMarcaSelecionada(int id, bool selecionado) {
-    setState(() {
-      if (selecionado) {
-        if (_marcasSelecionadas.isNotEmpty) return;
-        _marcasSelecionadas = [id];
-      } else {
-        _marcasSelecionadas.clear();
-      }
-    });
-  }
+void _onMarcaSelecionada(
+  int idMarca,
+  bool selecionado,
+  List<MarcaModel> marcas,
+  List<CategoriaModel> categorias,
+) {
+  setState(() {
+    if (selecionado) {
+      _marcasSelecionadas = [idMarca];
 
-  void _onCategoriaSelecionada(int id, bool selecionado) {
-    setState(() {
-      if (selecionado) {
-        if (_categoriasSelecionadas.isNotEmpty) return;
-        _categoriasSelecionadas = [id];
-      } else {
-        _categoriasSelecionadas.clear();
+      // Se já havia categoria escolhida, valida se ela pertence à marca.
+      if (_categoriasSelecionadas.isNotEmpty) {
+        final idCategoriaAtual = _categoriasSelecionadas.first;
+
+        final marca = marcas.firstWhere(
+          (m) => m.id == idMarca,
+          orElse: () => marcas.first,
+        );
+
+        final categoriaValida = marca.categorias.any(
+          (c) => c.id == idCategoriaAtual,
+        );
+
+        if (!categoriaValida) {
+          _categoriasSelecionadas.clear();
+        }
       }
-    });
-  }
+    } else {
+      _marcasSelecionadas.clear();
+    }
+  });
+}
+
+void _onCategoriaSelecionada(
+  int idCategoria,
+  bool selecionado,
+  List<MarcaModel> marcas,
+  List<CategoriaModel> categorias,
+) {
+  setState(() {
+    if (selecionado) {
+      _categoriasSelecionadas = [idCategoria];
+
+      // Se já havia marca escolhida, valida se ela pertence à categoria.
+      if (_marcasSelecionadas.isNotEmpty) {
+        final idMarcaAtual = _marcasSelecionadas.first;
+
+        final categoria = categorias.firstWhere(
+          (c) => c.id == idCategoria,
+          orElse: () => categorias.first,
+        );
+
+        final marcaValida = categoria.marcas.contains(idMarcaAtual);
+
+        if (!marcaValida) {
+          _marcasSelecionadas.clear();
+        }
+      }
+    } else {
+      _categoriasSelecionadas.clear();
+    }
+  });
+}
 
   // ═══════════════════════════════════════════════════════════════════════════
   // [IMAGENS] Métodos de imagem — desactivados temporariamente
@@ -365,9 +407,15 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
                     children: [
                       _buildCardDadosBasicos(),
                       const SizedBox(height: 16),
-                      _buildSecaoMarcas(marcaProvider.marcas),
-                      const SizedBox(height: 16),
-                      _buildSecaoCategorias(categoriaProvider.categorias),
+_buildSecaoMarcas(
+  marcaProvider.marcas,
+  categoriaProvider.categorias,
+),
+const SizedBox(height: 16),
+_buildSecaoCategorias(
+  categoriaProvider.categorias,
+  marcaProvider.marcas,
+),
                       const SizedBox(height: 16),
                       _buildSecaoImagensDesativada(), // [IMAGENS] placeholder
                       const SizedBox(height: 24),
@@ -515,110 +563,188 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
       ),
     );
   }
+bool _marcaPermitida(MarcaModel marca, List<CategoriaModel> categorias) {
+  // Se nenhuma categoria foi escolhida, todas as marcas ficam disponíveis.
+  if (_categoriasSelecionadas.isEmpty) return true;
 
+  final idCategoriaSelecionada = _categoriasSelecionadas.first;
+
+  // Regra principal: a marca precisa estar associada à categoria seleccionada.
+  return marca.categorias.any((c) => c.id == idCategoriaSelecionada);
+}
+
+bool _categoriaPermitida(CategoriaModel categoria, List<MarcaModel> marcas) {
+  // Se nenhuma marca foi escolhida, todas as categorias ficam disponíveis.
+  if (_marcasSelecionadas.isEmpty) return true;
+
+  final idMarcaSelecionada = _marcasSelecionadas.first;
+
+  // Regra principal: a categoria precisa estar associada à marca seleccionada.
+  return categoria.marcas.contains(idMarcaSelecionada);
+}
   // ─── Marcas ───────────────────────────────────────────────────────────────
 
-  Widget _buildSecaoMarcas(List<MarcaModel> marcas) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Marca *',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            const Text(
-              'Selecione uma marca.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            if (marcas.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: Text('Nenhuma marca disponível.',
-                    style: TextStyle(color: Colors.orange)),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: marcas.map((marca) {
-                  final sel = _marcasSelecionadas.contains(marca.id);
-                  return FilterChip(
-                    label: Text(marca.nomeMarca),
-                    selected: sel,
-                    onSelected: sel || _marcasSelecionadas.isEmpty
-                        ? (v) => _onMarcaSelecionada(marca.id, v)
-                        : null,
-                    selectedColor: _kAzul.withOpacity(0.15),
-                    checkmarkColor: _kAzul,
-                  );
-                }).toList(),
+  Widget _buildSecaoMarcas(
+  List<MarcaModel> marcas,
+  List<CategoriaModel> categorias,
+) {
+  return Card(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: Colors.grey.shade200),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Marca *',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _categoriasSelecionadas.isEmpty
+                ? 'Selecione uma marca.'
+                : 'Apenas marcas associadas à categoria selecionada estão activas.',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+
+          if (marcas.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                'Nenhuma marca disponível.',
+                style: TextStyle(color: Colors.orange),
               ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: marcas.map((marca) {
+                final sel = _marcasSelecionadas.contains(marca.id);
+                final permitida = _marcaPermitida(marca, categorias);
+
+                return FilterChip(
+                  label: Text(marca.nomeMarca),
+                  selected: sel,
+                  onSelected: permitida
+                      ? (v) => _onMarcaSelecionada(
+                            marca.id,
+                            v,
+                            marcas,
+                            categorias,
+                          )
+                      : null,
+                  selectedColor: _kAzul.withOpacity(0.15),
+                  checkmarkColor: _kAzul,
+                  disabledColor: Colors.grey.shade200,
+                  labelStyle: TextStyle(
+                    color: permitida || sel ? _kAzul : Colors.grey,
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.normal,
+                  ),
+                );
+              }).toList(),
+            ),
+
+          if (_categoriasSelecionadas.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _AvisoFiltroProduto(
+              icon: Icons.filter_alt_outlined,
+              texto:
+                  'Filtro activo: marcas limitadas pela categoria seleccionada.',
+            ),
           ],
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ─── Categorias ───────────────────────────────────────────────────────────
 
-  Widget _buildSecaoCategorias(List<CategoriaModel> categorias) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Categoria *',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            const Text(
-              'Selecione uma categoria.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            if (categorias.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: Text('Nenhuma categoria disponível.',
-                    style: TextStyle(color: Colors.orange)),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: categorias.map((cat) {
-                  final sel = _categoriasSelecionadas.contains(cat.id);
-                  return FilterChip(
-                    label: Text(cat.nomeCategoria),
-                    selected: sel,
-                    onSelected: sel || _categoriasSelecionadas.isEmpty
-                        ? (v) => _onCategoriaSelecionada(cat.id, v)
-                        : null,
-                    selectedColor: _kAzul.withOpacity(0.15),
-                    checkmarkColor: _kAzul,
-                  );
-                }).toList(),
+Widget _buildSecaoCategorias(
+  List<CategoriaModel> categorias,
+  List<MarcaModel> marcas,
+) {
+  return Card(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: Colors.grey.shade200),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Categoria *',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _marcasSelecionadas.isEmpty
+                ? 'Selecione uma categoria.'
+                : 'Apenas categorias associadas à marca selecionada estão activas.',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+
+          if (categorias.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                'Nenhuma categoria disponível.',
+                style: TextStyle(color: Colors.orange),
               ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: categorias.map((cat) {
+                final sel = _categoriasSelecionadas.contains(cat.id);
+                final permitida = _categoriaPermitida(cat, marcas);
+
+                return FilterChip(
+                  label: Text(cat.nomeCategoria),
+                  selected: sel,
+                  onSelected: permitida
+                      ? (v) => _onCategoriaSelecionada(
+                            cat.id,
+                            v,
+                            marcas,
+                            categorias,
+                          )
+                      : null,
+                  selectedColor: _kAzul.withOpacity(0.15),
+                  checkmarkColor: _kAzul,
+                  disabledColor: Colors.grey.shade200,
+                  labelStyle: TextStyle(
+                    color: permitida || sel ? _kAzul : Colors.grey,
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.normal,
+                  ),
+                );
+              }).toList(),
+            ),
+
+          if (_marcasSelecionadas.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _AvisoFiltroProduto(
+              icon: Icons.filter_alt_outlined,
+              texto:
+                  'Filtro activo: categorias limitadas pela marca seleccionada.',
+            ),
           ],
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ─── [IMAGENS] Placeholder — secção desactivada ───────────────────────────
   //
@@ -1007,5 +1133,43 @@ class _ProdutoFormScreenState extends State<ProdutoFormScreen> {
         content: Text(msg),
         backgroundColor: _kVermelho,
         behavior: SnackBarBehavior.floating));
+  }
+}
+
+class _AvisoFiltroProduto extends StatelessWidget {
+  final IconData icon;
+  final String texto;
+
+  const _AvisoFiltroProduto({
+    required this.icon,
+    required this.texto,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _kAzul.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _kAzul.withOpacity(0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: _kAzul),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              texto,
+              style: const TextStyle(
+                fontSize: 12,
+                color: _kAzul,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

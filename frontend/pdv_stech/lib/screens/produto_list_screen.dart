@@ -34,8 +34,10 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProdutoProvider>().listar();
-    });
+  context.read<ProdutoProvider>().listar();
+  context.read<MarcaProvider>().carregarMarcas();
+  context.read<CategoriaProvider>().carregarCategorias();
+});
   }
 
   // ── Acções ────────────────────────────────────────────────────────────────
@@ -175,6 +177,18 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
 
   Widget _buildBody() {
     final provider = context.watch<ProdutoProvider>();
+    
+    final marcaProvider = context.watch<MarcaProvider>();
+final categoriaProvider = context.watch<CategoriaProvider>();
+
+final marcasPorId = {
+  for (final marca in marcaProvider.marcas) marca.id: marca.nomeMarca,
+};
+
+final categoriasPorId = {
+  for (final categoria in categoriaProvider.categorias)
+    categoria.id: categoria.nomeCategoria,
+};
 
     if (provider.isLoading) {
       return const Center(child: CircularProgressIndicator(color: _kAzul));
@@ -238,42 +252,73 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
             ),
             child: const Row(
               children: [
-                Expanded(
-                    flex: 3,
-                    child: Text('Produto',
-                        style: TextStyle(
-                            color: _kBranco,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
-                Expanded(
-                    flex: 2,
-                    child: Text('Preço',
-                        style: TextStyle(
-                            color: _kBranco,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
-                Expanded(
-                    flex: 2,
-                    child: Text('Promoção',
-                        style: TextStyle(
-                            color: _kBranco,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
-                Expanded(
-                    flex: 2,
-                    child: Text('Estoque',
-                        style: TextStyle(
-                            color: _kBranco,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
-                Expanded(
-                    flex: 1,
-                    child: Text('Estado',
-                        style: TextStyle(
-                            color: _kBranco,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700))),
-                SizedBox(width: 100),
+Expanded(
+  flex: 3,
+  child: Text(
+    'Produto',
+    style: TextStyle(
+      color: _kBranco,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+Expanded(
+  flex: 2,
+  child: Text(
+    'Marca',
+    style: TextStyle(
+      color: _kBranco,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+Expanded(
+  flex: 2,
+  child: Text(
+    'Categoria',
+    style: TextStyle(
+      color: _kBranco,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+Expanded(
+  flex: 2,
+  child: Text(
+    'Preço',
+    style: TextStyle(
+      color: _kBranco,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+Expanded(
+  flex: 2,
+  child: Text(
+    'Estoque',
+    style: TextStyle(
+      color: _kBranco,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+Expanded(
+  flex: 1,
+  child: Text(
+    'Estado',
+    style: TextStyle(
+      color: _kBranco,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+),
+SizedBox(width: 100),
               ],
             ),
           ),
@@ -282,14 +327,15 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
               itemCount: provider.produtos.length,
-              itemBuilder: (_, i) => _ProdutoLinhaTabela(
-                produto: provider.produtos[i],
-                currencyFmt: _currencyFormat,
-                isAlternate: i.isOdd,
-                onEditar: () =>
-                    _navegarParaFormulario(provider.produtos[i]),
-                onToggle: () => _toggleStatus(provider.produtos[i]),
-              ),
+          itemBuilder: (_, i) => _ProdutoLinhaTabela(
+  produto: provider.produtos[i],
+  currencyFmt: _currencyFormat,
+  isAlternate: i.isOdd,
+  marcasPorId: marcasPorId,
+  categoriasPorId: categoriasPorId,
+  onEditar: () => _navegarParaFormulario(provider.produtos[i]),
+  onToggle: () => _toggleStatus(provider.produtos[i]),
+),
             ),
           ),
         ],
@@ -303,24 +349,39 @@ class _ProdutoListScreenState extends State<ProdutoListScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProdutoLinhaTabela extends StatelessWidget {
-  const _ProdutoLinhaTabela({
-    required this.produto,
-    required this.currencyFmt,
-    required this.isAlternate,
-    required this.onEditar,
-    required this.onToggle,
-  });
+const _ProdutoLinhaTabela({
+  required this.produto,
+  required this.currencyFmt,
+  required this.isAlternate,
+  required this.marcasPorId,
+  required this.categoriasPorId,
+  required this.onEditar,
+  required this.onToggle,
+});
 
-  final ProdutoModel  produto;
-  final NumberFormat  currencyFmt;
-  final bool          isAlternate;
-  final VoidCallback  onEditar;
-  final VoidCallback  onToggle;
+final ProdutoModel produto;
+final NumberFormat currencyFmt;
+final bool isAlternate;
+final Map<int, String> marcasPorId;
+final Map<int, String> categoriasPorId;
+final VoidCallback onEditar;
+final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final temPromo   = produto.precoPromocional != null;
     final semEstoque = produto.quantidadeEstoque <= 0;
+
+    final nomeMarca = produto.marcas.isNotEmpty
+    ? marcasPorId[produto.marcas.first] ?? 'Marca #${produto.marcas.first}'
+    : '—';
+
+final nomeCategoria = produto.categorias.isNotEmpty
+    ? categoriasPorId[produto.categorias.first] ??
+        'Categoria #${produto.categorias.first}'
+    : '—';
+
+final precoPrincipal = produto.precoPromocional ?? produto.preco;
 
     return Container(
       decoration: BoxDecoration(
@@ -348,78 +409,88 @@ class _ProdutoLinhaTabela extends StatelessWidget {
               ),
             ),
 
-            // Preço normal
-            Expanded(
-              flex: 2,
-              child: Text(
-                currencyFmt.format(produto.preco),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: temPromo ? Colors.grey : _kAzul,
-                  fontWeight: FontWeight.w500,
-                  decoration:
-                      temPromo ? TextDecoration.lineThrough : null,
-                ),
-              ),
-            ),
+            // Marca
+Expanded(
+  flex: 2,
+  child: Text(
+    nomeMarca,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(
+      fontSize: 12,
+      color: _kCinzaTexto,
+      fontWeight: FontWeight.w500,
+    ),
+  ),
+),
 
-            // Promoção
-            Expanded(
-              flex: 2,
-              child: temPromo
-                  ? Row(children: [
-                      Text(
-                        currencyFmt.format(produto.precoPromocional),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _kVermelho,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: _kVermelho,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('PROMO',
-                            style: TextStyle(
-                                color: _kBranco,
-                                fontSize: 8,
-                                fontWeight: FontWeight.w800)),
-                      ),
-                    ])
-                  : Text('—',
-                      style:
-                          TextStyle(color: Colors.grey[400], fontSize: 12)),
-            ),
+// Categoria
+Expanded(
+  flex: 2,
+  child: Text(
+    nomeCategoria,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(
+      fontSize: 12,
+      color: _kCinzaTexto,
+      fontWeight: FontWeight.w500,
+    ),
+  ),
+),
 
-            // Estoque
-            Expanded(
-              flex: 2,
-              child: Row(children: [
-                Icon(
-                  semEstoque
-                      ? Icons.warning_amber_rounded
-                      : Icons.check_circle_outline,
-                  size: 14,
-                  color: semEstoque ? Colors.red : Colors.green[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  semEstoque ? 'Esgotado' : '${produto.quantidadeEstoque}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: semEstoque ? Colors.red : Colors.grey[700],
-                    fontWeight: semEstoque
-                        ? FontWeight.w700
-                        : FontWeight.normal,
-                  ),
-                ),
-              ]),
-            ),
+// Preço
+Expanded(
+  flex: 2,
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        currencyFmt.format(precoPrincipal),
+        style: TextStyle(
+          fontSize: 12,
+          color: temPromo ? _kVermelho : _kAzul,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      if (temPromo)
+        Text(
+          currencyFmt.format(produto.preco),
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            decoration: TextDecoration.lineThrough,
+          ),
+        ),
+    ],
+  ),
+),
+
+// Estoque
+Expanded(
+  flex: 2,
+  child: Row(
+    children: [
+      Icon(
+        semEstoque
+            ? Icons.warning_amber_rounded
+            : Icons.check_circle_outline,
+        size: 14,
+        color: semEstoque ? Colors.red : Colors.green[600],
+      ),
+      const SizedBox(width: 4),
+      Text(
+        semEstoque ? 'Esgotado' : '${produto.quantidadeEstoque}',
+        style: TextStyle(
+          fontSize: 12,
+          color: semEstoque ? Colors.red : Colors.grey[700],
+          fontWeight:
+              semEstoque ? FontWeight.w700 : FontWeight.normal,
+        ),
+      ),
+    ],
+  ),
+),
 
             // Estado
             Expanded(
@@ -510,3 +581,4 @@ class _ProdutoLinhaTabela extends StatelessWidget {
     );
   }
 }
+

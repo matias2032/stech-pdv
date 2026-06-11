@@ -274,18 +274,60 @@ class _MarcasListScreenState extends State<MarcasListScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () => _navegarParaFormulario(marca: marca),
-                      icon: const Icon(Icons.category_outlined, size: 16),
-                      label: const Text('Gerir Categorias'),
-                      style: TextButton.styleFrom(foregroundColor: _kAzul),
-                    ),
-                  ],
-                ),
+             const SizedBox(height: 12),
+
+_TituloAssociacoes(
+  icon: Icons.category_outlined,
+  label: 'Categorias associadas',
+  total: marca.categorias.length,
+),
+
+const SizedBox(height: 8),
+
+if (marca.categorias.isEmpty)
+  const Text(
+    'Nenhuma categoria associada.',
+    style: TextStyle(
+      fontSize: 12,
+      color: _kCinzaTexto,
+      fontStyle: FontStyle.italic,
+    ),
+  )
+else
+  Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children: marca.categorias.map((categoria) {
+      return Chip(
+        avatar: const Icon(
+          Icons.category_rounded,
+          size: 14,
+          color: _kAzul,
+        ),
+        label: Text(
+          categoria.nomeCategoria,
+          style: const TextStyle(fontSize: 12),
+        ),
+        backgroundColor: _kAzul.withOpacity(0.06),
+        side: BorderSide(color: _kAzul.withOpacity(0.18)),
+        visualDensity: VisualDensity.compact,
+      );
+    }).toList(),
+  ),
+
+const SizedBox(height: 12),
+
+Row(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    TextButton.icon(
+      onPressed: () => _navegarParaFormulario(marca: marca),
+      icon: const Icon(Icons.category_outlined, size: 16),
+      label: const Text('Gerir Categorias'),
+      style: TextButton.styleFrom(foregroundColor: _kAzul),
+    ),
+  ],
+),
               ],
             ),
           ),
@@ -336,6 +378,52 @@ class _DialogoConfirmacao extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8)),
           ),
           child: Text(labelBotao),
+        ),
+      ],
+    );
+  }
+}
+
+class _TituloAssociacoes extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int total;
+
+  const _TituloAssociacoes({
+    required this.icon,
+    required this.label,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: _kAzul),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: _kAzul,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _kAzul.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$total',
+            style: const TextStyle(
+              fontSize: 11,
+              color: _kAzul,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );

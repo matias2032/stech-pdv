@@ -312,20 +312,59 @@ class _CategoriasListScreenState extends State<CategoriasListScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () =>
-                          _navegarParaFormulario(categoria: categoria),
-                      icon: const Icon(Icons.label_outline_rounded,
-                          size: 16),
-                      label: const Text('Gerir Marcas'),
-                      style: TextButton.styleFrom(
-                          foregroundColor: _kAzul),
-                    ),
-                  ],
-                ),
+
+_TituloAssociacoes(
+  icon: Icons.label_outline_rounded,
+  label: 'Marcas associadas',
+  total: categoria.marcas.length,
+),
+
+const SizedBox(height: 8),
+
+if (categoria.marcas.isEmpty)
+  const Text(
+    'Nenhuma marca associada.',
+    style: TextStyle(
+      fontSize: 12,
+      color: _kCinzaTexto,
+      fontStyle: FontStyle.italic,
+    ),
+  )
+else
+  Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children: categoria.marcas.map((idMarca) {
+      return Chip(
+        avatar: const Icon(
+          Icons.label_rounded,
+          size: 14,
+          color: _kAzul,
+        ),
+        label: Text(
+          'Marca #$idMarca',
+          style: const TextStyle(fontSize: 12),
+        ),
+        backgroundColor: _kAzul.withOpacity(0.06),
+        side: BorderSide(color: _kAzul.withOpacity(0.18)),
+        visualDensity: VisualDensity.compact,
+      );
+    }).toList(),
+  ),
+
+const SizedBox(height: 12),
+
+Row(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    TextButton.icon(
+      onPressed: () => _navegarParaFormulario(categoria: categoria),
+      icon: const Icon(Icons.label_outline_rounded, size: 16),
+      label: const Text('Gerir Marcas'),
+      style: TextButton.styleFrom(foregroundColor: _kAzul),
+    ),
+  ],
+),
               ],
             ),
           ),
@@ -379,6 +418,52 @@ class _DialogoConfirmacao extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8)),
           ),
           child: Text(labelBotao),
+        ),
+      ],
+    );
+  }
+}
+
+class _TituloAssociacoes extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int total;
+
+  const _TituloAssociacoes({
+    required this.icon,
+    required this.label,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: _kAzul),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: _kAzul,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _kAzul.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$total',
+            style: const TextStyle(
+              fontSize: 11,
+              color: _kAzul,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );
