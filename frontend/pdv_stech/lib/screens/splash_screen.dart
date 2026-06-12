@@ -10,6 +10,7 @@ import 'package:api_compartilhado/core/database/daos/produto_dao.dart';
 import 'package:api_compartilhado/core/database/daos/servico_dao.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:api_compartilhado/core/database/daos/cliente_dao.dart';
+import 'package:flutter/foundation.dart'; // para kDebugMode
 
 // ── Paleta STech ─────────────────────────────────────────────────────
 const _navy   = Color(0xFF1B2A6B);
@@ -54,6 +55,8 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _setupAnimations();
     _startSequence();
+
+    
   }
 
   // ── Animações ─────────────────────────────────────────────────────
@@ -83,10 +86,21 @@ class _SplashScreenState extends State<SplashScreen>
   // ── Sequência principal ───────────────────────────────────────────
 
   Future<void> _startSequence() async {
-    final stopwatch = Stopwatch()..start();
+  final stopwatch = Stopwatch()..start();
 
-    // 1. Animações de entrada
-    await _logoCtrl.forward();
+  // ── TEMPORÁRIO — limpar queue e pedidos órfãos ─────────────────
+  // if (kDebugMode) {
+  //   final db = LocalDatabase.instance.db;
+  //   final deletedQueue = await db.delete('sync_queue');
+  //   final deletedPedidos = await db.delete('pedido', where: 'id < 0');
+  //   await db.delete('item_pedido', where: 'id_pedido < 0');
+  //   await db.delete('item_pedido_servico', where: 'id_pedido < 0');
+  //   debugPrint('🧹 Limpeza debug: queue=$deletedQueue, pedidos=$deletedPedidos');
+  // }
+  // ── FIM TEMPORÁRIO ─────────────────────────────────────────────
+
+  // 1. Animações de entrada
+  await _logoCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 100));
     await _textCtrl.forward();
 

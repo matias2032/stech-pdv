@@ -98,12 +98,17 @@ _pedidoService = pedidoService;
 _documentoFiscalDao     = documentoFiscalDao;
 _documentoFiscalService = documentoFiscalService;
 
-  _subscription = connectivity.isOnlineStream.listen((isOnline) {
-    if (isOnline) {
-      debugPrint('🔁 SyncScheduler — online detectado, a iniciar flush...');
-      flushQueue();
-    }
-  });
+_subscription = connectivity.isOnlineStream.listen((isOnline) {
+  if (isOnline) {
+    debugPrint('🔁 SyncScheduler — online detectado, aguardando estabilização...');
+    // Aguarda 8 segundos antes de tentar — dá tempo ao HikariPool de reconectar ao Neon
+    Future.delayed(const Duration(seconds: 8), () {
+      if (_connectivity?.isOnline ?? false) {  // confirma que ainda está online
+        flushQueue();
+      }
+    });
+  }
+});
   debugPrint('⚙️ SyncScheduler iniciado');
 }
 
@@ -116,6 +121,8 @@ Future<void> flushQueue() async {
     return;
   }
   _syncEmCurso = true;
+
+  await Future.delayed(const Duration(seconds: 5)); 
 
   try {
     final pendentes = await _syncQueueDao!.getPending();
@@ -136,7 +143,7 @@ final operacoes = <Map<String, dynamic>>[];
       final operacao = item['operacao'] as String;
 
       if (entidade == 'pedido' &&
-          (operacao == 'ADD_ITEM_PRODUTO' || operacao == 'ADD_ITEM_SERVICO')) {
+          (operacao == 'ADD_ITEM_PRODUTO' || operacao == 'ADD_ITEM_SERVICO' ||  operacao == 'FINALIZAR')) {
         try {
           payload = await _resolverIdsPedido(payload);
         } catch (_) {
@@ -594,6 +601,19 @@ Future<void> _processarPedido(
       );
       await dao.upsert(atualizado.toLocalDb());
 
+      case 'FINALIZAR':
+  final idPedido = payload['idPedido'] as int;
+  final dto = FinalizarPedidoRequestDTO(
+    idTipoPagamento:        payload['idTipoPagamento']        as int,
+    valorPago:              (payload['valorPago'] as num).toDouble(),
+    observacoes:            payload['observacoes']            as String?,
+    idCliente:              payload['idCliente']              as int?,
+    nomeClienteSingular:    payload['nomeClienteSingular']    as String?,
+    apelidoClienteSingular: payload['apelidoClienteSingular'] as String?,
+  );
+  final finalizado = await _pedidoService!.finalizarPedido(idPedido, dto);
+  await _pedidoDao!.upsert(finalizado.toLocalDb());
+
     default:
       throw Exception('Operação desconhecida para pedido: $operacao');
   }
@@ -657,14 +677,14 @@ Future<void> _actualizarDaoLocal({
 
     case 'pedido':
       if (operacao == 'CREATE' && localId != null && idReal != null) {
-        // 1. Busca o registo temporário antes de o apagar
+        // 1. Guarda o tempId antes de apagar
         final tempRow = await _pedidoDao!.getByLocalId(localId);
         final tempId  = tempRow?['id'] as int?;
 
         // 2. Apaga o registo temporário
         await _pedidoDao!.deleteByLocalId(localId);
 
-        // 3. Vai buscar o pedido real ao backend e guarda no SQLite
+        // 3. Vai buscar o pedido real ao backend
         try {
           final pedidoReal = await _pedidoService!.buscarPorId(idReal);
           await _pedidoDao!.upsert(pedidoReal.toLocalDb());
@@ -681,10 +701,48 @@ Future<void> _actualizarDaoLocal({
             );
           }
         } catch (e) {
-          debugPrint('⚠️ SyncScheduler — não foi possível fazer pull do pedido $idReal: $e');
-          // Mesmo sem pull, garante que o registo temporário não fica órfão
+          debugPrint('⚠️ SyncScheduler — pull pedido $idReal falhou: $e');
         }
+
       }
+
+       if (operacao == 'FINALIZAR') {
+    final idPedidoReal = payload['idPedido'] as int?;
+    if (idPedidoReal != null) {
+      try {
+        final pedidoReal = await _pedidoService!.buscarPorId(idPedidoReal);
+        await _pedidoDao!.upsert(pedidoReal.toLocalDb());
+        // Actualiza também os itens com dados reais do backend
+        await _pedidoDao!.deleteItensByPedido(pedidoReal.idPedido);
+        final itensProduto = pedidoReal.itensProduto.map((i) => {
+          'id':             i.idItemPedido,
+          'id_pedido':      pedidoReal.idPedido,
+          'id_produto':     i.idProduto,
+          'preco_unitario': i.precoUnitario,
+          'quantidade':     i.quantidade,
+          'subtotal':       i.subtotal,
+        }).toList();
+        if (itensProduto.isNotEmpty) {
+          await _pedidoDao!.upsertAllItens(itensProduto);
+        }
+        await _pedidoDao!.deleteItensServicoPorPedido(pedidoReal.idPedido);
+        final itensServico = pedidoReal.itensServico.map((i) => {
+          'id':             i.idItemServico,
+          'id_pedido':      pedidoReal.idPedido,
+          'id_servico':     i.idServico,
+          'preco_unitario': i.precoUnitario,
+          'quantidade':     i.quantidade,
+          'subtotal':       i.subtotal,
+          'observacoes':    i.observacoes,
+        }).toList();
+        if (itensServico.isNotEmpty) {
+          await _pedidoDao!.upsertAllItensServico(itensServico);
+        }
+      } catch (e) {
+        debugPrint('⚠️ SyncScheduler — pull após FINALIZAR falhou: $e');
+      }
+    }
+  }
   }
 }
 

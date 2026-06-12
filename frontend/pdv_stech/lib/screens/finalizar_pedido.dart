@@ -19,9 +19,7 @@ class FinalizarPedidoScreen extends StatefulWidget {
 }
 
 class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
-  // REMOVIDO: final _pedidoService = PedidoService();
-  // REMOVIDO: late final ClienteService _clienteService;
-  late final ClienteService _clienteService; // mantido apenas para listar empresas
+
   final _currencyFmt = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
 
   // ── Pagamento ─────────────────────────────────────────────────────────────
@@ -49,21 +47,21 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
 
   bool get _ehDinheiro => _idTipoPagamento == 1;
 
-  bool get _podeFinalizar {
-    if (_idTipoPagamento == null) return false;
-    if (_ehDinheiro && _valorPago < widget.pedido.total) return false;
-    return true;
-  }
+bool get _podeFinalizar {
 
-  @override
+  if (_idTipoPagamento == null) return false;
+  if (_ehDinheiro && _valorPago < widget.pedido.total) return false;
+  return true;
+}
+
+
+ @override
   void initState() {
     super.initState();
-    _clienteService = ClienteService(
-      baseUrl:    ApiConfig.baseUrl,
-      httpClient: http.Client(),
-    );
+    // _clienteService já não é necessário aqui
     _carregar();
   }
+
 
   @override
   void dispose() {
@@ -76,29 +74,31 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
   // ── Carregamento — usa Provider para tipos de pagamento ───────────────────
 
   Future<void> _carregar() async {
+    // 1. Tipos de pagamento (offline-first via PedidoProvider)
     try {
-      // Tipos de pagamento via Provider (offline-first)
       await context.read<PedidoProvider>().carregarTiposPagamento();
+    } catch (_) {}
 
-      // Empresas ainda via service directo (ClienteListaProvider não expõe
-      // filtrarPorPerfil de forma síncrona aqui — usa service como excepção)
-      final empresas = await _clienteService.listarPorPerfil(1);
+    // 2. Empresas via ClienteListaProvider (offline-first)
+    try {
+      await context.read<ClienteListaProvider>().filtrarPorPerfil(1);
+    } catch (_) {}
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      final provider = context.read<PedidoProvider>();
-      setState(() {
-        _tiposPagamento  = provider.tiposPagamento;
-        _empresas        = empresas;
-        _idTipoPagamento = _tiposPagamento.isNotEmpty
-            ? _tiposPagamento.first.idTipoPagamento
-            : null;
-        _carregando = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _carregando = false);
-    }
+    final pedidoProvider  = context.read<PedidoProvider>();
+    final clienteProvider = context.read<ClienteListaProvider>();
+
+    setState(() {
+      _tiposPagamento  = pedidoProvider.tiposPagamento;
+      _empresas        = clienteProvider.clientes;
+      _idTipoPagamento = _tiposPagamento.isNotEmpty
+          ? _tiposPagamento.first.idTipoPagamento
+          : null;
+      _carregando = false; // executa SEMPRE
+    });
   }
+
 
   // ── Finalizar via Provider ────────────────────────────────────────────────
 
@@ -549,7 +549,7 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
 
   // ─── Botão ────────────────────────────────────────────────────────────────
 
-  Widget _buildBotao() {
+Widget _buildBotao() {
     final activo = _podeFinalizar && !_finalizando;
     return SizedBox(
       width: double.infinity,
@@ -558,30 +558,24 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
         onPressed: activo ? _finalizar : null,
         icon: _finalizando
             ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-            : Icon(activo
-                ? Icons.check_circle_outline
-                : Icons.lock_outline_rounded),
-        label: Text(
-          _finalizando
-              ? 'A finalizar…'
-              : activo
-                  ? 'Confirmar Finalização'
-                  : _idTipoPagamento == null
-                      ? 'Seleccione o método de pagamento'
-                      : 'Valor recebido insuficiente',
-          style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.bold),
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : Icon(activo ? Icons.check_circle_outline : Icons.lock_outline_rounded),
+label: Text(
+  _finalizando
+      ? 'A finalizar…'
+      : activo
+          ? 'Confirmar Finalização'
+          : _idTipoPagamento == null
+              ? 'Seleccione o método de pagamento'
+              : 'Valor recebido insuficiente',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           overflow: TextOverflow.ellipsis,
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: activo ? _kPrimary : Colors.grey[300],
           foregroundColor: activo ? Colors.white : Colors.grey[600],
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: activo ? 3 : 0,
         ),
       ),

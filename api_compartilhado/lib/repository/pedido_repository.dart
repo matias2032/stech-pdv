@@ -10,6 +10,7 @@ import '../core/database/daos/produto_dao.dart';
 import '../core/database/daos/sync_queue_dao.dart';
 import '../core/database/local_database.dart';
 import 'package:sqflite/sqflite.dart';
+import '../core/database/daos/servico_dao.dart';
 
 class PedidoRepository {
   PedidoRepository({
@@ -18,17 +19,20 @@ class PedidoRepository {
     required SyncQueueDao syncQueueDao,
     required ConnectivityService connectivity,
     required ProdutoDao produtoDao,
+       required ServicoDao servicoDao,    
   })  : _service = service,
         _dao = dao,
         _syncQueueDao = syncQueueDao,
         _connectivity = connectivity,
-        _produtoDao = produtoDao;
+        _produtoDao = produtoDao,
+        _servicoDao = servicoDao;  
 
   final PedidoService _service;
   final PedidoDao _dao;
   final SyncQueueDao _syncQueueDao;
   final ConnectivityService _connectivity;
   final ProdutoDao _produtoDao;
+   final ServicoDao _servicoDao;   
   Database get _db => LocalDatabase.instance.db;
 
   static const _uuid = Uuid();
@@ -64,6 +68,26 @@ class PedidoRepository {
           'observacoes':    i.observacoes,
         }).toList();
     if (itensServico.isNotEmpty) await _dao.upsertAllItensServico(itensServico);
+  }
+
+  Future<void> _recalcularTotalLocal(int idPedido) async {
+    final prodRows = await _dao.getItensByPedido(idPedido);
+    final servRows = await _dao.getItensServicoPorPedido(idPedido);
+
+    double total = 0;
+    for (final r in prodRows) {
+      total += (r['subtotal'] as num?)?.toDouble() ?? 0.0;
+    }
+    for (final r in servRows) {
+      total += (r['subtotal'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    await _db.update(
+      'pedido',
+      {'total': total, 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [idPedido],
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -269,29 +293,46 @@ class PedidoRepository {
 
     // Itens de produto iniciais
     for (final item in dto.itensProduto) {
+      final prodRow = await _produtoDao.getById(item.idProduto);
+      final preco = prodRow != null
+          ? ((prodRow['preco_promocional'] as num?)?.toDouble() ??
+             (prodRow['preco'] as num?)?.toDouble() ?? 0.0)
+          : 0.0;
+      final subtotal = preco * item.quantidade;
+
       await _dao.upsertItem({
         'id':             -(DateTime.now().microsecondsSinceEpoch + item.idProduto),
         'id_pedido':      tempId,
         'id_produto':     item.idProduto,
-        'preco_unitario': 0.0,
+        'preco_unitario': preco,
         'quantidade':     item.quantidade,
-        'subtotal':       0.0,
+        'subtotal':       subtotal,
       });
       await _produtoDao.decrementarEstoque(item.idProduto, item.quantidade);
     }
 
+
     // Itens de serviço iniciais
-    for (final item in dto.itensServico) {
+   for (final item in dto.itensServico) {
+      final servRow = await _servicoDao.getById(item.idServico);
+      final preco = servRow != null
+          ? (servRow['preco_unitario'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
+      final subtotal = preco * item.quantidade;
+
       await _dao.upsertItemServico({
         'id':             -(DateTime.now().microsecondsSinceEpoch + item.idServico),
         'id_pedido':      tempId,
         'id_servico':     item.idServico,
-        'preco_unitario': 0.0,
+        'preco_unitario': preco,
         'quantidade':     item.quantidade,
-        'subtotal':       0.0,
+        'subtotal':       subtotal,
         'observacoes':    item.observacoes,
       });
     }
+
+    // Recalcula e persiste o total no registo do pedido
+    await _recalcularTotalLocal(tempId);
 
     await _syncQueueDao.enqueue('pedido', 'CREATE', {
       'localId':         localId,
@@ -321,16 +362,24 @@ class PedidoRepository {
     }
 
     // ── Offline ───────────────────────────────────────────────────
+    final prodRow = await _produtoDao.getById(dto.idProduto);
+    final preco = prodRow != null
+        ? ((prodRow['preco_promocional'] as num?)?.toDouble() ??
+           (prodRow['preco'] as num?)?.toDouble() ?? 0.0)
+        : 0.0;
+    final subtotal = preco * dto.quantidade;
+
     await _dao.upsertItem({
       'id':             -(DateTime.now().millisecondsSinceEpoch),
       'id_pedido':      idPedido,
       'id_produto':     dto.idProduto,
-      'preco_unitario': 0.0,
+      'preco_unitario': preco,
       'quantidade':     dto.quantidade,
-      'subtotal':       0.0,
+      'subtotal':       subtotal,
     });
 
     await _produtoDao.decrementarEstoque(dto.idProduto, dto.quantidade);
+    await _recalcularTotalLocal(idPedido);   // ← NOVO
 
     await _syncQueueDao.enqueue('pedido', 'ADD_ITEM_PRODUTO', {
       'idPedido':      idPedido.isNegative ? null        : idPedido,
@@ -360,15 +409,23 @@ class PedidoRepository {
     }
 
     // ── Offline ───────────────────────────────────────────────────
-    await _dao.upsertItemServico({             // ← CORRIGIDO: era omitido
+    final servRow = await _servicoDao.getById(dto.idServico);
+    final preco = servRow != null
+        ? (servRow['preco_unitario'] as num?)?.toDouble() ?? 0.0
+        : 0.0;
+    final subtotal = preco * dto.quantidade;
+
+    await _dao.upsertItemServico({
       'id':             -(DateTime.now().millisecondsSinceEpoch),
       'id_pedido':      idPedido,
       'id_servico':     dto.idServico,
-      'preco_unitario': 0.0,
+      'preco_unitario': preco,
       'quantidade':     dto.quantidade,
-      'subtotal':       0.0,
+      'subtotal':       subtotal,
       'observacoes':    dto.observacoes,
     });
+
+    await _recalcularTotalLocal(idPedido);   // ← NOVO
 
     await _syncQueueDao.enqueue('pedido', 'ADD_ITEM_SERVICO', {
       'idPedido':      idPedido.isNegative ? null        : idPedido,
@@ -463,15 +520,50 @@ class PedidoRepository {
   // FINALIZAR / CANCELAR
   // ══════════════════════════════════════════════════════════════════
 
-  Future<PedidoModel> finalizarPedido(
-    int idPedido,
-    FinalizarPedidoRequestDTO dto,
-  ) async {
-    _requireOnline('finalizar pedido');
+Future<PedidoModel> finalizarPedido(
+  int idPedido,
+  FinalizarPedidoRequestDTO dto,
+) async {
+  if (_connectivity.isOnline) {
     final m = await _service.finalizarPedido(idPedido, dto);
     await _upsertPedidoComItens(m);
     return m;
   }
+
+  // ── Offline ───────────────────────────────────────────────────────
+  // Actualiza o estado local imediatamente (optimistic)
+  await _db.update(
+    'pedido',
+    {
+      'status_pedido': 'finalizado',
+      'id_tipo_pagamento': dto.idTipoPagamento,
+      'valor_pago': dto.valorPago,
+      'sync_status': 'pending',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    where: 'id = ?',
+    whereArgs: [idPedido],
+  );
+
+  // Enfileira para sync posterior
+  await _syncQueueDao.enqueue('pedido', 'FINALIZAR', {
+    // Se idPedido < 0 ainda não foi sincronizado — usa local ref
+    'idPedido':      idPedido.isNegative ? null        : idPedido,
+    'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
+    'idTipoPagamento':        dto.idTipoPagamento,
+    'valorPago':              dto.valorPago,
+    'observacoes':            dto.observacoes,
+    'idCliente':              dto.idCliente,
+    'nomeClienteSingular':    dto.nomeClienteSingular,
+    'apelidoClienteSingular': dto.apelidoClienteSingular,
+  });
+
+  // Retorna o modelo local actualizado
+  final row = await _dao.getById(idPedido);
+  return row != null
+      ? await _pedidoComItensDoCache(row)
+      : _pedidoVazio(idPedido);
+}
 
   Future<void> cancelarPedido(
     int idPedido,

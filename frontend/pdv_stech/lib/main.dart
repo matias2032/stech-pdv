@@ -130,7 +130,8 @@ final pedidoRepository = PedidoRepository(
   dao:          PedidoDao(),
   syncQueueDao: SyncQueueDao(),
   connectivity: connectivity,
-  produtoDao:   ProdutoDao(),          // ← linha que faltava
+  produtoDao:   ProdutoDao(), 
+  servicoDao:   ServicoDao()         // ← linha que faltava
 );
 
   final docFiscalRepository = DocumentoFiscalRepository(

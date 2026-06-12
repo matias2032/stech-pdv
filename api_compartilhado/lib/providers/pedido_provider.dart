@@ -206,26 +206,23 @@ Future<PedidoModel?> adicionarItemProduto(
   // ════════════════════════════════════════════════════════════════════════
 
 Future<bool> cancelarPedido(
-  int idPedido,
-  CancelamentoPedidoRequestModel dto,
-) async {
-  await _run(() => _repository.cancelarPedido(
-        idPedido,
-        CancelamentoPedidoRequestDTO(
-          idUsuarioCancelou: dto.idUsuarioCancelou,
-          motivo:            dto.motivo,
-        ),
-      ));
-  if (_status == PedidoStatus.success) {
-    // Limpa o pedido activo se era este que foi cancelado
-    if (_pedidoActual?.idPedido == idPedido) {
-      _pedidoActual = null;
+    int idPedido,
+    CancelamentoPedidoRequestModel dto,
+  ) async {
+    await _run(() => _repository.cancelarPedido(
+          idPedido,
+          CancelamentoPedidoRequestDTO(
+            idUsuarioCancelou: dto.idUsuarioCancelou,
+            motivo:            dto.motivo,
+          ),
+        ));
+    if (_status == PedidoStatus.success) {
+      _pedidoActual = null;          // ← limpa sempre, sem condição
       notifyListeners();
+      PedidoAtivoController.instance.limpar();
     }
-    PedidoAtivoController.instance.limpar();
+    return _status == PedidoStatus.success;
   }
-  return _status == PedidoStatus.success;
-}
   // ════════════════════════════════════════════════════════════════════════
   // CONSULTAS
   // ════════════════════════════════════════════════════════════════════════
