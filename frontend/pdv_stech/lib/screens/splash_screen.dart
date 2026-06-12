@@ -89,14 +89,14 @@ class _SplashScreenState extends State<SplashScreen>
   final stopwatch = Stopwatch()..start();
 
   // ── TEMPORÁRIO — limpar queue e pedidos órfãos ─────────────────
-  if (kDebugMode) {
-    final db = LocalDatabase.instance.db;
-    final deletedQueue = await db.delete('sync_queue');
-    final deletedPedidos = await db.delete('pedido', where: 'id < 0');
-    await db.delete('item_pedido', where: 'id_pedido < 0');
-    await db.delete('item_pedido_servico', where: 'id_pedido < 0');
-    debugPrint('🧹 Limpeza debug: queue=$deletedQueue, pedidos=$deletedPedidos');
-  }
+  // if (kDebugMode) {
+  //   final db = LocalDatabase.instance.db;
+  //   final deletedQueue = await db.delete('sync_queue');
+  //   final deletedPedidos = await db.delete('pedido', where: 'id < 0');
+  //   await db.delete('item_pedido', where: 'id_pedido < 0');
+  //   await db.delete('item_pedido_servico', where: 'id_pedido < 0');
+  //   debugPrint('🧹 Limpeza debug: queue=$deletedQueue, pedidos=$deletedPedidos');
+  // }
   // ── FIM TEMPORÁRIO ─────────────────────────────────────────────
 
   // 1. Animações de entrada
@@ -116,18 +116,53 @@ class _SplashScreenState extends State<SplashScreen>
     _setStep('A contactar servidor…', 0.50);
     final isBackendUp = isNetworkUp ? await _healthCheck(url) : false;
 
-    // 5. Determinar modo de operação
+// 5. Determinar modo de operação
     _setStep('A preparar modo de operação…', 0.70);
     await Future.delayed(const Duration(milliseconds: 300));
 
     if (isBackendUp) {
       _setConnMode(_ConnMode.online);
     } else if (isNetworkUp) {
-      // Rede existe mas backend não responde (Render a dormir, etc.)
       _setConnMode(_ConnMode.offlineFirst);
+      // ── NOVO: mostra popup se backend não responde ────────────
+      final continuar = await _mostrarDialogoOffline(
+        titulo: 'Servidor indisponível',
+        mensagem: 'A rede está activa mas o servidor não responde.\n'
+            'Pode tentar novamente ou continuar em modo offline.',
+      );
+      if (!continuar && mounted) {
+        // Reinicia a sequência completa (equivalente a hot restart)
+        _logoCtrl.reset();
+        _textCtrl.reset();
+        setState(() {
+          _state       = _SplashState.iniciando;
+          _statusMsg   = 'A iniciar…';
+          _barProgress = 0.0;
+          _connMode    = _ConnMode.desconhecido;
+        });
+        _startSequence();
+        return;
+      }
     } else {
-      // Sem rede nenhuma
       _setConnMode(_ConnMode.fullOffline);
+      // ── NOVO: mostra popup se sem rede ────────────────────────
+      final continuar = await _mostrarDialogoOffline(
+        titulo: 'Sem ligação à rede',
+        mensagem: 'Não foi detectada nenhuma ligação à internet.\n'
+            'Pode tentar novamente ou continuar com os dados locais.',
+      );
+      if (!continuar && mounted) {
+        _logoCtrl.reset();
+        _textCtrl.reset();
+        setState(() {
+          _state       = _SplashState.iniciando;
+          _statusMsg   = 'A iniciar…';
+          _barProgress = 0.0;
+          _connMode    = _ConnMode.desconhecido;
+        });
+        _startSequence();
+        return;
+      }
     }
 
     // 6. Verificar se há dados locais em modo offline
@@ -283,6 +318,25 @@ Future<void> _sincronizarCompleto() async {
       debugPrint('⚠️ Splash sync clientes: $e');
     }
 
+    _setStep('A sincronizar Pedidos', 0.97);
+
+ try {
+      final resp = await client
+          .get(Uri.parse('$url/api/pedidos'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => PedidoModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = PedidoDao();
+        await dao.upsertAll(lista.map((p) => p.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} pedidos');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync pedidos: $e');
+    }
+
     // ── Tipos de Pagamento ────────────────────────────────────────────
 _setStep('A sincronizar tipos de pagamento…', 0.97);
 try {
@@ -310,6 +364,10 @@ try {
 } catch (e) {
   debugPrint('⚠️ Splash sync tipos de pagamento: $e');
 }
+
+
+
+
 
     client.close();
   } catch (e) {
@@ -680,6 +738,64 @@ try {
         ),
       ],
     );
+  }
+
+  /// Retorna true  → continuar offline
+  /// Retorna false → tentar novamente (reinicia sequência)
+  Future<bool> _mostrarDialogoOffline({
+    required String titulo,
+    required String mensagem,
+  }) async {
+    if (!mounted) return true;
+
+    final resultado = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // obriga a escolher
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          const Icon(Icons.wifi_off_rounded, color: _red, size: 22),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              titulo,
+              style: const TextStyle(
+                color: _navy,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ]),
+        content: Text(
+          mensagem,
+          style: TextStyle(fontSize: 13, color: _navy.withOpacity(.7), height: 1.5),
+        ),
+        actions: [
+          // Continuar offline
+          TextButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.offline_bolt_outlined, size: 16),
+            label: const Text('Continuar offline'),
+            style: TextButton.styleFrom(foregroundColor: _navy),
+          ),
+          // Tentar novamente
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, false),
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Tentar novamente'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _navy,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return resultado ?? true; // se fechar sem escolher, continua offline
   }
 
   // ── Rodapé ────────────────────────────────────────────────────────
