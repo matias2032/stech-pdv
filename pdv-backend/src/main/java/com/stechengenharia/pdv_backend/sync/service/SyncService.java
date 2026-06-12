@@ -7,6 +7,11 @@ import com.stechengenharia.pdv_backend.cliente.dto.ClienteRequestDTO;
 import com.stechengenharia.pdv_backend.cliente.service.ClienteService;
 import com.stechengenharia.pdv_backend.marca.dto.MarcaRequestDTO;
 import com.stechengenharia.pdv_backend.marca.service.MarcaService;
+import com.stechengenharia.pdv_backend.pedido.dto.CancelamentoPedidoRequestDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.EditarItemRequestDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.FinalizarPedidoRequestDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.ItemPedidoRequestDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.ItemServicoRequestDTO;
 import com.stechengenharia.pdv_backend.pedido.dto.PedidoRequestDTO;
 import com.stechengenharia.pdv_backend.pedido.service.PedidoService;
 import com.stechengenharia.pdv_backend.produto.dto.ProdutoRequestDTO;
@@ -206,20 +211,100 @@ public class SyncService {
     // PEDIDO
     // ══════════════════════════════════════════════════════════════════════
 
-    private SyncResultadoDTO processarPedido(SyncOperacaoDTO op) {
+private SyncResultadoDTO processarPedido(SyncOperacaoDTO op) {
         return switch (op.getOperacao().toUpperCase()) {
             case "CREATE" -> {
                 PedidoRequestDTO dto = converter(op.getPayload(), PedidoRequestDTO.class);
                 var response = pedidoService.criarPedido(dto);
                 yield sucesso(op, (long) response.idPedido);
             }
+
+            case "ADD_ITEM_PRODUTO" -> {
+                Integer idPedido = extrairIdPedido(op);
+                ItemPedidoRequestDTO dto = converter(op.getPayload(), ItemPedidoRequestDTO.class);
+                var response = pedidoService.adicionarItemProduto(idPedido, dto);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "ADD_ITEM_SERVICO" -> {
+                Integer idPedido = extrairIdPedido(op);
+                ItemServicoRequestDTO dto = converter(op.getPayload(), ItemServicoRequestDTO.class);
+                var response = pedidoService.adicionarItemServico(idPedido, dto);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "EDIT_ITEM_PRODUTO" -> {
+                Integer idPedido     = extrairIdPedido(op);
+                Integer idItemPedido = extrairInt(op, "idItemPedido");
+                EditarItemRequestDTO dto = converter(op.getPayload(), EditarItemRequestDTO.class);
+                var response = pedidoService.editarQuantidadeItemProduto(idPedido, idItemPedido, dto);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "EDIT_ITEM_SERVICO" -> {
+                Integer idPedido      = extrairIdPedido(op);
+                Integer idItemServico = extrairInt(op, "idItemServico");
+                EditarItemRequestDTO dto = converter(op.getPayload(), EditarItemRequestDTO.class);
+                var response = pedidoService.editarQuantidadeItemServico(idPedido, idItemServico, dto);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "REMOVE_ITEM_PRODUTO" -> {
+                Integer idPedido     = extrairIdPedido(op);
+                Integer idItemPedido = extrairInt(op, "idItemPedido");
+                var response = pedidoService.eliminarItemProduto(idPedido, idItemPedido);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "REMOVE_ITEM_SERVICO" -> {
+                Integer idPedido      = extrairIdPedido(op);
+                Integer idItemServico = extrairInt(op, "idItemServico");
+                var response = pedidoService.eliminarItemServico(idPedido, idItemServico);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "FINALIZAR" -> {
+                Integer idPedido = extrairIdPedido(op);
+                FinalizarPedidoRequestDTO dto = converter(op.getPayload(), FinalizarPedidoRequestDTO.class);
+                var response = pedidoService.finalizarPedido(idPedido, dto);
+                yield sucesso(op, (long) response.idPedido);
+            }
+
+            case "CANCEL" -> {
+                Integer idPedido = extrairIdPedido(op);
+                CancelamentoPedidoRequestDTO dto = converter(op.getPayload(), CancelamentoPedidoRequestDTO.class);
+                pedidoService.cancelarPedido(idPedido, dto);
+                yield sucesso(op, (long) idPedido);
+            }
+
             case "DELETE" -> {
                 pedidoService.eliminar(op.getId().intValue());
                 yield sucesso(op, op.getId());
             }
+
             default -> erroIndividual(op,
                     "Operação não suportada para pedido via sync: " + op.getOperacao());
         };
+    }
+
+    // ── Helpers para extrair idPedido / outros ids inteiros do payload ──────
+
+    private Integer extrairIdPedido(SyncOperacaoDTO op) {
+        Object valor = op.getPayload().get("idPedido");
+        if (valor == null) {
+            throw new IllegalArgumentException(
+                    "idPedido ausente no payload de " + op.getEntidade() + "/" + op.getOperacao());
+        }
+        return ((Number) valor).intValue();
+    }
+
+    private Integer extrairInt(SyncOperacaoDTO op, String campo) {
+        Object valor = op.getPayload().get(campo);
+        if (valor == null) {
+            throw new IllegalArgumentException(
+                    campo + " ausente no payload de " + op.getEntidade() + "/" + op.getOperacao());
+        }
+        return ((Number) valor).intValue();
     }
 
     // ══════════════════════════════════════════════════════════════════════

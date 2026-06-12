@@ -89,14 +89,14 @@ class _SplashScreenState extends State<SplashScreen>
   final stopwatch = Stopwatch()..start();
 
   // ── TEMPORÁRIO — limpar queue e pedidos órfãos ─────────────────
-  // if (kDebugMode) {
-  //   final db = LocalDatabase.instance.db;
-  //   final deletedQueue = await db.delete('sync_queue');
-  //   final deletedPedidos = await db.delete('pedido', where: 'id < 0');
-  //   await db.delete('item_pedido', where: 'id_pedido < 0');
-  //   await db.delete('item_pedido_servico', where: 'id_pedido < 0');
-  //   debugPrint('🧹 Limpeza debug: queue=$deletedQueue, pedidos=$deletedPedidos');
-  // }
+  if (kDebugMode) {
+    final db = LocalDatabase.instance.db;
+    final deletedQueue = await db.delete('sync_queue');
+    final deletedPedidos = await db.delete('pedido', where: 'id < 0');
+    await db.delete('item_pedido', where: 'id_pedido < 0');
+    await db.delete('item_pedido_servico', where: 'id_pedido < 0');
+    debugPrint('🧹 Limpeza debug: queue=$deletedQueue, pedidos=$deletedPedidos');
+  }
   // ── FIM TEMPORÁRIO ─────────────────────────────────────────────
 
   // 1. Animações de entrada

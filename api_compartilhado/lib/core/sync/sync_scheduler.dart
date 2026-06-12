@@ -54,6 +54,10 @@ DocumentoFiscalService? _documentoFiscalService;
   
   bool _syncEmCurso = false;
 
+    final Map<String, int> _idMapping = {};
+
+    
+
 
   // ── Inicialização ─────────────────────────────────────────────────
 
@@ -115,35 +119,75 @@ _subscription = connectivity.isOnlineStream.listen((isOnline) {
   // ── Flush da fila ─────────────────────────────────────────────────
 
   // Substituir flushQueue completo
-Future<void> flushQueue() async {
-  if (_syncEmCurso) {
-    debugPrint('⚙️ SyncScheduler — sync já em curso, ignorar');
-    return;
-  }
-  _syncEmCurso = true;
+// ── Flush da fila ─────────────────────────────────────────────────
 
-  await Future.delayed(const Duration(seconds: 5)); 
-
-  try {
-    final pendentes = await _syncQueueDao!.getPending();
-    if (pendentes.isEmpty) {
-      debugPrint('✅ SyncScheduler — fila vazia, nada a sincronizar');
+  Future<void> flushQueue() async {
+    if (_syncEmCurso) {
+      debugPrint('⚙️ SyncScheduler — sync já em curso, ignorar');
       return;
     }
+    _syncEmCurso = true;
 
-    debugPrint('⚙️ SyncScheduler — ${pendentes.length} operação(ões) a enviar via batch');
+    await Future.delayed(const Duration(seconds: 5));
 
-    // ── Montar payload do batch ───────────────────────────────────
-final operacoes = <Map<String, dynamic>>[];
+    try {
+      // Limpa o mapeamento de IDs temporários no início de cada flush
+      _idMapping.clear();
+
+      final pendentes = await _syncQueueDao!.getPending();
+      if (pendentes.isEmpty) {
+        debugPrint('✅ SyncScheduler — fila vazia, nada a sincronizar');
+        return;
+      }
+
+      debugPrint('⚙️ SyncScheduler — ${pendentes.length} operação(ões) a enviar via batch');
+
+      // ── PASSAGEM 1: pedido/CREATE ─────────────────────────────────
+      // Estes precisam de ser processados primeiro para que _idMapping
+      // seja populado antes de resolver dependências (ADD_ITEM_*, FINALIZAR).
+      final creates = pendentes.where(
+        (item) =>
+            item['entidade'] == 'pedido' && item['operacao'] == 'CREATE',
+      ).toList();
+
+      if (creates.isNotEmpty) {
+        await _enviarEProcessarLote(creates);
+      }
+
+      // ── PASSAGEM 2: restantes (já com _idMapping populado) ─────────
+      final restantes = pendentes.where(
+        (item) =>
+            !(item['entidade'] == 'pedido' && item['operacao'] == 'CREATE'),
+      ).toList();
+
+      if (restantes.isNotEmpty) {
+        await _enviarEProcessarLote(restantes);
+      }
+    } catch (e) {
+      debugPrint('❌ SyncScheduler — erro no batch: $e');
+      // Não incrementa tentativas aqui — erro de rede, não de lógica
+    } finally {
+      _syncEmCurso = false;
+    }
+  }
+
+  // ── Monta, envia e processa um lote (batch) de itens da fila ──────
+Future<void> _enviarEProcessarLote(
+    List<Map<String, dynamic>> itens,
+  ) async {
+    final operacoes  = <Map<String, dynamic>>[];
+    final queueIdsEnviados = <int>[]; // paralelo a `operacoes`, mesma ordem/índice
     final idsSaltados = <int>{};
 
-    for (final item in pendentes) {
+    for (final item in itens) {
       var payload = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
       final entidade = item['entidade'] as String;
       final operacao = item['operacao'] as String;
 
       if (entidade == 'pedido' &&
-          (operacao == 'ADD_ITEM_PRODUTO' || operacao == 'ADD_ITEM_SERVICO' ||  operacao == 'FINALIZAR')) {
+          (operacao == 'ADD_ITEM_PRODUTO' ||
+              operacao == 'ADD_ITEM_SERVICO' ||
+              operacao == 'FINALIZAR')) {
         try {
           payload = await _resolverIdsPedido(payload);
         } catch (_) {
@@ -159,12 +203,22 @@ final operacoes = <Map<String, dynamic>>[];
         'id':       payload['id'],
         'payload':  payload,
       });
+      queueIdsEnviados.add(item['id'] as int);
     }
 
-if (operacoes.isEmpty) {
-  debugPrint('⚙️ SyncScheduler — todas as operações pendentes adiadas');
-  return;
-}
+    if (operacoes.isEmpty) {
+      for (final item in itens) {
+        final queueId = item['id'] as int;
+        if (idsSaltados.contains(queueId)) {
+          debugPrint(
+            '⏭️ SyncScheduler — ${item['entidade']}/${item['operacao']} '
+            'adiado (pedido pai pendente)',
+          );
+        }
+      }
+      debugPrint('⚙️ SyncScheduler — todas as operações deste lote adiadas');
+      return;
+    }
 
     // ── Enviar batch ao backend ───────────────────────────────────
     final response = await http.post(
@@ -175,48 +229,36 @@ if (operacoes.isEmpty) {
 
     if (response.statusCode != 200) {
       debugPrint('❌ SyncScheduler — batch rejeitado HTTP ${response.statusCode}');
-      // Incrementar tentativas em todos
-      for (final item in pendentes) {
+      for (final item in itens) {
         await _syncQueueDao!.incrementarTentativas(item['id'] as int);
       }
       return;
     }
 
     // ── Processar resultados individuais ──────────────────────────
-    final body      = jsonDecode(response.body) as Map<String, dynamic>;
+    final body       = jsonDecode(response.body) as Map<String, dynamic>;
     final resultados = (body['resultados'] as List<dynamic>?) ?? [];
 
-    // Mapear localId → resultado e id → resultado para lookup rápido
-    final porLocalId = <String, Map<String, dynamic>>{};
-    final porId      = <String, Map<String, dynamic>>{};
-
-    for (final r in resultados) {
-      final res = r as Map<String, dynamic>;
-      final localId = res['localId'] as String?;
-      final idReal  = res['idReal'];
-      if (localId != null) porLocalId[localId] = res;
-      if (idReal  != null) porId['${res['entidade']}_$idReal'] = res;
+    // Casamento por posição: resultados[i] corresponde a operacoes[i],
+    // que corresponde a queueIdsEnviados[i]. O backend processa
+    // sequencialmente e devolve exactamente um resultado por operação,
+    // na mesma ordem — não depende de localId/idReal estarem presentes.
+    final resultadoPorQueueId = <int, Map<String, dynamic>>{};
+    for (var i = 0; i < resultados.length && i < queueIdsEnviados.length; i++) {
+      resultadoPorQueueId[queueIdsEnviados[i]] = resultados[i] as Map<String, dynamic>;
     }
 
-    for (final item in pendentes) {
-      final queueId  = item['id']       as int;
-      final entidade = item['entidade'] as String;
-      final operacao = item['operacao'] as String;
-      final payload  = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
-      final localId  = payload['localId'] as String?;
-      final backendId = payload['id'] as int?;
+    for (final item in itens) {
+      final queueId   = item['id']       as int;
+      final entidade  = item['entidade'] as String;
+      final operacao  = item['operacao'] as String;
+      final payload   = jsonDecode(item['payload'] as String) as Map<String, dynamic>;
+      final localId   = payload['localId'] as String?;
 
-      // Encontrar resultado correspondente
-      Map<String, dynamic>? resultado;
-      if (localId != null)    resultado = porLocalId[localId];
-      if (resultado == null && backendId != null) {
-        resultado = porId['${entidade}_$backendId'];
-      }
-
-      final sucesso = resultado?['sucesso'] as bool? ?? false;
+      final resultado = resultadoPorQueueId[queueId];
+      final sucesso   = resultado?['sucesso'] as bool? ?? false;
 
       if (sucesso) {
-        // Actualizar DAO local com idReal (para CREATE)
         final idReal = resultado?['idReal'] as int?;
         try {
           await _actualizarDaoLocal(
@@ -239,13 +281,7 @@ if (operacoes.isEmpty) {
         debugPrint('❌ SyncScheduler — $entidade/$operacao falhou: ${resultado?["erro"]}');
       }
     }
-  } catch (e) {
-    debugPrint('❌ SyncScheduler — erro no batch: $e');
-    // Não incrementa tentativas aqui — erro de rede, não de lógica
-  } finally {
-    _syncEmCurso = false;
   }
-}
 
 
 
@@ -675,7 +711,7 @@ Future<void> _actualizarDaoLocal({
         await _servicoDao!.deleteByLocalId(localId);
       }
 
-    case 'pedido':
+case 'pedido':
       if (operacao == 'CREATE' && localId != null && idReal != null) {
         // 1. Guarda o tempId antes de apagar
         final tempRow = await _pedidoDao!.getByLocalId(localId);
@@ -703,7 +739,9 @@ Future<void> _actualizarDaoLocal({
         } catch (e) {
           debugPrint('⚠️ SyncScheduler — pull pedido $idReal falhou: $e');
         }
-
+         if (tempId != null) {
+          _idMapping['$tempId'] = idReal;
+        }
       }
 
        if (operacao == 'FINALIZAR') {
@@ -748,29 +786,39 @@ Future<void> _actualizarDaoLocal({
 
 
 Future<Map<String, dynamic>> _resolverIdsPedido(
-  Map<String, dynamic> payload,
-) async {
-  final idPedidoLocal = payload['idPedidoLocal'] as String?;
-  if (idPedidoLocal == null) return payload; // já tem idPedido real
+    Map<String, dynamic> payload,
+  ) async {
+    final idPedidoLocal = payload['idPedidoLocal'] as String?;
+    if (idPedidoLocal == null) return payload; // já tem idPedido real
 
-  // O tempId estava guardado como int negativo; procura no DAO pelo id numérico
-  final tempId = int.tryParse(idPedidoLocal);
-  if (tempId == null) return payload;
-
-  final row = await _pedidoDao!.getById(tempId);
-  if (row != null) {
-    final idReal = row['id'] as int?;
-    if (idReal != null && idReal > 0) {
-      // Substitui o local pelo real
+    // 1. Verifica primeiro o mapeamento em memória, populado nesta
+    //    mesma passagem do flush (ex: pedido criado na Passagem 1).
+    final idRealMapeado = _idMapping[idPedidoLocal];
+    if (idRealMapeado != null) {
       final resolvido = Map<String, dynamic>.from(payload);
-      resolvido['idPedido'] = idReal;
+      resolvido['idPedido'] = idRealMapeado;
       resolvido.remove('idPedidoLocal');
       return resolvido;
     }
+
+    // 2. Fallback: procura no SQLite (caso o CREATE já tenha sido
+    //    sincronizado num flush anterior).
+    final tempId = int.tryParse(idPedidoLocal);
+    if (tempId == null) return payload;
+
+    final row = await _pedidoDao!.getById(tempId);
+    if (row != null) {
+      final idReal = row['id'] as int?;
+      if (idReal != null && idReal > 0) {
+        final resolvido = Map<String, dynamic>.from(payload);
+        resolvido['idPedido'] = idReal;
+        resolvido.remove('idPedidoLocal');
+        return resolvido;
+      }
+    }
+    // Pedido ainda não sincronizado — adiar esta operação
+    throw Exception('Pedido temporário $idPedidoLocal ainda não sincronizado');
   }
-  // Pedido ainda não sincronizado — adiar esta operação
-  throw Exception('Pedido temporário $idPedidoLocal ainda não sincronizado');
-}
 
 
 
