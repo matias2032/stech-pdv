@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 3,       
+  version: 4,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -54,6 +54,23 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_categoria_sync ON categoria(sync_status)');
   }
+
+  if (oldVersion < 4) {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS item_pedido_servico (
+      id              INTEGER PRIMARY KEY,
+      id_pedido       INTEGER NOT NULL,
+      id_servico      INTEGER NOT NULL,
+      preco_unitario  REAL    NOT NULL DEFAULT 0,
+      quantidade      INTEGER NOT NULL DEFAULT 1,
+      subtotal        REAL    NOT NULL DEFAULT 0,
+      observacoes     TEXT
+    )
+  ''');
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_item_pedido_servico ON item_pedido_servico(id_pedido)'
+  );
+}
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -152,6 +169,20 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
         )
       ''');
 
+      await txn.execute('''
+  CREATE TABLE IF NOT EXISTS item_pedido_servico (
+    id              INTEGER PRIMARY KEY,
+    id_pedido       INTEGER NOT NULL,
+    id_servico      INTEGER NOT NULL,
+    preco_unitario  REAL    NOT NULL DEFAULT 0,
+    quantidade      INTEGER NOT NULL DEFAULT 1,
+    subtotal        REAL    NOT NULL DEFAULT 0,
+    observacoes     TEXT
+  )
+''');
+
+
+
       // ── tipo_pagamento ────────────────────────────────────────────
       await txn.execute('''
         CREATE TABLE tipo_pagamento (
@@ -239,6 +270,7 @@ await txn.execute('''
       await txn.execute('CREATE INDEX idx_pedido_sync    ON pedido(sync_status)');
       await txn.execute('CREATE INDEX idx_pedido_status  ON pedido(status_pedido)');
       await txn.execute('CREATE INDEX idx_item_pedido    ON item_pedido(id_pedido)');
+      await txn.execute('CREATE INDEX idx_item_pedido_servico ON item_pedido_servico(id_pedido)');
       await txn.execute('CREATE INDEX idx_categoria_sync ON categoria(sync_status)');
       await txn.execute('CREATE INDEX idx_marca_sync     ON marca(sync_status)');
       await txn.execute('CREATE INDEX idx_servico_sync ON servico(sync_status)');
@@ -260,6 +292,7 @@ await txn.execute('CREATE INDEX idx_documento_fiscal_pedido ON documento_fiscal(
   Future<void> clearAll() async {
     await db.transaction((txn) async {
       await txn.delete('item_pedido');
+      await txn.delete('item_pedido_servico');
       await txn.delete('pedido');
       await txn.delete('cliente');
       await txn.delete('produto');

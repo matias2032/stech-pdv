@@ -25,10 +25,12 @@ import 'package:api_compartilhado/models/documento_fiscal_model.dart';
 import 'package:api_compartilhado/services/documento_fiscal_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:sqflite/sqflite.dart';
 
 class SyncScheduler {
   SyncScheduler._();
   static final SyncScheduler instance = SyncScheduler._();
+  
 
   ConnectivityService? _connectivity;
   SyncQueueDao?        _syncQueueDao;
@@ -46,9 +48,12 @@ PedidoDao?      _pedidoDao;
 PedidoService?  _pedidoService;
 DocumentoFiscalDao?     _documentoFiscalDao;
 DocumentoFiscalService? _documentoFiscalService;
+  Database get _db => LocalDatabase.instance.db;
 
   StreamSubscription<bool>? _subscription;
+  
   bool _syncEmCurso = false;
+
 
   // ── Inicialização ─────────────────────────────────────────────────
 
@@ -70,7 +75,10 @@ required PedidoService pedidoService,
 required DocumentoFiscalDao     documentoFiscalDao,
 required DocumentoFiscalService documentoFiscalService,
 
-}) {
+
+})
+
+ {
   _connectivity      = connectivity;
   _syncQueueDao      = syncQueueDao;
   _clienteDao        = clienteDao;
@@ -623,11 +631,8 @@ Future<void> _actualizarDaoLocal({
     case 'cliente':
       if (operacao == 'CREATE' && localId != null && idReal != null) {
         await _clienteDao!.deleteByLocalId(localId);
-        // Fazer pull do registo real se online; se não, marca como synced
         final existente = await _clienteDao!.getById(idReal);
-        if (existente != null) {
-          await _clienteDao!.marcarSynced(idReal);
-        }
+        if (existente != null) await _clienteDao!.marcarSynced(idReal);
       }
 
     case 'marca':
@@ -652,7 +657,33 @@ Future<void> _actualizarDaoLocal({
 
     case 'pedido':
       if (operacao == 'CREATE' && localId != null && idReal != null) {
+        // 1. Busca o registo temporário antes de o apagar
+        final tempRow = await _pedidoDao!.getByLocalId(localId);
+        final tempId  = tempRow?['id'] as int?;
+
+        // 2. Apaga o registo temporário
         await _pedidoDao!.deleteByLocalId(localId);
+
+        // 3. Vai buscar o pedido real ao backend e guarda no SQLite
+        try {
+          final pedidoReal = await _pedidoService!.buscarPorId(idReal);
+          await _pedidoDao!.upsert(pedidoReal.toLocalDb());
+
+          // 4. Migra itens temporários para o ID real
+          if (tempId != null) {
+            await _db.rawUpdate(
+              'UPDATE item_pedido SET id_pedido = ? WHERE id_pedido = ?',
+              [idReal, tempId],
+            );
+            await _db.rawUpdate(
+              'UPDATE item_pedido_servico SET id_pedido = ? WHERE id_pedido = ?',
+              [idReal, tempId],
+            );
+          }
+        } catch (e) {
+          debugPrint('⚠️ SyncScheduler — não foi possível fazer pull do pedido $idReal: $e');
+          // Mesmo sem pull, garante que o registo temporário não fica órfão
+        }
       }
   }
 }

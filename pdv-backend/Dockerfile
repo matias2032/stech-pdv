@@ -5,16 +5,14 @@ FROM maven:3.9.6-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
-# pom.xml está na raiz do contexto (pdv-backend/)
 COPY pom.xml .
 RUN mvn dependency:go-offline -q
 
-# src/ está na raiz do contexto (pdv-backend/src)
 COPY src ./src
 RUN mvn package -DskipTests -q
 
 # ─────────────────────────────────────────
-# STAGE 2 — Runtime (imagem mínima)
+# STAGE 2 — Runtime
 # ─────────────────────────────────────────
 FROM eclipse-temurin:17-jre-alpine
 

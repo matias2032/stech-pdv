@@ -6,7 +6,7 @@ class ApiConfig {
 
 static const String _prodBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://stech-pdv.onrender.com', // ← muda o default
+defaultValue: 'https://erp.stecheng.co.mz', // ← muda o default
 );
 
   static const int _porta = int.fromEnvironment(

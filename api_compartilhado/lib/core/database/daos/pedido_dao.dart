@@ -6,7 +6,9 @@ import '../local_database.dart';
 class PedidoDao {
   Database get _db => LocalDatabase.instance.db;
 
-  // ── pedido ────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  // PEDIDO
+  // ══════════════════════════════════════════════════════════════════
 
   Future<List<Map<String, dynamic>>> getAll() async {
     final rows = await _db.query('pedido', orderBy: 'data_pedido DESC');
@@ -61,7 +63,9 @@ class PedidoDao {
   }
 
   Future<void> upsert(Map<String, dynamic> pedido) async {
-    await _db.insert('pedido', pedido, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _db.insert(
+      'pedido', pedido, conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> upsertAll(List<Map<String, dynamic>> pedidos) async {
@@ -91,7 +95,9 @@ class PedidoDao {
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
   }
 
-  // ── item_pedido ───────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  // ITEM_PEDIDO (produtos)
+  // ══════════════════════════════════════════════════════════════════
 
   Future<List<Map<String, dynamic>>> getItensByPedido(int idPedido) async {
     final rows = await _db.query(
@@ -103,7 +109,9 @@ class PedidoDao {
   }
 
   Future<void> upsertItem(Map<String, dynamic> item) async {
-    await _db.insert('item_pedido', item, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _db.insert(
+      'item_pedido', item, conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> upsertAllItens(List<Map<String, dynamic>> itens) async {
@@ -116,5 +124,40 @@ class PedidoDao {
 
   Future<void> deleteItensByPedido(int idPedido) async {
     await _db.delete('item_pedido', where: 'id_pedido = ?', whereArgs: [idPedido]);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ITEM_PEDIDO_SERVICO (serviços)
+  // ══════════════════════════════════════════════════════════════════
+
+  Future<List<Map<String, dynamic>>> getItensServicoPorPedido(int idPedido) async {
+    final rows = await _db.query(
+      'item_pedido_servico',
+      where: 'id_pedido = ?',
+      whereArgs: [idPedido],
+    );
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
+  Future<void> upsertItemServico(Map<String, dynamic> item) async {
+    await _db.insert(
+      'item_pedido_servico', item, conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> upsertAllItensServico(List<Map<String, dynamic>> itens) async {
+    final batch = _db.batch();
+    for (final i in itens) {
+      batch.insert(
+        'item_pedido_servico', i, conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> deleteItensServicoPorPedido(int idPedido) async {
+    await _db.delete(
+      'item_pedido_servico', where: 'id_pedido = ?', whereArgs: [idPedido],
+    );
   }
 }
