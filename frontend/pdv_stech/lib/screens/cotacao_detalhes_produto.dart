@@ -84,6 +84,41 @@ class _CotacaoDetalhesProdutoScreenState
     setState(() => _quantidade = v);
   }
 
+  Future<CotacaoModel?> _validarCotacaoAtivaAberta(
+  CotacaoProvider cotacaoProvider,
+) async {
+  final ativa = CotacaoAtivaController.instance.cotacaoAtiva.value;
+
+  if (ativa == null) return null;
+
+  final fresca = await cotacaoProvider.buscarPorId(ativa.idCotacao);
+  if (!mounted) return null;
+
+  if (fresca == null) {
+    _snack(
+      'Não foi possível confirmar o estado actual da cotação.',
+      Colors.orange,
+    );
+    return null;
+  }
+
+  // Actualiza primeiro o controller com a versão realmente consultada.
+  CotacaoAtivaController.instance.definir(fresca);
+
+  // Avalia directamente a cotação fresca, não o getter _cotacaoAtiva.
+  if (!fresca.estaAberta) {
+    _snack(
+      'Cotação ${fresca.referencia} já não está aberta.',
+      Colors.orange,
+    );
+
+    CotacaoAtivaController.instance.limpar();
+    return null;
+  }
+
+  return fresca;
+}
+
   // ── Acção principal ───────────────────────────────────────────────────────
 Future<void> _adicionarACotacao() async {
   if (_processando) return;
@@ -117,60 +152,40 @@ Future<void> _adicionarACotacao() async {
       final cotacaoProvider = context.read<CotacaoProvider>();
 
       if (_temCotacaoAtiva) {
-        // ── Adiciona à cotação activa ────────────────────────────────────
-        final cotacaoActualizada = await cotacaoProvider.adicionarProduto(
-          _cotacaoAtiva!.idCotacao,
-          AdicionarProdutoCotacaoRequestModel(
-            idProduto:   produto.idProduto,
-            quantidade:  _quantidade,
-            // precoUnitario: null → backend/repositório usa o preço actual
-          ),
-        );
-        if (!mounted) return;
+  final cotacaoAberta =
+      await _validarCotacaoAtivaAberta(cotacaoProvider);
 
-        if (cotacaoProvider.status == CotacaoStatus.success &&
-            cotacaoActualizada != null) {
-          CotacaoAtivaController.instance.definir(cotacaoActualizada);
-          _snack(
-            '✅ Item adicionado à cotação ${cotacaoActualizada.referencia}',
-            Colors.green,
-          );
-          Navigator.pop(context, cotacaoActualizada);
-        } else {
-          _snack('Erro: ${cotacaoProvider.errorMessage}', _kAccent);
-        }
-      } else {
-        // ── Cria nova cotação e adiciona o item ──────────────────────────
-        final novaCotacao = await cotacaoProvider.criarCotacao(
-          CriarCotacaoRequestModel(idUsuario: SessaoService.instance.idUsuario),
-        );
-        if (!mounted) return;
+  if (!mounted) return;
 
-        if (novaCotacao == null ||
-            cotacaoProvider.status != CotacaoStatus.success) {
-          _snack('Erro ao criar cotação: ${cotacaoProvider.errorMessage}',
-              _kAccent);
-          return;
-        }
+  if (cotacaoAberta == null) return;
 
-        final cotacaoComItem = await cotacaoProvider.adicionarProduto(
-          novaCotacao.idCotacao,
-          AdicionarProdutoCotacaoRequestModel(
-            idProduto:  produto.idProduto,
-            quantidade: _quantidade,
-          ),
-        );
-        if (!mounted) return;
+  final cotacaoActualizada = await cotacaoProvider.adicionarProduto(
+    cotacaoAberta.idCotacao,
+    AdicionarProdutoCotacaoRequestModel(
+      idProduto: produto.idProduto,
+      quantidade: _quantidade,
+    ),
+  );
 
-        final cotacaoFinal = cotacaoComItem ?? novaCotacao;
-        CotacaoAtivaController.instance.definir(cotacaoFinal);
+  if (!mounted) return;
 
-        _snack(
-          '✅ Cotação ${cotacaoFinal.referencia} criada!',
-          _kCotacao,
-        );
-        Navigator.pop(context, cotacaoFinal);
-      }
+  if (cotacaoProvider.status == CotacaoStatus.success &&
+      cotacaoActualizada != null) {
+    CotacaoAtivaController.instance.definir(cotacaoActualizada);
+
+    _snack(
+      '✅ Produto adicionado à cotação ${cotacaoActualizada.referencia}',
+      Colors.green,
+    );
+
+    Navigator.pop(context, cotacaoActualizada);
+  } else {
+    _snack(
+      'Erro: ${cotacaoProvider.errorMessage}',
+      _kAccent,
+    );
+  }
+}
     } finally {
       if (mounted) setState(() => _processando = false);
     }
@@ -308,16 +323,18 @@ Future<void> _adicionarACotacao() async {
     );
   }
 
-  void _snack(String msg, Color cor) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+void _snack(String msg, Color color) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
       content: Text(msg),
-      backgroundColor: cor,
+      backgroundColor: color,
       behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
-  }
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ),
+  );
+}
 
   // ════════════════════════════════════════════════════════════════════════
   // BUILD

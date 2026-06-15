@@ -78,63 +78,77 @@ Future<void> _adicionarACotacao() async {
       final obs = _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim();
 
       if (_temCotacaoAtiva) {
-        // ── Adiciona à cotação activa ────────────────────────────────────
-        final cotacaoActualizada = await cotacaoProvider.adicionarServico(
-          _cotacaoAtiva!.idCotacao,
-          AdicionarServicoCotacaoRequestModel(
-            idServico:   servico.idServico,
-            quantidade:  _quantidade,
-            observacoes: obs,
-          ),
-        );
-        if (!mounted) return;
+  final cotacaoAberta =
+      await _validarCotacaoAtivaAberta(cotacaoProvider);
 
-        if (cotacaoProvider.status == CotacaoStatus.success &&
-            cotacaoActualizada != null) {
-          CotacaoAtivaController.instance.definir(cotacaoActualizada);
-          _snack(
-            '✅ Serviço adicionado à cotação ${cotacaoActualizada.referencia}',
-            Colors.green,
-          );
-          Navigator.pop(context, cotacaoActualizada);
-        } else {
-          _snack('Erro: ${cotacaoProvider.errorMessage}', _kAccent);
-        }
-      } else {
-        // ── Cria nova cotação e adiciona o item ──────────────────────────
-        final novaCotacao = await cotacaoProvider.criarCotacao(
-          CriarCotacaoRequestModel(idUsuario: SessaoService.instance.idUsuario),
-        );
-        if (!mounted) return;
+  if (!mounted) return;
 
-        if (novaCotacao == null ||
-            cotacaoProvider.status != CotacaoStatus.success) {
-          _snack(
-              'Erro ao criar cotação: ${cotacaoProvider.errorMessage}', _kAccent);
-          return;
-        }
+  if (cotacaoAberta == null) return;
 
-        final cotacaoComItem = await cotacaoProvider.adicionarServico(
-          novaCotacao.idCotacao,
-          AdicionarServicoCotacaoRequestModel(
-            idServico:   servico.idServico,
-            quantidade:  _quantidade,
-            observacoes: obs,
-          ),
-        );
-        if (!mounted) return;
+  final cotacaoActualizada = await cotacaoProvider.adicionarServico(
+    cotacaoAberta.idCotacao,
+    AdicionarServicoCotacaoRequestModel(
+      idServico: servico.idServico,
+      quantidade: _quantidade,
+      observacoes: obs,
+    ),
+  );
 
-        final cotacaoFinal = cotacaoComItem ?? novaCotacao;
-        CotacaoAtivaController.instance.definir(cotacaoFinal);
+  if (!mounted) return;
 
-        _snack('✅ Cotação ${cotacaoFinal.referencia} criada!', _kCotacao);
-        Navigator.pop(context, cotacaoFinal);
-      }
+  if (cotacaoProvider.status == CotacaoStatus.success &&
+      cotacaoActualizada != null) {
+    CotacaoAtivaController.instance.definir(cotacaoActualizada);
+
+    _snack(
+      '✅ Serviço adicionado à cotação ${cotacaoActualizada.referencia}',
+      Colors.green,
+    );
+
+    Navigator.pop(context, cotacaoActualizada);
+  } else {
+    _snack(
+      'Erro: ${cotacaoProvider.errorMessage}',
+      _kAccent,
+    );
+  }
+}
     } finally {
       if (mounted) setState(() => _processando = false);
     }
   }
+Future<CotacaoModel?> _validarCotacaoAtivaAberta(
+  CotacaoProvider cotacaoProvider,
+) async {
+  final ativa = CotacaoAtivaController.instance.cotacaoAtiva.value;
 
+  if (ativa == null) return null;
+
+  final fresca = await cotacaoProvider.buscarPorId(ativa.idCotacao);
+  if (!mounted) return null;
+
+  if (fresca == null) {
+    _snack(
+      'Não foi possível confirmar o estado actual da cotação.',
+      Colors.orange,
+    );
+    return null;
+  }
+
+  CotacaoAtivaController.instance.definir(fresca);
+
+  if (!fresca.estaAberta) {
+    _snack(
+      'Cotação ${fresca.referencia} já não está aberta.',
+      Colors.orange,
+    );
+
+    CotacaoAtivaController.instance.limpar();
+    return null;
+  }
+
+  return fresca;
+}
   // ── Diálogo de confirmação ────────────────────────────────────────────────
   Future<bool> _dialogConfirmacao() async {
     return await showDialog<bool>(
@@ -257,16 +271,18 @@ Future<void> _adicionarACotacao() async {
     );
   }
 
-  void _snack(String msg, Color cor) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+void _snack(String msg, Color color) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
       content: Text(msg),
-      backgroundColor: cor,
+      backgroundColor: color,
       behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
-  }
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ),
+  );
+}
 
   // ════════════════════════════════════════════════════════════════════════
   // BUILD
