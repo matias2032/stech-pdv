@@ -608,7 +608,6 @@ Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
 
   IconData _iconeTipo(String codigo) => switch (codigo) {
         'FAT' => Icons.receipt_rounded,
-        'COT' => Icons.request_quote_rounded,
         'REC' => Icons.payments_rounded,
         'NCO' => Icons.note_alt_rounded,
         'VD' => Icons.attach_money_rounded,

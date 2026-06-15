@@ -105,7 +105,7 @@ class DocumentoFiscalService {
   }
 
   /// POST /api/documentos-fiscais/emitir
-  /// [codigoTipo] ex: "FAT", "COT", "REC", "NCO"
+  /// [codigoTipo] ex: "FAT","REC", "NCO"
   Future<DocumentoFiscalModel> emitir({
     required int idPedido,
     required String codigoTipo,

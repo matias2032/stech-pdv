@@ -330,7 +330,6 @@ class _BarraFiltros extends StatelessWidget {
 
   static const _tipos = [
     (codigo: 'FAT', label: 'Factura'),
-    (codigo: 'COT', label: 'Cotação'),
     (codigo: 'REC', label: 'Recibo'),
     (codigo: 'VD', label: 'Venda a Dinheiro'),
   ];
@@ -543,7 +542,6 @@ class _CardDocumento extends StatelessWidget {
   Color get _corTipo {
     return switch (doc.tipoDocumento.codigo) {
       'FAT' => const Color(0xFF0D6E3D),
-      'COT' => const Color(0xFF1B2A6B),
       'REC' => const Color(0xFF7B3F00),
       'VD' => const Color(0xFF4CAF50),
       _ => _kCinzaTexto,
@@ -704,7 +702,6 @@ class _CardDocumento extends StatelessWidget {
   IconData _iconeTipo(String codigo) {
     return switch (codigo) {
       'FAT' => Icons.receipt_rounded,
-      'COT' => Icons.request_quote_rounded,
       'REC' => Icons.payments_rounded,
       'NCO' => Icons.note_alt_rounded,
       'VD' => Icons.attach_money_rounded,
