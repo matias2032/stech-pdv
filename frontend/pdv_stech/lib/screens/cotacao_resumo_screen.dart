@@ -36,10 +36,12 @@ class _CotacaoResumoScreenState extends State<CotacaoResumoScreen> {
   bool _gerando    = false;
 
   @override
-  void initState() {
-    super.initState();
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
     _carregar();
-  }
+  });
+}
 
   @override
   void dispose() {
