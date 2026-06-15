@@ -121,6 +121,14 @@ public class CotacaoService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+public List<CotacaoResponseDTO.Detalhe> listarProntas() {
+    return cotacaoRepository.findAllProntas()
+            .stream()
+            .map(this::toDetalhe)
+            .toList();
+}
+
     // ════════════════════════════════════════════════════════════════════
     // c) VISUALIZAR COTAÇÃO
     // ════════════════════════════════════════════════════════════════════
@@ -134,38 +142,37 @@ public class CotacaoService {
     // d) ACTUALIZAR COTAÇÃO
     // ════════════════════════════════════════════════════════════════════
 
-    @Transactional
-    public CotacaoResponseDTO.Detalhe atualizarCotacao(Long idCotacao, CotacaoRequestDTO.Atualizar dto) {
-        Cotacao cotacao = encontrarCotacaoCompletaOuLancar(idCotacao);
-        validarEditavel(cotacao, "actualização");
+@Transactional
+public CotacaoResponseDTO.Detalhe atualizarCotacao(Long idCotacao, CotacaoRequestDTO.Atualizar dto) {
+    Cotacao cotacao = encontrarCotacaoCompletaOuLancar(idCotacao);
 
-        // cliente: null = remover associação; id = trocar cliente
-        if (dto.idCliente() != null) {
-            cotacao.setCliente(encontrarClienteOuLancar(dto.idCliente()));
-        } else {
-            cotacao.setCliente(null);
-        }
-
-        if (dto.validadeAte() != null) {
-            cotacao.setValidadeAte(dto.validadeAte());
-        }
-
-        if (dto.observacoes() != null) {
-            cotacao.setObservacoes(dto.observacoes());
-        }
-
-        // só permite transições manuais seguras
-        if (dto.statusCotacao() != null) {
-            validarTransicaoManual(cotacao.getStatusCotacao(), dto.statusCotacao());
-            cotacao.setStatusCotacao(dto.statusCotacao());
-        }
-
+    // Transição de status — permitida independentemente de editabilidade
+    if (dto.statusCotacao() != null) {
+        validarTransicaoManual(cotacao.getStatusCotacao(), dto.statusCotacao());
+        cotacao.setStatusCotacao(dto.statusCotacao());
         cotacao.setSyncStatus("PENDING_UPDATE");
         cotacaoRepository.save(cotacao);
-
-        log.info("Cotação {} actualizada", cotacao.getReferencia());
+        log.info("Status da cotação {} alterado para {}", cotacao.getReferencia(), dto.statusCotacao());
         return toDetalhe(cotacao);
     }
+
+    // Restantes campos — exigem estado editável (ABERTA)
+    validarEditavel(cotacao, "actualização");
+
+    if (dto.idCliente() != null) {
+        cotacao.setCliente(encontrarClienteOuLancar(dto.idCliente()));
+    } else {
+        cotacao.setCliente(null);
+    }
+    if (dto.validadeAte() != null) cotacao.setValidadeAte(dto.validadeAte());
+    if (dto.observacoes() != null) cotacao.setObservacoes(dto.observacoes());
+
+    cotacao.setSyncStatus("PENDING_UPDATE");
+    cotacaoRepository.save(cotacao);
+
+    log.info("Cotação {} actualizada", cotacao.getReferencia());
+    return toDetalhe(cotacao);
+}
 
     // ════════════════════════════════════════════════════════════════════
     // e) SOFT DELETE
@@ -411,18 +418,14 @@ public class CotacaoService {
         Cotacao cotacao = encontrarCotacaoCompletaOuLancar(idCotacao);
 
         // ── Guardas ───────────────────────────────────────────────────
-        if ("CONVERTIDA".equals(cotacao.getStatusCotacao())) {
-            throw new CotacaoNaoEditavelException(
-                    "A cotação " + cotacao.getReferencia() + " já foi convertida.");
-        }
-        if (!cotacao.isEditavel()) {
-            throw new CotacaoNaoEditavelException(
-                    "A cotação " + cotacao.getReferencia() +
-                    " está " + cotacao.getStatusCotacao() + " e não pode ser convertida.");
-        }
-        if (!cotacao.temItens()) {
-            throw new CotacaoSemItensException(cotacao.getReferencia());
-        }
+    if (!"PRONTA".equals(cotacao.getStatusCotacao())) {
+    throw new CotacaoNaoEditavelException(
+        "Só cotações com status PRONTA podem ser convertidas. " +
+        "Status actual: " + cotacao.getStatusCotacao());
+}
+if (!cotacao.temItens()) {
+    throw new CotacaoSemItensException(cotacao.getReferencia());
+}
 
         // ── Monta PedidoRequestDTO a partir da cotação ────────────────
         PedidoRequestDTO pedidoRequest = new PedidoRequestDTO();

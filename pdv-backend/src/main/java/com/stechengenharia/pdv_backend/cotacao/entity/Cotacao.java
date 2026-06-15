@@ -79,10 +79,17 @@ private Set<CotacaoItemServico> itensServico = new HashSet<>();
         this.total = totalProdutos.add(totalServicos);
     }
 
-    public boolean isEditavel() {
-        return !List.of("CONVERTIDA", "CANCELADA", "EXPIRADA")
-                .contains(this.statusCotacao);
-    }
+public boolean isEditavel() {
+    return "ABERTA".equals(this.statusCotacao);
+}
+
+public boolean isPronta() {
+    return "PRONTA".equals(this.statusCotacao);
+}
+
+public boolean isConvertivel() {
+    return "PRONTA".equals(this.statusCotacao);
+}
 
     public boolean temItens() {
         return !itensProduto.isEmpty() || !itensServico.isEmpty();

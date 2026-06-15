@@ -79,7 +79,12 @@ public class CotacaoController {
 
         cotacaoService.excluirCotacao(idCotacao);
         return ResponseEntity.noContent().build(); // 204
-    }
+            }
+
+            @GetMapping("/api/cotacoes/prontas")
+public ResponseEntity<List<CotacaoResponseDTO.Detalhe>> listarProntas() {
+    return ResponseEntity.ok(cotacaoService.listarProntas());
+}
 
     // ════════════════════════════════════════════════════════════════════
     // ITENS DE PRODUTO

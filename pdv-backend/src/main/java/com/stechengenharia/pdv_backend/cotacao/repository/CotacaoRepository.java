@@ -79,9 +79,23 @@ public interface CotacaoRepository extends JpaRepository<Cotacao, Long> {
         """)
     List<Cotacao> findExpiradas(@Param("hoje") LocalDate hoje);
 
+    @Query("""
+    SELECT c FROM Cotacao c
+    LEFT JOIN FETCH c.itensProduto
+    LEFT JOIN FETCH c.itensServico
+    LEFT JOIN FETCH c.cliente
+    LEFT JOIN FETCH c.usuario
+    WHERE c.statusCotacao = 'PRONTA'
+    AND c.deleted = false
+    ORDER BY c.createdAt DESC
+    """)
+List<Cotacao> findAllProntas();
+
     // ── Sincronização ─────────────────────────────────────────────────
     List<Cotacao> findBySyncStatusIn(List<String> statuses);
 
     @Query("SELECT c FROM Cotacao c WHERE c.updatedAt > :desde")
     List<Cotacao> findAtualizadasDepoisDe(@Param("desde") Instant desde);
+
+
 }
