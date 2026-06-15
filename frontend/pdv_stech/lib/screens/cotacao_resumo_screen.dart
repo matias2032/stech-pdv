@@ -66,44 +66,42 @@ void initState() {
 
   // ── Gerar cotação ─────────────────────────────────────────────────────────
 
-  Future<void> _gerarCotacao() async {
-    if (_gerando) return;
-    if (_tipoCliente == 'empresa' && _empresaSelecionada == null) {
-      return _snack('Seleccione a empresa', Colors.orange);
-    }
-
-    setState(() => _gerando = true);
-    try {
-      final provider = context.read<CotacaoProvider>();
-
-      // Determina o idCliente a associar
-      final idCliente = _tipoCliente == 'empresa'
-          ? _empresaSelecionada!.id
-          : null;
-
-      final actualizada = await provider.atualizarCotacao(
-        widget.cotacao.idCotacao,
-        AtualizarCotacaoRequestModel(
-          idCliente:     idCliente,
-          statusCotacao: 'ENVIADA',
-          observacoes:   widget.cotacao.observacoes,
-          validadeAte:   widget.cotacao.validadeAte,
-        ),
-      );
-
-      if (!mounted) return;
-
-      if (provider.status == CotacaoStatus.success && actualizada != null) {
-        // Limpa a cotação activa — ciclo de vida encerrado
-        CotacaoAtivaController.instance.limpar();
-        Navigator.pop(context, true);
-      } else {
-        _snack('Erro: ${provider.errorMessage}', _kAccent);
-      }
-    } finally {
-      if (mounted) setState(() => _gerando = false);
-    }
+Future<void> _gerarCotacao() async {
+  if (_gerando) return;
+  if (_tipoCliente == 'empresa' && _empresaSelecionada == null) {
+    return _snack('Seleccione a empresa', Colors.orange);
   }
+
+  setState(() => _gerando = true);
+  try {
+    final provider = context.read<CotacaoProvider>();
+
+    final idCliente = _tipoCliente == 'empresa'
+        ? _empresaSelecionada!.id
+        : null;
+
+    final actualizada = await provider.atualizarCotacao(
+      widget.cotacao.idCotacao,
+      AtualizarCotacaoRequestModel(
+        idCliente:   idCliente,
+        observacoes: widget.cotacao.observacoes,
+        validadeAte: widget.cotacao.validadeAte,
+        // statusCotacao não é enviado — cotação permanece ABERTA
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (provider.status == CotacaoStatus.success && actualizada != null) {
+      _snack('Cliente associado com sucesso!', Colors.green);
+      Navigator.pop(context, true);
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
+    }
+  } finally {
+    if (mounted) setState(() => _gerando = false);
+  }
+}
 
   void _snack(String msg, Color cor) {
     if (!mounted) return;
@@ -195,7 +193,7 @@ void initState() {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Gerar Cotação',
+                    const Text('Finalizar Cotação',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,

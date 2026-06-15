@@ -92,48 +92,60 @@ class _CotacoesAbertasScreenState extends State<CotacoesAbertasScreen> {
   }
 
   /// Converte a cotação em pedido e navega para FinalizarPedidoScreen.
-  Future<void> _converterEmPedido(CotacaoModel cotacao) async {
-    if (_operacaoEmAndamento) return;
-    if (!cotacao.temItens) {
-      _snack('A cotação não tem itens — adicione pelo menos um antes de converter.', Colors.orange);
-      return;
-    }
-    final ok = await _dialogoConverterEmPedido(cotacao);
-    if (!ok) return;
+//   Future<void> _converterEmPedido(CotacaoModel cotacao) async {
+//     if (_operacaoEmAndamento) return;
+//     if (!cotacao.temItens) {
+//       _snack('A cotação não tem itens — adicione pelo menos um antes de converter.', Colors.orange);
+//       return;
+//     }
+//     final ok = await _dialogoConverterEmPedido(cotacao);
+//     if (!ok) return;
 
-    setState(() => _operacaoEmAndamento = true);
-    try {
-      final pedido = await context.read<CotacaoProvider>().converterEmPedido(
-        cotacao.idCotacao,
-        ConverterCotacaoEmPedidoRequestModel(idTipoPagamento: 1),
-      );
-      if (!mounted) return;
+//     setState(() => _operacaoEmAndamento = true);
+//     try {
+//       final pedido = await context.read<CotacaoProvider>().converterEmPedido(
+//         cotacao.idCotacao,
+//         ConverterCotacaoEmPedidoRequestModel(idTipoPagamento: 1),
+//       );
+//       if (!mounted) return;
 
-if (pedido != null) {
-  if (CotacaoAtivaController.instance.cotacaoAtiva.value?.idCotacao ==
-      cotacao.idCotacao) {
-    CotacaoAtivaController.instance.limpar();
-  }
-  final gerada = await Navigator.push<bool>(
+// if (pedido != null) {
+//   if (CotacaoAtivaController.instance.cotacaoAtiva.value?.idCotacao ==
+//       cotacao.idCotacao) {
+//     CotacaoAtivaController.instance.limpar();
+//   }
+//   final gerada = await Navigator.push<bool>(
+//     context,
+//     MaterialPageRoute(
+//       builder: (_) => CotacaoResumoScreen(cotacao: cotacao),
+//     ),
+//   );
+//   if (mounted) {
+//     if (gerada == true) {
+//       _snack('Cotação ${cotacao.referencia} enviada com sucesso!', Colors.green);
+//     }
+//     await _carregar();
+//   }
+// } else {
+//         final err = context.read<CotacaoProvider>().errorMessage;
+//         _snack('Erro ao converter: ${err ?? 'sem ligação'}', _kAccent);
+//       }
+//     } finally {
+//       if (mounted) setState(() => _operacaoEmAndamento = false);
+//     }
+//   }
+
+/// Navega para o resumo da cotação para associar cliente.
+Future<void> _abrirResumo(CotacaoModel cotacao) async {
+  if (_operacaoEmAndamento) return;
+  await Navigator.push(
     context,
     MaterialPageRoute(
       builder: (_) => CotacaoResumoScreen(cotacao: cotacao),
     ),
   );
-  if (mounted) {
-    if (gerada == true) {
-      _snack('Cotação ${cotacao.referencia} enviada com sucesso!', Colors.green);
-    }
-    await _carregar();
-  }
-} else {
-        final err = context.read<CotacaoProvider>().errorMessage;
-        _snack('Erro ao converter: ${err ?? 'sem ligação'}', _kAccent);
-      }
-    } finally {
-      if (mounted) setState(() => _operacaoEmAndamento = false);
-    }
-  }
+  if (mounted) await _carregar();
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // DIÁLOGOS
@@ -753,23 +765,24 @@ if (pedido != null) {
       ),
       const SizedBox(width: 12),
       // Converter em Pedido
-      ElevatedButton.icon(
-        onPressed: _operacaoEmAndamento
-            ? null
-            : () => _converterEmPedido(cotacao),
-        icon: const Icon(Icons.swap_horiz, size: 18),
-        label: const Text('Converter',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _kCotacao,
-          foregroundColor: Colors.white,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 12),
-        ),
-      ),
+      // Converter em Pedido  →  Ver Resumo
+ElevatedButton.icon(
+  onPressed: _operacaoEmAndamento
+      ? null
+      : () => _abrirResumo(cotacao),
+  icon: const Icon(Icons.person_outline, size: 18),
+  label: const Text('Resumo',
+      style: TextStyle(fontWeight: FontWeight.bold)),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: _kCotacao,
+    foregroundColor: Colors.white,
+    elevation: 2,
+    shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10)),
+    padding: const EdgeInsets.symmetric(
+        horizontal: 16, vertical: 12),
+  ),
+),
     ]);
   }
 

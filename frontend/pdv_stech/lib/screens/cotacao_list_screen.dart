@@ -703,47 +703,52 @@ class _LinhaCotacao extends StatelessWidget {
               ),
 
               // Ações
-              SizedBox(
-                width: 88,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Tooltip(
-                      message: 'Detalhes',
-                      child: InkWell(
-                        onTap: () => onAbrirDetalhe(cotacao),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _kAzul.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(Icons.visibility_outlined,
-                              size: 16, color: _kAzul),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message: 'Remover',
-                      child: InkWell(
-                        onTap: () => onExcluir(cotacao),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _kVermelho.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(Icons.delete_outline_rounded,
-                              size: 16, color: _kVermelho),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              // Ações
+SizedBox(
+  width: 88,
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      Tooltip(
+        message: 'Detalhes',
+        child: InkWell(
+          onTap: () => onAbrirDetalhe(cotacao),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _kAzul.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.visibility_outlined,
+                size: 16, color: _kAzul),
+          ),
+        ),
+      ),
+      // ── só mostra o botão remover se a cotação for eliminável ──
+      if (!['CONVERTIDA', 'CANCELADA', 'EXPIRADA']
+          .contains(cotacao.statusCotacao)) ...[
+        const SizedBox(width: 6),
+        Tooltip(
+          message: 'Remover',
+          child: InkWell(
+            onTap: () => onExcluir(cotacao),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: _kVermelho.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(6),
               ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  size: 16, color: _kVermelho),
+            ),
+          ),
+        ),
+      ],
+    ],
+  ),
+),
             ],
           ),
         ),
