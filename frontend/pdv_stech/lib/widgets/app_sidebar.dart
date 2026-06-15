@@ -146,6 +146,11 @@ class _AppSidebarState extends State<AppSidebar>
           title: 'Extractos',
           route: '/gerenciar_extractos',
         ),
+        _MenuItem(
+          icon:  Icons.price_check_rounded,
+          title: 'Cotações',
+          route: '/gerenciar_cotacoes',
+        ),
       ],
     ),
     _MenuGroup(

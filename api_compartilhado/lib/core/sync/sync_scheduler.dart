@@ -24,6 +24,8 @@ import '../database/daos/documento_fiscal_dao.dart';
 import 'package:api_compartilhado/models/documento_fiscal_model.dart';
 import 'package:api_compartilhado/services/documento_fiscal_service.dart';
 import 'dart:convert';
+import 'package:api_compartilhado/models/cotacao_model.dart';
+import '../database/daos/cotacao_dao.dart';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 
@@ -48,6 +50,8 @@ PedidoDao?      _pedidoDao;
 PedidoService?  _pedidoService;
 DocumentoFiscalDao?     _documentoFiscalDao;
 DocumentoFiscalService? _documentoFiscalService;
+CotacaoDao?     _cotacaoDao;
+CotacaoService? _cotacaoService;
   Database get _db => LocalDatabase.instance.db;
 
   StreamSubscription<bool>? _subscription;
@@ -78,6 +82,8 @@ required PedidoDao     pedidoDao,
 required PedidoService pedidoService,
 required DocumentoFiscalDao     documentoFiscalDao,
 required DocumentoFiscalService documentoFiscalService,
+  required CotacaoDao     cotacaoDao,
+  required CotacaoService  cotacaoService,
 
 
 })
@@ -101,6 +107,8 @@ required DocumentoFiscalService documentoFiscalService,
 _pedidoService = pedidoService;
 _documentoFiscalDao     = documentoFiscalDao;
 _documentoFiscalService = documentoFiscalService;
+ _cotacaoDao     = cotacaoDao;
+  _cotacaoService = cotacaoService;
 
 _subscription = connectivity.isOnlineStream.listen((isOnline) {
   if (isOnline) {
@@ -147,7 +155,8 @@ _subscription = connectivity.isOnlineStream.listen((isOnline) {
       // seja populado antes de resolver dependências (ADD_ITEM_*, FINALIZAR).
       final creates = pendentes.where(
         (item) =>
-            item['entidade'] == 'pedido' && item['operacao'] == 'CREATE',
+            (item['entidade'] == 'pedido' || item['entidade'] == 'cotacao') &&
+            item['operacao'] == 'CREATE',
       ).toList();
 
       if (creates.isNotEmpty) {
@@ -155,9 +164,10 @@ _subscription = connectivity.isOnlineStream.listen((isOnline) {
       }
 
       // ── PASSAGEM 2: restantes (já com _idMapping populado) ─────────
-      final restantes = pendentes.where(
+  final restantes = pendentes.where(
         (item) =>
-            !(item['entidade'] == 'pedido' && item['operacao'] == 'CREATE'),
+            !((item['entidade'] == 'pedido' || item['entidade'] == 'cotacao') &&
+              item['operacao'] == 'CREATE'),
       ).toList();
 
       if (restantes.isNotEmpty) {
@@ -190,6 +200,23 @@ Future<void> _enviarEProcessarLote(
               operacao == 'FINALIZAR')) {
         try {
           payload = await _resolverIdsPedido(payload);
+        } catch (_) {
+          idsSaltados.add(item['id'] as int);
+          continue;
+        }
+      }
+
+      if (entidade == 'cotacao' &&
+          (operacao == 'ADD_ITEM_PRODUTO' ||
+              operacao == 'ADD_ITEM_SERVICO' ||
+              operacao == 'EDIT_ITEM_PRODUTO' ||
+              operacao == 'EDIT_ITEM_SERVICO' ||
+              operacao == 'REMOVE_ITEM_PRODUTO' ||
+              operacao == 'REMOVE_ITEM_SERVICO' ||
+              operacao == 'UPDATE' ||
+              operacao == 'DELETE')) {
+        try {
+          payload = await _resolverIdsCotacao(payload);
         } catch (_) {
           idsSaltados.add(item['id'] as int);
           continue;
@@ -311,9 +338,177 @@ case 'documento_fiscal':
     'Todas as operações requerem ligação activa.',
   );
   await _processarDocumentoFiscal(operacao, payload);
+
+     case 'cotacao':
+      await _processarCotacao(operacao, payload);
     default:
       throw Exception('Entidade desconhecida: $entidade');
   }
+}
+
+
+Future<void> _processarCotacao(
+  String operacao,
+  Map<String, dynamic> payload,
+) async {
+  final service = _cotacaoService!;
+  final dao     = _cotacaoDao!;
+
+  switch (operacao) {
+    case 'CREATE':
+      final localId = payload['localId'] as String?;
+      final dto = CriarCotacaoRequestModel(
+        idUsuario: payload['idUsuario'] as int,
+        idCliente: payload['idCliente'] as int?,
+        validadeAte: payload['validadeAte'] != null
+            ? DateTime.tryParse(payload['validadeAte'] as String)
+            : null,
+        observacoes: payload['observacoes'] as String?,
+      );
+      final criada = await service.criarCotacao(dto);
+      if (localId != null) await dao.deleteByLocalId(localId);
+      await dao.upsert(criada.toLocalDb());
+
+    case 'UPDATE':
+      final idCotacao = payload['idCotacao'] as int;
+      final dto = AtualizarCotacaoRequestModel(
+        idCliente: payload['idCliente'] as int?,
+        validadeAte: payload['validadeAte'] != null
+            ? DateTime.tryParse(payload['validadeAte'] as String)
+            : null,
+        observacoes: payload['observacoes'] as String?,
+        statusCotacao: payload['statusCotacao'] as String?,
+      );
+      final atualizada = await service.atualizarCotacao(idCotacao, dto);
+      await dao.upsert(atualizada.toLocalDb());
+
+    case 'DELETE':
+      final idCotacao = payload['idCotacao'] as int;
+      await service.excluirCotacao(idCotacao);
+      await dao.marcarDeletada(idCotacao);
+
+    case 'ADD_ITEM_PRODUTO':
+      final atualizada = await service.adicionarProduto(
+        payload['idCotacao'] as int,
+        AdicionarProdutoCotacaoRequestModel(
+          idProduto:  payload['idProduto']  as int,
+          quantidade: payload['quantidade'] as int,
+          precoUnitario: payload['precoUnitario'] != null
+              ? (payload['precoUnitario'] as num).toDouble()
+              : null,
+          observacoes: payload['observacoes'] as String?,
+        ),
+      );
+      await _upsertCotacaoComItensSync(atualizada);
+
+    case 'ADD_ITEM_SERVICO':
+      final atualizada = await service.adicionarServico(
+        payload['idCotacao'] as int,
+        AdicionarServicoCotacaoRequestModel(
+          idServico:  payload['idServico']  as int,
+          quantidade: payload['quantidade'] as int,
+          precoUnitario: payload['precoUnitario'] != null
+              ? (payload['precoUnitario'] as num).toDouble()
+              : null,
+          observacoes: payload['observacoes'] as String?,
+        ),
+      );
+      await _upsertCotacaoComItensSync(atualizada);
+
+    case 'EDIT_ITEM_PRODUTO':
+      final atualizada = await service.atualizarItemProduto(
+        payload['idCotacao'] as int,
+        payload['idItem']    as int,
+        AtualizarItemCotacaoRequestModel(
+          quantidade: payload['quantidade'] as int,
+          precoUnitario: payload['precoUnitario'] != null
+              ? (payload['precoUnitario'] as num).toDouble()
+              : null,
+          observacoes: payload['observacoes'] as String?,
+        ),
+      );
+      await _upsertCotacaoComItensSync(atualizada);
+
+    case 'EDIT_ITEM_SERVICO':
+      final atualizada = await service.atualizarItemServico(
+        payload['idCotacao'] as int,
+        payload['idItem']    as int,
+        AtualizarItemCotacaoRequestModel(
+          quantidade: payload['quantidade'] as int,
+          precoUnitario: payload['precoUnitario'] != null
+              ? (payload['precoUnitario'] as num).toDouble()
+              : null,
+          observacoes: payload['observacoes'] as String?,
+        ),
+      );
+      await _upsertCotacaoComItensSync(atualizada);
+
+    case 'REMOVE_ITEM_PRODUTO':
+      final atualizada = await service.removerItemProduto(
+        payload['idCotacao'] as int,
+        payload['idItem']    as int,
+      );
+      await _upsertCotacaoComItensSync(atualizada);
+
+    case 'REMOVE_ITEM_SERVICO':
+      final atualizada = await service.removerItemServico(
+        payload['idCotacao'] as int,
+        payload['idItem']    as int,
+      );
+      await _upsertCotacaoComItensSync(atualizada);
+
+    default:
+      throw Exception('Operação desconhecida para cotação: $operacao');
+  }
+}
+
+// Reflecte CotacaoModel + itens no SQLite (espelha
+// CotacaoRepository._upsertCotacaoComItens)
+Future<void> _upsertCotacaoComItensSync(CotacaoModel m) async {
+  await _cotacaoDao!.upsert(m.toLocalDb());
+
+  await _cotacaoDao!.deleteItensProdutoPorCotacao(m.idCotacao);
+  if (m.itensProduto.isNotEmpty) {
+    await _cotacaoDao!.upsertAllItensProduto(
+      m.itensProduto.map((i) => i.toLocalDb(m.idCotacao)).toList(),
+    );
+  }
+
+  await _cotacaoDao!.deleteItensServicoPorCotacao(m.idCotacao);
+  if (m.itensServico.isNotEmpty) {
+    await _cotacaoDao!.upsertAllItensServico(
+      m.itensServico.map((i) => i.toLocalDb(m.idCotacao)).toList(),
+    );
+  }
+}
+
+// Resolve idCotacao temporário (< 0) para o ID real, usando o mesmo
+// _idMapping partilhado com o fluxo de pedidos.
+Future<Map<String, dynamic>> _resolverIdsCotacao(
+  Map<String, dynamic> payload,
+) async {
+  final idCotacao = payload['idCotacao'] as int?;
+  if (idCotacao == null || idCotacao > 0) return payload; // já tem id real
+
+  final chave = '$idCotacao';
+
+  final idRealMapeado = _idMapping[chave];
+  if (idRealMapeado != null) {
+    final resolvido = Map<String, dynamic>.from(payload);
+    resolvido['idCotacao'] = idRealMapeado;
+    return resolvido;
+  }
+
+  final row = await _cotacaoDao!.getById(idCotacao);
+  if (row != null) {
+    final idReal = row['id'] as int?;
+    if (idReal != null && idReal > 0) {
+      final resolvido = Map<String, dynamic>.from(payload);
+      resolvido['idCotacao'] = idReal;
+      return resolvido;
+    }
+  }
+  throw Exception('Cotação temporária $idCotacao ainda não sincronizada');
 }
 
   // ── Processar operações de cliente ────────────────────────────────
@@ -711,6 +906,36 @@ Future<void> _actualizarDaoLocal({
         await _servicoDao!.deleteByLocalId(localId);
       }
 
+      case 'cotacao':
+      if (operacao == 'CREATE' && localId != null && idReal != null) {
+        final tempRow = await _cotacaoDao!.getByLocalId(localId);
+        final tempId  = tempRow?['id'] as int?;
+
+        await _cotacaoDao!.deleteByLocalId(localId);
+
+        try {
+          final cotacaoReal = await _cotacaoService!.buscarPorId(idReal);
+          await _cotacaoDao!.upsert(cotacaoReal.toLocalDb());
+
+          if (tempId != null) {
+            await _db.rawUpdate(
+              'UPDATE cotacao_item_produto SET id_cotacao = ? WHERE id_cotacao = ?',
+              [idReal, tempId],
+            );
+            await _db.rawUpdate(
+              'UPDATE cotacao_item_servico SET id_cotacao = ? WHERE id_cotacao = ?',
+              [idReal, tempId],
+            );
+          }
+        } catch (e) {
+          debugPrint('⚠️ SyncScheduler — pull cotação $idReal falhou: $e');
+        }
+
+        if (tempId != null) {
+          _idMapping['$tempId'] = idReal;
+        }
+      }
+
 case 'pedido':
       if (operacao == 'CREATE' && localId != null && idReal != null) {
         // 1. Guarda o tempId antes de apagar
@@ -780,6 +1005,8 @@ case 'pedido':
         debugPrint('⚠️ SyncScheduler — pull após FINALIZAR falhou: $e');
       }
     }
+
+    
   }
   }
 }

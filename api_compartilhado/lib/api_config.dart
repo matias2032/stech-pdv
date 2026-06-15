@@ -88,6 +88,7 @@ defaultValue: 'https://erp.stecheng.co.mz', // ← muda o default
   static const String marcas = '/api/marcas';
   static const String clientes = '/api/clientes';
    static const String _documentosFiscais = '/api/documentos-fiscais';
+    static const String cotacoes = '/api/cotacoes';
    static const String _sync = '/api/sync';
 
 
@@ -108,6 +109,7 @@ defaultValue: 'https://erp.stecheng.co.mz', // ← muda o default
   static String get marcasUrl => '$baseUrl$marcas';
     static String get clientesUrl => '$baseUrl$clientes';
      static String get documentosFiscaisUrl => '$baseUrl$_documentosFiscais';
+      static String get cotacoesUrl => '$baseUrl$cotacoes';
      static String get syncBatchUrl => '$baseUrl$_sync/batch';
 
   // ── Configurações gerais ──────────────────────────────────────────

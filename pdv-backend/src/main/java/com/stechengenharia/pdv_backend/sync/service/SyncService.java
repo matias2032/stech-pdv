@@ -18,6 +18,8 @@ import com.stechengenharia.pdv_backend.produto.dto.ProdutoRequestDTO;
 import com.stechengenharia.pdv_backend.produto.service.ProdutoService;
 import com.stechengenharia.pdv_backend.servico.dto.ServicoRequestDTO;
 import com.stechengenharia.pdv_backend.servico.service.ServicoService;
+import com.stechengenharia.pdv_backend.cotacao.dto.CotacaoRequestDTO;
+import com.stechengenharia.pdv_backend.cotacao.service.CotacaoService;
 import com.stechengenharia.pdv_backend.sync.dto.SyncOperacaoDTO;
 import com.stechengenharia.pdv_backend.sync.dto.SyncRequestDTO;
 import com.stechengenharia.pdv_backend.sync.dto.SyncResponseDTO;
@@ -41,7 +43,8 @@ public class SyncService {
     private final ServicoService   servicoService;
     private final ProdutoService   produtoService;
     private final PedidoService    pedidoService;
-    private final ObjectMapper     objectMapper;
+private final CotacaoService   cotacaoService;
+private final ObjectMapper     objectMapper;
 
     // ────────────────────────────────────────────────────────────────────────
 
@@ -77,6 +80,7 @@ public class SyncService {
                 case "servico"   -> processarServico(op);
                 case "produto"   -> processarProduto(op);
                 case "pedido"    -> processarPedido(op);
+                case "cotacao"   -> processarCotacao(op);
                 default          -> erroIndividual(op,
                         "Entidade não suportada: " + op.getEntidade());
             };
@@ -287,6 +291,88 @@ private SyncResultadoDTO processarPedido(SyncOperacaoDTO op) {
         };
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+// COTAÇÃO
+// ══════════════════════════════════════════════════════════════════════
+
+private SyncResultadoDTO processarCotacao(SyncOperacaoDTO op) {
+    return switch (op.getOperacao().toUpperCase()) {
+
+        case "CREATE" -> {
+            CotacaoRequestDTO.Criar dto = converter(op.getPayload(), CotacaoRequestDTO.Criar.class);
+            var response = cotacaoService.criarCotacao(dto);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "UPDATE" -> {
+            CotacaoRequestDTO.Atualizar dto = converter(op.getPayload(), CotacaoRequestDTO.Atualizar.class);
+            var response = cotacaoService.atualizarCotacao(op.getId(), dto);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "DELETE" -> {
+            cotacaoService.excluirCotacao(op.getId());
+            yield sucesso(op, op.getId());
+        }
+
+        case "ADD_ITEM_PRODUTO" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            CotacaoRequestDTO.AdicionarProduto dto = converter(op.getPayload(), CotacaoRequestDTO.AdicionarProduto.class);
+            var response = cotacaoService.adicionarProduto(idCotacao, dto);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "ADD_ITEM_SERVICO" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            CotacaoRequestDTO.AdicionarServico dto = converter(op.getPayload(), CotacaoRequestDTO.AdicionarServico.class);
+            var response = cotacaoService.adicionarServico(idCotacao, dto);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "EDIT_ITEM_PRODUTO" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            Long idItem    = extrairLong(op, "idItem");
+            CotacaoRequestDTO.AtualizarItem dto = converter(op.getPayload(), CotacaoRequestDTO.AtualizarItem.class);
+            var response = cotacaoService.atualizarItemProduto(idCotacao, idItem, dto);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "EDIT_ITEM_SERVICO" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            Long idItem    = extrairLong(op, "idItem");
+            CotacaoRequestDTO.AtualizarItem dto = converter(op.getPayload(), CotacaoRequestDTO.AtualizarItem.class);
+            var response = cotacaoService.atualizarItemServico(idCotacao, idItem, dto);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "REMOVE_ITEM_PRODUTO" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            Long idItem    = extrairLong(op, "idItem");
+            var response = cotacaoService.removerItemProduto(idCotacao, idItem);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "REMOVE_ITEM_SERVICO" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            Long idItem    = extrairLong(op, "idItem");
+            var response = cotacaoService.removerItemServico(idCotacao, idItem);
+            yield sucesso(op, response.idCotacao());
+        }
+
+        case "CONVERTER" -> {
+            Long idCotacao = extrairLong(op, "idCotacao");
+            CotacaoRequestDTO.ConverterEmPedido dto = converter(op.getPayload(), CotacaoRequestDTO.ConverterEmPedido.class);
+            var response = cotacaoService.converterEmPedido(idCotacao, dto);
+            yield sucesso(op, (long) response.idPedido);
+        }
+
+        default -> erroIndividual(op,
+                "Operação não suportada para cotacao via sync: " + op.getOperacao());
+    };
+}
+
+
+
     // ── Helpers para extrair idPedido / outros ids inteiros do payload ──────
 
     private Integer extrairIdPedido(SyncOperacaoDTO op) {
@@ -307,6 +393,15 @@ private SyncResultadoDTO processarPedido(SyncOperacaoDTO op) {
         return ((Number) valor).intValue();
     }
 
+    // adicionar após extrairInt
+private Long extrairLong(SyncOperacaoDTO op, String campo) {
+    Object valor = op.getPayload().get(campo);
+    if (valor == null) {
+        throw new IllegalArgumentException(
+                campo + " ausente no payload de " + op.getEntidade() + "/" + op.getOperacao());
+    }
+    return ((Number) valor).longValue();
+}
     // ══════════════════════════════════════════════════════════════════════
     // UTILITÁRIOS
     // ══════════════════════════════════════════════════════════════════════

@@ -21,6 +21,7 @@ export 'models/marca_model.dart';
 export 'models/cliente_model.dart';
 export 'models/documento_fiscal_model.dart'; // ← TipoDocumentoModel + DocumentoFiscalModel (API)
 export 'models/extrato_model.dart';
+export 'models/cotacao_model.dart';
 
 // 3. Services
 export 'services/sessao_service.dart';
@@ -29,6 +30,7 @@ export 'services/pedido_service.dart';
 export 'services/estoque_service.dart';
 export 'services/produto_service.dart';
 export 'services/impressora_service.dart';
+export 'services/cotacao_service.dart';
 // pdf_service.dart NÃO é exportado aqui — usa DocumentoPdfModel (local)
 // e deve ser importado directamente onde for usado:
 //   import 'package:api_compartilhado/services/pdf_service.dart';
@@ -52,10 +54,12 @@ export 'providers/servico_provider.dart';
 export 'providers/cliente_provider.dart';
 export 'providers/usuario_provider.dart' hide UsuarioService;
 export 'providers/documento_fiscal_provider.dart'; // ← DocumentoFiscalProvider
+export 'providers/cotacao_provider.dart';
 export 'core/constants/constantes_fiscais.dart';
 
 // 5. Controllers
 export 'controllers/pedido_ativo_controller.dart';
+export 'controllers/cotacao_ativa_controller.dart';
 
 export 'core/database/local_database.dart';
 export 'core/database/daos/cliente_dao.dart';
@@ -83,3 +87,5 @@ export 'repository/servico_repository.dart';
 export 'core/database/daos/servico_dao.dart';
 export 'core/database/daos/usuario_dao.dart';
 export 'controllers/pedido_ativo_controller.dart';
+export 'core/database/daos/cotacao_dao.dart';
+export 'repository/cotacao_repository.dart';

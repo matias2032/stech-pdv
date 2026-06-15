@@ -38,6 +38,7 @@ import 'screens/documentos_form_screen.dart';
 import 'screens/extractos_list_screen.dart';
 import 'screens/extractos_form_screen.dart';
 import 'package:flutter/foundation.dart';
+import 'screens/cotacao_list_screen.dart';
 
 
 void main() async {
@@ -88,6 +89,7 @@ final marcaService     = MarcaService();
   final servicoService   = ServicoService.instance;
   final pedidoService    = PedidoService();
   final docFiscalService = DocumentoFiscalService();
+  final cotacaoService = CotacaoService();
 
   // ── Repositórios ──────────────────────────────────────────────────
   final clienteRepository = ClienteRepository(
@@ -148,6 +150,15 @@ final usuarioRepository = UsuarioRepository(
   connectivity: connectivity,
 );
 
+final cotacaoRepository = CotacaoRepository(
+  service:      cotacaoService,
+  dao:          CotacaoDao(),
+  syncQueueDao: SyncQueueDao(),
+  connectivity: connectivity,
+  produtoDao:   ProdutoDao(),
+  servicoDao:   ServicoDao(),
+);
+
 
 SyncScheduler.instance.init(
   connectivity:           connectivity,
@@ -166,6 +177,8 @@ SyncScheduler.instance.init(
   pedidoService:          pedidoService,
   documentoFiscalDao:     DocumentoFiscalDao(),
   documentoFiscalService: docFiscalService,
+    cotacaoDao:     CotacaoDao(),
+  cotacaoService: cotacaoService,
 );
 
   return MultiProvider(
@@ -223,7 +236,13 @@ SyncScheduler.instance.init(
       ChangeNotifierProvider(
         create: (_) => DocumentoFiscalProvider(repository: docFiscalRepository),
       ),
+
+       ChangeNotifierProvider(
+        create: (_) => CotacaoProvider(repository: cotacaoRepository),
+      ),
       ],
+
+
       child: MaterialApp(
         title: 'Gestor STech',
         debugShowCheckedModeBanner: false,
@@ -262,6 +281,7 @@ SyncScheduler.instance.init(
           '/cadastrar_documentos'     : (_) => const DocumentosFormScreen(),
           '/gerenciar_extractos'      : (_) => const ExtratosListScreen(),
           '/cadastrar_extractos'      : (_) => const ExtratosFormScreen(),
+             '/gerenciar_cotacoes'      : (_) => const CotacaoListScreen(),
         },
 
         onGenerateRoute: (settings) {

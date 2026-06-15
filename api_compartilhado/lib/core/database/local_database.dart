@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 4,       
+  version: 5,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -71,6 +71,66 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     'CREATE INDEX IF NOT EXISTS idx_item_pedido_servico ON item_pedido_servico(id_pedido)'
   );
 }
+
+if (oldVersion < 5) {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cotacao (
+        id                            INTEGER PRIMARY KEY,
+        local_id                      TEXT UNIQUE,
+        referencia                    TEXT,
+        id_cliente                    INTEGER,
+        nome_cliente                  TEXT,
+        id_usuario                    INTEGER NOT NULL,
+        nome_usuario                  TEXT,
+        status_cotacao                TEXT    NOT NULL DEFAULT 'ABERTA',
+        total                         REAL    NOT NULL DEFAULT 0,
+        validade_ate                  TEXT,
+        observacoes                   TEXT,
+        id_pedido_convertido          INTEGER,
+        referencia_pedido_convertido  TEXT,
+        created_at                    TEXT,
+        deleted                       INTEGER NOT NULL DEFAULT 0,
+        sync_status                   TEXT    NOT NULL DEFAULT 'synced',
+        updated_at                    TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cotacao_item_produto (
+        id              INTEGER PRIMARY KEY,
+        id_cotacao      INTEGER NOT NULL,
+        id_produto      INTEGER NOT NULL,
+        nome_produto    TEXT,
+        preco_unitario  REAL    NOT NULL DEFAULT 0,
+        quantidade      INTEGER NOT NULL DEFAULT 1,
+        subtotal        REAL    NOT NULL DEFAULT 0,
+        observacoes     TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cotacao_item_servico (
+        id              INTEGER PRIMARY KEY,
+        id_cotacao      INTEGER NOT NULL,
+        id_servico      INTEGER NOT NULL,
+        nome_servico    TEXT,
+        preco_unitario  REAL    NOT NULL DEFAULT 0,
+        quantidade      INTEGER NOT NULL DEFAULT 1,
+        subtotal        REAL    NOT NULL DEFAULT 0,
+        observacoes     TEXT
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cotacao_sync ON cotacao(sync_status)');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cotacao_status ON cotacao(status_cotacao)');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cotacao_item_produto ON cotacao_item_produto(id_cotacao)');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cotacao_item_servico ON cotacao_item_servico(id_cotacao)');
+  }
+
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -250,6 +310,54 @@ await txn.execute('''
   )
 ''');
 
+await txn.execute('''
+  CREATE TABLE cotacao (
+    id                            INTEGER PRIMARY KEY,
+    local_id                      TEXT UNIQUE,
+    referencia                    TEXT,
+    id_cliente                    INTEGER,
+    nome_cliente                  TEXT,
+    id_usuario                    INTEGER NOT NULL,
+    nome_usuario                  TEXT,
+    status_cotacao                TEXT    NOT NULL DEFAULT 'ABERTA',
+    total                         REAL    NOT NULL DEFAULT 0,
+    validade_ate                  TEXT,
+    observacoes                   TEXT,
+    id_pedido_convertido          INTEGER,
+    referencia_pedido_convertido  TEXT,
+    created_at                    TEXT,
+    deleted                       INTEGER NOT NULL DEFAULT 0,
+    sync_status                   TEXT    NOT NULL DEFAULT 'synced',
+    updated_at                    TEXT
+  )
+''');
+
+await txn.execute('''
+  CREATE TABLE cotacao_item_produto (
+    id              INTEGER PRIMARY KEY,
+    id_cotacao      INTEGER NOT NULL,
+    id_produto      INTEGER NOT NULL,
+    nome_produto    TEXT,
+    preco_unitario  REAL    NOT NULL DEFAULT 0,
+    quantidade      INTEGER NOT NULL DEFAULT 1,
+    subtotal        REAL    NOT NULL DEFAULT 0,
+    observacoes     TEXT
+  )
+''');
+
+await txn.execute('''
+  CREATE TABLE cotacao_item_servico (
+    id              INTEGER PRIMARY KEY,
+    id_cotacao      INTEGER NOT NULL,
+    id_servico      INTEGER NOT NULL,
+    nome_servico    TEXT,
+    preco_unitario  REAL    NOT NULL DEFAULT 0,
+    quantidade      INTEGER NOT NULL DEFAULT 1,
+    subtotal        REAL    NOT NULL DEFAULT 0,
+    observacoes     TEXT
+  )
+''');
+
 
       // ── sync_queue ────────────────────────────────────────────────
       await txn.execute('''
@@ -276,6 +384,10 @@ await txn.execute('''
       await txn.execute('CREATE INDEX idx_servico_sync ON servico(sync_status)');
       await txn.execute('CREATE INDEX idx_documento_fiscal_sync ON documento_fiscal(sync_status)');
 await txn.execute('CREATE INDEX idx_documento_fiscal_pedido ON documento_fiscal(id_pedido)');
+await txn.execute('CREATE INDEX idx_cotacao_sync   ON cotacao(sync_status)');
+await txn.execute('CREATE INDEX idx_cotacao_status ON cotacao(status_cotacao)');
+await txn.execute('CREATE INDEX idx_cotacao_item_produto ON cotacao_item_produto(id_cotacao)');
+await txn.execute('CREATE INDEX idx_cotacao_item_servico ON cotacao_item_servico(id_cotacao)');
       await txn.execute('CREATE INDEX idx_sync_queue     ON sync_queue(tentativas)');
 
     });
@@ -303,6 +415,9 @@ await txn.execute('CREATE INDEX idx_documento_fiscal_pedido ON documento_fiscal(
       await txn.delete('categoria');
       await txn.delete('servico');
       await txn.delete('documento_fiscal');
+      await txn.delete('cotacao_item_produto');
+await txn.delete('cotacao_item_servico');
+await txn.delete('cotacao');
     });
   }
 }

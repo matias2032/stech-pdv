@@ -13,13 +13,8 @@ import java.util.Map;
 @RequestMapping("/wake-up")
 public class WakeUpController {
 
-    @GetMapping
-    public ResponseEntity<Map<String, String>> wakeUp() {
-        return ResponseEntity.ok(Map.of(
-            "status",    "online",
-            "mensagem",  "Servidor activo e a responder.",
-            "timestamp", ZonedDateTime.now()
-                             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z"))
-        ));
-    }
+@GetMapping
+public ResponseEntity<String> wakeUp() {
+    return ResponseEntity.ok("ok");
+}
 }
