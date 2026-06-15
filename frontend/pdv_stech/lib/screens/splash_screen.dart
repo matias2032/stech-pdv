@@ -337,6 +337,23 @@ Future<void> _sincronizarCompleto() async {
       debugPrint('⚠️ Splash sync pedidos: $e');
     }
 
+     try {
+      final resp = await client
+          .get(Uri.parse('$url/api/cotacoes'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => CotacaoModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = CotacaoDao();
+        await dao.upsertAll(lista.map((p) => p.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} cotações');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync cotações: $e');
+    }
+
     // ── Tipos de Pagamento ────────────────────────────────────────────
 _setStep('A sincronizar tipos de pagamento…', 0.97);
 try {
