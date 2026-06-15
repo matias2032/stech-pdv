@@ -522,19 +522,17 @@ if (!cotacao.temItens()) {
         }
     }
 
-    private void validarTransicaoManual(String statusActual, String novoStatus) {
-        // transições permitidas manualmente (conversão é feita pelo método próprio)
-        List<String> permitidos = switch (statusActual) {
-            case "ABERTA"   -> List.of("ENVIADA", "CANCELADA");
-            case "ENVIADA"  -> List.of("APROVADA", "CANCELADA");
-            case "APROVADA" -> List.of("CANCELADA");
-            default         -> List.of();
-        };
-        if (!permitidos.contains(novoStatus)) {
-            throw new IllegalArgumentException(
-                    "Transição de status inválida: " + statusActual + " → " + novoStatus);
-        }
+private void validarTransicaoManual(String statusActual, String novoStatus) {
+    List<String> permitidos = switch (statusActual) {
+        case "ABERTA"  -> List.of("PRONTA", "CANCELADA");
+        case "PRONTA"  -> List.of("ABERTA", "CANCELADA");
+        default        -> List.of();
+    };
+    if (!permitidos.contains(novoStatus)) {
+        throw new IllegalArgumentException(
+            "Transição de status inválida: " + statusActual + " → " + novoStatus);
     }
+}
 
     private String gerarReferencia() {
         return "COT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();

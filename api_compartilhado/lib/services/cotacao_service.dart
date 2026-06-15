@@ -355,6 +355,14 @@ class CotacaoService {
     return _parseCotacao(res, idCotacao: idCotacao, idItem: idItem);
   }
 
+    Future<List<CotacaoModel>> listarProntas() async {
+  debugPrint('🔍 CotacaoService.listarProntas');
+  final res = await _client
+      .get(Uri.parse('$_baseUrl/prontas'), headers: _headers)
+      .timeout(ApiConfig.timeout);
+  return _parseLista(res);
+}
+
   // ════════════════════════════════════════════════════════════════════════
   // CONVERSÃO
   // ════════════════════════════════════════════════════════════════════════
@@ -382,6 +390,8 @@ class CotacaoService {
     }
     _throwFromResponse(res, idCotacao: idCotacao);
   }
+
+
 
   // ─── Dispose ─────────────────────────────────────────────────────────────
 

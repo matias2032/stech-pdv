@@ -80,20 +80,20 @@ Future<void> _gerarCotacao() async {
         ? _empresaSelecionada!.id
         : null;
 
-    final actualizada = await provider.atualizarCotacao(
-      widget.cotacao.idCotacao,
-      AtualizarCotacaoRequestModel(
-        idCliente:   idCliente,
-        observacoes: widget.cotacao.observacoes,
-        validadeAte: widget.cotacao.validadeAte,
-        // statusCotacao não é enviado — cotação permanece ABERTA
-      ),
-    );
+final actualizada = await provider.atualizarCotacao(
+  widget.cotacao.idCotacao,
+  AtualizarCotacaoRequestModel(
+    idCliente:     idCliente,
+    statusCotacao: 'PRONTA',
+    observacoes:   widget.cotacao.observacoes,
+    validadeAte:   widget.cotacao.validadeAte,
+  ),
+);
 
     if (!mounted) return;
 
     if (provider.status == CotacaoStatus.success && actualizada != null) {
-      _snack('Cliente associado com sucesso!', Colors.green);
+  _snack('Cotação fechada e pronta para converter!', Colors.green);
       Navigator.pop(context, true);
     } else {
       _snack('Erro: ${provider.errorMessage}', _kAccent);
@@ -373,11 +373,10 @@ Future<void> _gerarCotacao() async {
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.send_outlined),
-        label: Text(
-          _gerando ? 'A gerar…' : 'Gerar Cotação',
-          style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.bold),
-        ),
+   label: Text(
+  _gerando ? 'A fechar…' : 'Fechar Cotação',
+  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+),
         style: ElevatedButton.styleFrom(
           backgroundColor: _kCotacao,
           foregroundColor: Colors.white,

@@ -39,6 +39,9 @@ import 'screens/extractos_list_screen.dart';
 import 'screens/extractos_form_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'screens/cotacao_list_screen.dart';
+import 'screens/cotacao_detalhes_screen.dart';
+import 'screens/cotacoes_abertas_screen.dart';
+import 'screens/cotacao_catalogo_screen.dart';
 
 
 void main() async {
@@ -281,7 +284,7 @@ SyncScheduler.instance.init(
           '/cadastrar_documentos'     : (_) => const DocumentosFormScreen(),
           '/gerenciar_extractos'      : (_) => const ExtratosListScreen(),
           '/cadastrar_extractos'      : (_) => const ExtratosFormScreen(),
-             '/gerenciar_cotacoes'      : (_) => const CotacaoListScreen(),
+             '/gerenciar_cotacoes'      : (_) => const CotacaoCatalogoScreen(),
         },
 
         onGenerateRoute: (settings) {

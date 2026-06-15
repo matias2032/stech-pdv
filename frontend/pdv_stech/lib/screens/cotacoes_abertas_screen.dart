@@ -30,7 +30,7 @@ class _CotacoesAbertasScreenState extends State<CotacoesAbertasScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CotacaoProvider>().listarTodas();
+     context.read<CotacaoProvider>().listarPorStatus('ABERTA');
     });
   }
 
@@ -39,12 +39,12 @@ class _CotacoesAbertasScreenState extends State<CotacoesAbertasScreen> {
   // ══════════════════════════════════════════════════════════════════════════
 
   Future<void> _carregar() async {
-    await context.read<CotacaoProvider>().listarTodas();
-  }
+  await context.read<CotacaoProvider>().listarPorStatus('ABERTA');
+}
 
   // Apenas cotações ainda editáveis (ABERTA, ENVIADA, APROVADA)
   List<CotacaoModel> _cotacoesEditaveis(List<CotacaoModel> todas) =>
-      todas.where((c) => c.isEditavel).toList();
+    todas.where((c) => c.estaAberta).toList();
 
   // ══════════════════════════════════════════════════════════════════════════
   // ACÇÕES

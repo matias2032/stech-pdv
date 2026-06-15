@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../widgets/app_sidebar.dart';
 import 'cotacao_catalogo_screen.dart';
 import 'cotacoes_abertas_screen.dart';
+import 'cotacao_detalhes_screen.dart';
 
 // ── Cores STech Engenharia ────────────────────────────────────────────────────
 const _kVermelho   = Color(0xFFC8102E);
@@ -83,7 +84,7 @@ class _CotacaoListScreenState extends State<CotacaoListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CotacaoProvider>().listarTodas();
+context.read<CotacaoProvider>().listarProntas();
     });
   }
 
@@ -104,24 +105,19 @@ class _CotacaoListScreenState extends State<CotacaoListScreen> {
     setState(() => _termoPesquisa = '');
   }
 
-  void _onSelecionarStatus(String status) {
-    setState(() => _statusSelecionado = status);
-    final provider = context.read<CotacaoProvider>();
-    if (status == 'TODAS') {
-      provider.listarTodas();
-    } else {
-      provider.listarPorStatus(status);
-    }
-  }
+  // void _onSelecionarStatus(String status) {
+  //   setState(() => _statusSelecionado = status);
+  //   final provider = context.read<CotacaoProvider>();
+  //   if (status == 'TODAS') {
+  //     provider.listarTodas();
+  //   } else {
+  //     provider.listarPorStatus(status);
+  //   }
+  // }
 
-  Future<void> _recarregar() async {
-    final provider = context.read<CotacaoProvider>();
-    if (_statusSelecionado == 'TODAS') {
-      await provider.listarTodas();
-    } else {
-      await provider.listarPorStatus(_statusSelecionado);
-    }
-  }
+Future<void> _recarregar() async {
+  await context.read<CotacaoProvider>().listarProntas();
+}
 
   List<CotacaoModel> _aplicarFiltroLocal(List<CotacaoModel> lista) {
     if (_termoPesquisa.isEmpty) return lista;
@@ -192,7 +188,7 @@ void _abrirDetalhe(CotacaoModel cotacao) {
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => const CotacoesAbertasScreen(),
+      builder: (_) => CotacaoDetalhesScreen(cotacao: cotacao),
     ),
   ).then((_) => _recarregar());
 }
@@ -212,10 +208,7 @@ void _abrirDetalhe(CotacaoModel cotacao) {
             onChanged: _onPesquisar,
             onLimpar: _limparPesquisa,
           ),
-          _BarraFiltroStatus(
-            selecionado: _statusSelecionado,
-            onSelecionar: _onSelecionarStatus,
-          ),
+     
           const Divider(height: 1),
           Expanded(
             child: _Listagem(
@@ -255,11 +248,11 @@ void _abrirDetalhe(CotacaoModel cotacao) {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.add_rounded),
-          tooltip: 'Nova Cotação',
-          onPressed: () => _abrirFormulario(),
-        ),
+        // IconButton(
+        //   icon: const Icon(Icons.add_rounded),
+        //   tooltip: 'Nova Cotação',
+        //   onPressed: () => _abrirFormulario(),
+        // ),
         IconButton(
           icon: const Icon(Icons.refresh_rounded),
           tooltip: 'Recarregar',
@@ -630,7 +623,7 @@ class _LinhaCotacao extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: _kAzul.withOpacity(0.12),
-                child: const Icon(Icons.request_quote_rounded,
+                child: const Icon(Icons.check_circle_outline,
                     size: 18, color: _kAzul),
               ),
               const SizedBox(width: 14),
