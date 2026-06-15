@@ -1,12 +1,5 @@
 // lib/screens/cotacao_detalhes_produto.dart
-//
-// Réplica de detalhes_produto.dart para o módulo Cotação.
-// Diferenças-chave vs. o original:
-//  • Sem bloqueio por estoque (cotação pode incluir itens sem stock actual)
-//  • Botão chama CotacaoProvider em vez de PedidoProvider
-//  • Usa CotacaoAtivaController para detectar/criar a cotação activa
-//  • Sem decremento de estoque (responsabilidade do backend na conversão)
-//  • Diálogo de confirmação adaptado ao contexto de cotação
+
 
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
@@ -92,10 +85,32 @@ class _CotacaoDetalhesProdutoScreenState
   }
 
   // ── Acção principal ───────────────────────────────────────────────────────
-  Future<void> _adicionarACotacao() async {
-    if (_processando) return;
-    final ok = await _dialogConfirmacao();
-    if (!ok) return;
+Future<void> _adicionarACotacao() async {
+  if (_processando) return;
+
+  // Refresca o status real da cotação activa antes de prosseguir
+  if (_temCotacaoAtiva) {
+    final cotacaoProvider = context.read<CotacaoProvider>();
+    final fresca = await cotacaoProvider.buscarPorId(_cotacaoAtiva!.idCotacao);
+    if (!mounted) return;
+
+    if (fresca != null) {
+      CotacaoAtivaController.instance.definir(fresca);
+    }
+
+    final actual = CotacaoAtivaController.instance.cotacaoAtiva.value;
+    if (actual != null && !actual.estaAberta) {
+      _snack(
+        'Cotação ${actual.referencia} já não está aberta (${actual.statusCotacao}).',
+        Colors.orange,
+      );
+      CotacaoAtivaController.instance.limpar();
+      return;
+    }
+  }
+
+  final ok = await _dialogConfirmacao();
+  if (!ok) return;
 
     setState(() => _processando = true);
     try {

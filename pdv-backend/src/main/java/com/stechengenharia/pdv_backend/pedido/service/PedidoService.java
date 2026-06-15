@@ -66,6 +66,12 @@ public PedidoResponseDTO criarPedido(PedidoRequestDTO dto) {
 
     pedido = pedidoRepository.save(pedido);
 
+    if (dto.idCliente != null) {
+    clienteRepository.findById(dto.idCliente)
+        .orElseThrow(() -> new RuntimeException("Cliente não encontrado: " + dto.idCliente));
+    pedido.setIdCliente(dto.idCliente);
+}
+
         if (dto.itensProduto != null) {
             for (ItemPedidoRequestDTO itemDto : dto.itensProduto) {
                 adicionarItemProdutoInterno(pedido, itemDto.idProduto, itemDto.quantidade);

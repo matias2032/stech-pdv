@@ -44,6 +44,8 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
   // ── Estado ────────────────────────────────────────────────────────────────
   bool _carregando  = true;
   bool _finalizando = false;
+  bool    _clienteBloqueado     = false;
+String? _nomeClienteBloqueado;
 
   bool get _ehDinheiro => _idTipoPagamento == 1;
 
@@ -73,82 +75,94 @@ bool get _podeFinalizar {
 
   // ── Carregamento — usa Provider para tipos de pagamento ───────────────────
 
-  Future<void> _carregar() async {
-    // 1. Tipos de pagamento (offline-first via PedidoProvider)
+Future<void> _carregar() async {
+  try {
+    await context.read<PedidoProvider>().carregarTiposPagamento();
+  } catch (_) {}
+
+  try {
+    await context.read<ClienteListaProvider>().filtrarPorPerfil(1);
+  } catch (_) {}
+
+  if (!mounted) return;
+
+  final pedidoProvider  = context.read<PedidoProvider>();
+  final clienteProvider = context.read<ClienteListaProvider>();
+
+  ClienteModel? clienteDoPedido;
+  if (widget.pedido.idCliente != null) {
     try {
-      await context.read<PedidoProvider>().carregarTiposPagamento();
+      clienteDoPedido = clienteProvider.clientes
+          .firstWhere((c) => c.id == widget.pedido.idCliente);
     } catch (_) {}
-
-    // 2. Empresas via ClienteListaProvider (offline-first)
-    try {
-      await context.read<ClienteListaProvider>().filtrarPorPerfil(1);
-    } catch (_) {}
-
-    if (!mounted) return;
-
-    final pedidoProvider  = context.read<PedidoProvider>();
-    final clienteProvider = context.read<ClienteListaProvider>();
-
-    setState(() {
-      _tiposPagamento  = pedidoProvider.tiposPagamento;
-      _empresas        = clienteProvider.clientes;
-      _idTipoPagamento = _tiposPagamento.isNotEmpty
-          ? _tiposPagamento.first.idTipoPagamento
-          : null;
-      _carregando = false; // executa SEMPRE
-    });
   }
+
+  setState(() {
+    _tiposPagamento       = pedidoProvider.tiposPagamento;
+    _empresas             = clienteProvider.clientes;
+    _idTipoPagamento      = _tiposPagamento.isNotEmpty
+        ? _tiposPagamento.first.idTipoPagamento
+        : null;
+    _clienteBloqueado     = widget.pedido.idCliente != null;
+    _nomeClienteBloqueado = clienteDoPedido?.nomeCompleto
+        ?? (widget.pedido.idCliente != null
+            ? 'Cliente #${widget.pedido.idCliente}'
+            : null);
+    _carregando = false;
+  });
+}
 
 
   // ── Finalizar via Provider ────────────────────────────────────────────────
 
   Future<void> _finalizar() async {
-    if (_finalizando) return;
+  if (_finalizando) return;
 
-    if (_idTipoPagamento == null) {
-      return _snack('Seleccione o tipo de pagamento', Colors.orange);
-    }
-    if (_ehDinheiro && _valorPago < widget.pedido.total) {
-      return _snack('O valor recebido é insuficiente', Colors.orange);
-    }
-    if (_tipoCliente == 'empresa' && _empresaSelecionada == null) {
-      return _snack('Seleccione a empresa', Colors.orange);
-    }
-
-    setState(() => _finalizando = true);
-
-    try {
-      await context.read<PedidoProvider>().finalizarPedido(
-        widget.pedido.idPedido,
-        FinalizarPedidoRequestModel(
-          idTipoPagamento:        _idTipoPagamento!,
-          valorPago:              _ehDinheiro ? _valorPago : widget.pedido.total,
-          idCliente:              _tipoCliente == 'empresa'
-                                      ? _empresaSelecionada!.id
-                                      : null,
-          nomeClienteSingular:    _tipoCliente == 'singular'
-                                      ? _nomeCtrl.text.trim().nullIfEmpty
-                                      : null,
-          apelidoClienteSingular: _tipoCliente == 'singular'
-                                      ? _apelidoCtrl.text.trim().nullIfEmpty
-                                      : null,
-        ),
-      );
-
-      if (!mounted) return;
-
-      final provider = context.read<PedidoProvider>();
-      if (provider.errorMessage == null) {
-        // ── Limpa o pedido activo para que o catálogo crie um novo ──────────
-        PedidoAtivoController.instance.limpar();
-        Navigator.pop(context, true);
-      } else {
-        _snack('Erro: ${provider.errorMessage}', _kAccent);
-      }
-    } finally {
-      if (mounted) setState(() => _finalizando = false);
-    }
+  if (_idTipoPagamento == null) {
+    return _snack('Seleccione o tipo de pagamento', Colors.orange);
   }
+  if (_ehDinheiro && _valorPago < widget.pedido.total) {
+    return _snack('O valor recebido é insuficiente', Colors.orange);
+  }
+  if (!_clienteBloqueado && _tipoCliente == 'empresa' && _empresaSelecionada == null) {
+    return _snack('Seleccione a empresa', Colors.orange);
+  }
+
+  setState(() => _finalizando = true);
+
+  final idClienteFinal = _clienteBloqueado
+      ? widget.pedido.idCliente
+      : (_tipoCliente == 'empresa' ? _empresaSelecionada?.id : null);
+
+  try {
+    await context.read<PedidoProvider>().finalizarPedido(
+      widget.pedido.idPedido,
+      FinalizarPedidoRequestModel(
+        idTipoPagamento:        _idTipoPagamento!,
+        valorPago:              _ehDinheiro ? _valorPago : widget.pedido.total,
+        idCliente:              idClienteFinal,
+        nomeClienteSingular:    (!_clienteBloqueado && _tipoCliente == 'singular')
+                                    ? _nomeCtrl.text.trim().nullIfEmpty
+                                    : null,
+        apelidoClienteSingular: (!_clienteBloqueado && _tipoCliente == 'singular')
+                                    ? _apelidoCtrl.text.trim().nullIfEmpty
+                                    : null,
+      ),
+    );
+
+    if (!mounted) return;
+
+    final provider = context.read<PedidoProvider>();
+    if (provider.errorMessage == null) {
+      PedidoAtivoController.instance.limpar();
+      Navigator.pop(context, true);
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
+    }
+  } finally {
+    if (mounted) setState(() => _finalizando = false);
+  }
+}
 
   void _snack(String msg, Color cor) {
     if (!mounted) return;
@@ -296,9 +310,48 @@ bool get _podeFinalizar {
 
   // ─── Cliente ──────────────────────────────────────────────────────────────
 
-  Widget _buildClienteCard() {
+Widget _buildClienteCard() {
+  if (_clienteBloqueado) {
     return _card(
-        child: Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _secLabel(Icons.person_outline, 'Cliente'),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _kPrimary.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _kPrimary.withOpacity(0.15)),
+                ),
+                child: Text(
+                  _nomeClienteBloqueado ?? '—',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _kPrimary),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: () => setState(() => _clienteBloqueado = false),
+              icon: const Icon(Icons.edit_outlined, size: 15),
+              label: const Text('Alterar', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(foregroundColor: _kPrimary),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  return _card(
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _secLabel(Icons.person_outline, 'Cliente'),
@@ -317,8 +370,9 @@ bool get _podeFinalizar {
               : _buildSingularFields(),
         ),
       ],
-    ));
-  }
+    ),
+  );
+}
 
   Widget _toggleBtn(String tipo, IconData icon, String label) {
     final sel = _tipoCliente == tipo;

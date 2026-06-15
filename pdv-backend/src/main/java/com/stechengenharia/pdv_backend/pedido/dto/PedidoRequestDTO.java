@@ -21,4 +21,6 @@ public class PedidoRequestDTO {
  
     @Valid
     public List<ItemServicoRequestDTO> itensServico;
+
+    public Long idCliente;
 }

@@ -452,6 +452,10 @@ if (!cotacao.temItens()) {
                     return i;
                 }).toList();
 
+                pedidoRequest.idCliente = cotacao.getCliente() != null
+        ? cotacao.getCliente().getId()
+        : null;
+
         // ── Cria o pedido via PedidoService ───────────────────────────
         PedidoResponseDTO pedidoResponse = pedidoService.criarPedido(pedidoRequest);
 

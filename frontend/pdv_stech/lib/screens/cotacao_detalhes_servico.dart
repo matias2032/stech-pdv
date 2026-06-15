@@ -1,12 +1,4 @@
 // lib/screens/cotacao_detalhes_servico.dart
-//
-// Réplica de detalhes_servico.dart para o módulo Cotação.
-// Diferenças-chave vs. o original:
-//  • Sem bloqueio por stock (serviços nunca têm stock — mantém-se igual)
-//  • Botão chama CotacaoProvider em vez de PedidoProvider
-//  • Usa CotacaoAtivaController para detectar/criar a cotação activa
-//  • Observações passadas via AdicionarServicoCotacaoRequestModel
-//  • Diálogo de confirmação adaptado ao contexto de cotação
 
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
@@ -55,11 +47,31 @@ class _CotacaoDetalhesServicoScreenState
   void _setQuantidade(int v) { if (v >= 1) setState(() => _quantidade = v); }
 
   // ── Acção principal ───────────────────────────────────────────────────────
-  Future<void> _adicionarACotacao() async {
-    if (_processando) return;
-    final ok = await _dialogConfirmacao();
-    if (!ok) return;
+Future<void> _adicionarACotacao() async {
+  if (_processando) return;
 
+  if (_temCotacaoAtiva) {
+    final cotacaoProvider = context.read<CotacaoProvider>();
+    final fresca = await cotacaoProvider.buscarPorId(_cotacaoAtiva!.idCotacao);
+    if (!mounted) return;
+
+    if (fresca != null) {
+      CotacaoAtivaController.instance.definir(fresca);
+    }
+
+    final actual = CotacaoAtivaController.instance.cotacaoAtiva.value;
+    if (actual != null && !actual.estaAberta) {
+      _snack(
+        'Cotação ${actual.referencia} já não está aberta (${actual.statusCotacao}).',
+        Colors.orange,
+      );
+      CotacaoAtivaController.instance.limpar();
+      return;
+    }
+  }
+
+  final ok = await _dialogConfirmacao();
+  if (!ok) return;
     setState(() => _processando = true);
     try {
       final cotacaoProvider = context.read<CotacaoProvider>();

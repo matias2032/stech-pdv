@@ -34,13 +34,13 @@ class _CotacaoResumoScreenState extends State<CotacaoResumoScreen> {
   // ── Estado ────────────────────────────────────────────────────────────────
   bool _carregando = true;
   bool _gerando    = false;
+bool _clienteBloqueado = false; // true quando cotação já tem cliente
 
-  @override
+@override
 void initState() {
   super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _carregar();
-  });
+  _clienteBloqueado = widget.cotacao.idCliente != null;
+  WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
 }
 
   @override
@@ -75,25 +75,32 @@ Future<void> _gerarCotacao() async {
   setState(() => _gerando = true);
   try {
     final provider = context.read<CotacaoProvider>();
-
     final idCliente = _tipoCliente == 'empresa'
         ? _empresaSelecionada!.id
         : null;
 
-final actualizada = await provider.atualizarCotacao(
-  widget.cotacao.idCotacao,
-  AtualizarCotacaoRequestModel(
-    idCliente:     idCliente,
-    statusCotacao: 'PRONTA',
-    observacoes:   widget.cotacao.observacoes,
-    validadeAte:   widget.cotacao.validadeAte,
-  ),
-);
+    // 1ª chamada — associar cliente (sem statusCotacao)
+    if (idCliente != null) {
+      await provider.atualizarCotacao(
+        widget.cotacao.idCotacao,
+        AtualizarCotacaoRequestModel(idCliente: idCliente),
+      );
+      if (!mounted) return;
+      if (provider.status != CotacaoStatus.success) {
+        _snack('Erro ao associar cliente: ${provider.errorMessage}', _kAccent);
+        return;
+      }
+    }
 
+    // 2ª chamada — mudar status para PRONTA (sem idCliente)
+    final actualizada = await provider.atualizarCotacao(
+      widget.cotacao.idCotacao,
+      const AtualizarCotacaoRequestModel(statusCotacao: 'PRONTA'),
+    );
     if (!mounted) return;
 
     if (provider.status == CotacaoStatus.success && actualizada != null) {
-  _snack('Cotação fechada e pronta para converter!', Colors.green);
+      _snack('Cotação fechada e pronta para converter!', Colors.green);
       Navigator.pop(context, true);
     } else {
       _snack('Erro: ${provider.errorMessage}', _kAccent);
@@ -258,7 +265,9 @@ final actualizada = await provider.atualizarCotacao(
 
   // ── Selector de cliente ───────────────────────────────────────────────────
 
-  Widget _buildClienteCard() {
+Widget _buildClienteCard() {
+  // Se já tem cliente e está bloqueado, mostrar modo leitura
+  if (_clienteBloqueado && widget.cotacao.idCliente != null) {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,22 +276,56 @@ final actualizada = await provider.atualizarCotacao(
           const SizedBox(height: 10),
           Row(children: [
             Expanded(
-                child: _toggleBtn('singular', Icons.person_outline, 'Singular')),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _kPrimary.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _kPrimary.withOpacity(0.15)),
+                ),
+                child: Text(
+                  widget.cotacao.nomeCliente ?? 'Cliente #${widget.cotacao.idCliente}',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: _kPrimary),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
-            Expanded(
-                child: _toggleBtn('empresa', Icons.business, 'Empresa')),
+            TextButton.icon(
+              onPressed: () => setState(() => _clienteBloqueado = false),
+              icon: const Icon(Icons.edit_outlined, size: 15),
+              label: const Text('Alterar', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(foregroundColor: _kCotacao),
+            ),
           ]),
-          const SizedBox(height: 12),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _tipoCliente == 'empresa'
-                ? _buildEmpresaSelector()
-                : _buildSingularFields(),
-          ),
         ],
       ),
     );
   }
+
+  // Modo edição (sem cliente ou após "Alterar")
+  return _card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _secLabel(Icons.person_outline, 'Cliente'),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _toggleBtn('singular', Icons.person_outline, 'Singular')),
+          const SizedBox(width: 8),
+          Expanded(child: _toggleBtn('empresa', Icons.business, 'Empresa')),
+        ]),
+        const SizedBox(height: 12),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: _tipoCliente == 'empresa'
+              ? _buildEmpresaSelector()
+              : _buildSingularFields(),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _toggleBtn(String tipo, IconData icon, String label) {
     final sel = _tipoCliente == tipo;

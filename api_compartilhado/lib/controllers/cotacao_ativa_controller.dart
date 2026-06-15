@@ -1,7 +1,5 @@
 // lib/controllers/cotacao_ativa_controller.dart
-//
-// Mantém a cotação activa (em montagem) durante a sessão.
-// Qualquer widget pode escutar via ValueListenableBuilder.
+
 
 import 'package:flutter/foundation.dart';
 import 'package:api_compartilhado/api_compartilhado.dart'; // CotacaoModel

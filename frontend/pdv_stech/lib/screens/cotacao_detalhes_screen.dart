@@ -27,40 +27,36 @@ class _CotacaoDetalhesScreenState extends State<CotacaoDetalhesScreen> {
   // ══════════════════════════════════════════════════════════════════════════
 
   Future<void> _converter() async {
-    if (_processando) return;
-    final ok = await _dialogoConfirmacao(
-      titulo: 'Converter em Pedido',
-      mensagem: 'Deseja converter a cotação ${widget.cotacao.referencia} em pedido?',
-      labelBotao: 'Converter',
-      corBotao: _kCotacao,
-      icone: Icons.swap_horiz,
-      aviso: 'O stock será decrementado e a cotação ficará CONVERTIDA.',
+  if (_processando) return;
+  final ok = await _dialogoConfirmacao(
+    titulo: 'Converter em Pedido',
+    mensagem: 'Deseja converter a cotação ${widget.cotacao.referencia} em pedido?',
+    labelBotao: 'Converter',
+    corBotao: _kCotacao,
+    icone: Icons.swap_horiz,
+    aviso: 'O stock será decrementado e a cotação ficará CONVERTIDA.',
+  );
+  if (!ok) return;
+
+  setState(() => _processando = true);
+  try {
+    final pedido = await context.read<CotacaoProvider>().converterEmPedido(
+      widget.cotacao.idCotacao,
+      const ConverterCotacaoEmPedidoRequestModel(idTipoPagamento: 1),
     );
-    if (!ok) return;
+    if (!mounted) return;
 
-    // Diálogo de pagamento
-    final idTipoPagamento = await _dialogoTipoPagamento();
-    if (idTipoPagamento == null) return;
-
-    setState(() => _processando = true);
-    try {
-      final pedido = await context.read<CotacaoProvider>().converterEmPedido(
-        widget.cotacao.idCotacao,
-        ConverterCotacaoEmPedidoRequestModel(idTipoPagamento: idTipoPagamento),
-      );
-      if (!mounted) return;
-
-      final provider = context.read<CotacaoProvider>();
-      if (pedido != null && provider.status == CotacaoStatus.success) {
-        _snack('Cotação convertida no pedido ${pedido.referencia}!', Colors.green);
-        Navigator.pop(context, 'convertida');
-      } else {
-        _snack('Erro: ${provider.errorMessage}', _kAccent);
-      }
-    } finally {
-      if (mounted) setState(() => _processando = false);
+    final provider = context.read<CotacaoProvider>();
+    if (pedido != null && provider.status == CotacaoStatus.success) {
+      _snack('Cotação convertida no pedido ${pedido.referencia}!', Colors.green);
+      Navigator.pop(context, 'convertida');
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
     }
+  } finally {
+    if (mounted) setState(() => _processando = false);
   }
+}
 
   Future<void> _reabrir() async {
     if (_processando) return;
@@ -176,33 +172,7 @@ class _CotacaoDetalhesScreenState extends State<CotacaoDetalhesScreen> {
         false;
   }
 
-  Future<int?> _dialogoTipoPagamento() async {
-    return await showDialog<int>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Tipo de Pagamento',
-            style: TextStyle(color: _kPrimary, fontWeight: FontWeight.bold)),
-        children: [
-          _opcaoPagamento(ctx, 1, Icons.money,          'Dinheiro'),
-          _opcaoPagamento(ctx, 2, Icons.phone_android,  'M-Pesa'),
-          _opcaoPagamento(ctx, 3, Icons.phone_android,  'E-Mola'),
-          _opcaoPagamento(ctx, 4, Icons.credit_card,    'Transferência'),
-        ],
-      ),
-    );
-  }
 
-  Widget _opcaoPagamento(BuildContext ctx, int id, IconData icon, String label) {
-    return SimpleDialogOption(
-      onPressed: () => Navigator.pop(ctx, id),
-      child: Row(children: [
-        Icon(icon, color: _kPrimary, size: 20),
-        const SizedBox(width: 10),
-        Text(label, style: const TextStyle(fontSize: 14)),
-      ]),
-    );
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // BUILD
