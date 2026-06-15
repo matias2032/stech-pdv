@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "cotacao")
@@ -55,13 +57,13 @@ public class Cotacao extends AuditableEntity {
     @JoinColumn(name = "id_pedido_convertido")
     private Pedido pedidoConvertido;
 
-    @OneToMany(mappedBy = "cotacao", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<CotacaoItemProduto> itensProduto = new ArrayList<>();
+@OneToMany(mappedBy = "cotacao", cascade = CascadeType.ALL, orphanRemoval = true)
+@Builder.Default
+private Set<CotacaoItemProduto> itensProduto = new HashSet<>();
 
-    @OneToMany(mappedBy = "cotacao", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<CotacaoItemServico> itensServico = new ArrayList<>();
+@OneToMany(mappedBy = "cotacao", cascade = CascadeType.ALL, orphanRemoval = true)
+@Builder.Default
+private Set<CotacaoItemServico> itensServico = new HashSet<>();
 
     // ── Helpers de negócio ────────────────────────────────────────────
 

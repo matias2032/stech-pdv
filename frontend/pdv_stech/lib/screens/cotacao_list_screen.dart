@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:provider/provider.dart';
 import '../widgets/app_sidebar.dart';
+import 'cotacao_catalogo_screen.dart';
+import 'cotacoes_abertas_screen.dart';
 
 // ── Cores STech Engenharia ────────────────────────────────────────────────────
 const _kVermelho   = Color(0xFFC8102E);
@@ -177,13 +179,23 @@ class _CotacaoListScreenState extends State<CotacaoListScreen> {
 
   // ── Navegação ────────────────────────────────────────────────────────────
 
-  void _abrirFormulario({CotacaoModel? cotacao}) {
-    // TODO: rota ainda não definida — deixar em branco propositadamente.
-  }
+void _abrirFormulario({CotacaoModel? cotacao}) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const CotacaoCatalogoScreen(),
+    ),
+  ).then((_) => _recarregar());
+}
 
-  void _abrirDetalhe(CotacaoModel cotacao) {
-    // TODO: rota de detalhe/edição ainda não definida — deixar em branco.
-  }
+void _abrirDetalhe(CotacaoModel cotacao) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const CotacoesAbertasScreen(),
+    ),
+  ).then((_) => _recarregar());
+}
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
