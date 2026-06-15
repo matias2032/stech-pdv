@@ -179,6 +179,20 @@ class CotacaoRepository {
     return Future.wait(rows.map(_cotacaoComItensDoCache));
   }
 
+Future<List<CotacaoModel>> listarProntas() async {
+  if (_connectivity.isOnline) {
+    try {
+      final lista = await _service.listarProntas();
+      for (final m in lista) await _upsertCotacaoComItens(m);
+      return lista;
+    } catch (e) {
+      debugPrint('⚠️ CotacaoRepository.listarProntas HTTP falhou — usando cache: $e');
+    }
+  }
+  final rows = await _dao.getByStatus('PRONTA');
+  return Future.wait(rows.map(_cotacaoComItensDoCache));
+}
+
   // ══════════════════════════════════════════════════════════════════
   // CRIAR COTAÇÃO
   // ══════════════════════════════════════════════════════════════════

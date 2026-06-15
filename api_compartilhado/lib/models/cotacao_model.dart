@@ -192,18 +192,17 @@ class CotacaoModel {
 
   // ── Helpers de negócio (espelho de Cotacao.java) ───────────────────
 
-  static const _statusNaoEditaveis = ['CONVERTIDA', 'CANCELADA', 'EXPIRADA'];
+bool get temItens      => itensProduto.isNotEmpty || itensServico.isNotEmpty;
 
-  bool get isEditavel => !_statusNaoEditaveis.contains(statusCotacao);
+bool get isEditavel    => statusCotacao == 'ABERTA';
+bool get isPronta      => statusCotacao == 'PRONTA';
+bool get isConvertivel => statusCotacao == 'PRONTA';
 
-  bool get temItens => itensProduto.isNotEmpty || itensServico.isNotEmpty;
-
-  bool get estaAberta    => statusCotacao == 'ABERTA';
-  bool get estaEnviada   => statusCotacao == 'ENVIADA';
-  bool get estaAprovada  => statusCotacao == 'APROVADA';
-  bool get estaConvertida => statusCotacao == 'CONVERTIDA';
-  bool get estaCancelada  => statusCotacao == 'CANCELADA';
-  bool get estaExpirada   => statusCotacao == 'EXPIRADA';
+bool get estaAberta     => statusCotacao == 'ABERTA';
+bool get estaPronta     => statusCotacao == 'PRONTA';
+bool get estaConvertida => statusCotacao == 'CONVERTIDA';
+bool get estaCancelada  => statusCotacao == 'CANCELADA';
+bool get estaExpirada   => statusCotacao == 'EXPIRADA';
 
   // ── HTTP → Model ──────────────────────────────────────────────────
 

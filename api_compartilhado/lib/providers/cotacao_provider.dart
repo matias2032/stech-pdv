@@ -88,6 +88,11 @@ class CotacaoProvider extends ChangeNotifier {
     if (result != null) _cotacoes = result;
   }
 
+  Future<void> listarProntas() async {
+  final result = await _run(() => _repository.listarProntas());
+  if (result != null) _cotacoes = result;
+}
+
   // ════════════════════════════════════════════════════════════════════════
   // ACTUALIZAR COTAÇÃO
   // ════════════════════════════════════════════════════════════════════════
