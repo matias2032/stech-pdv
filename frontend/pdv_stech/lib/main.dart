@@ -284,7 +284,8 @@ SyncScheduler.instance.init(
           '/cadastrar_documentos'     : (_) => const DocumentosFormScreen(),
           '/gerenciar_extractos'      : (_) => const ExtratosListScreen(),
           '/cadastrar_extractos'      : (_) => const ExtratosFormScreen(),
-             '/gerenciar_cotacoes'      : (_) => const CotacaoCatalogoScreen(),
+             '/criar_cotacao'      : (_) => const CotacaoCatalogoScreen(),
+                 '/cotacoes_prontas'      : (_) => const CotacaoListScreen(),
         },
 
         onGenerateRoute: (settings) {

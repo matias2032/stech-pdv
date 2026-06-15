@@ -122,37 +122,51 @@ class _AppSidebarState extends State<AppSidebar>
 
   List<_MenuGroup> _grupos(int pedidosAbertos) => [
     _MenuGroup(
-      icon: Icons.point_of_sale_rounded,
-      title: 'Vendas',
-      items: [
-        _MenuItem(
-          icon:  Icons.storefront_rounded,
-          title: 'Balcão de Vendas',
-          route: '/catalogo',
-          badge: pedidosAbertos,
-        ),
-        _MenuItem(
-          icon:  Icons.receipt_long_rounded,
-          title: 'Encomendas / Pedidos',
-          route: '/pedidos_finalizados',
-        ),
-        _MenuItem(
-          icon:  Icons.description_rounded,
-          title: 'Facturação',
-          route: '/gerenciar_documentos',
-        ),
-        _MenuItem(
-          icon:  Icons.swap_horiz_rounded,
-          title: 'Extractos',
-          route: '/gerenciar_extractos',
-        ),
-        _MenuItem(
-          icon:  Icons.price_check_rounded,
-          title: 'Cotações',
-          route: '/gerenciar_cotacoes',
-        ),
-      ],
+  icon: Icons.point_of_sale_rounded,
+  title: 'Vendas',
+  items: [
+    _MenuItem(
+      icon:  Icons.storefront_rounded,
+      title: 'Balcão de Vendas',
+      route: '/catalogo',
+      badge: pedidosAbertos,
     ),
+    _MenuItem(
+      icon:  Icons.receipt_long_rounded,
+      title: 'Encomendas / Pedidos',
+      route: '/pedidos_finalizados',
+    ),
+    _MenuItem(
+      icon:  Icons.description_rounded,
+      title: 'Facturação',
+      route: '/gerenciar_documentos',
+    ),
+    _MenuItem(
+      icon:  Icons.swap_horiz_rounded,
+      title: 'Extractos',
+      route: '/gerenciar_extractos',
+    ),
+  ],
+),
+
+_MenuGroup(
+  icon: Icons.request_quote_rounded,
+  title: 'Cotações',
+  items: [
+    _MenuItem(
+      icon:  Icons.price_check_rounded,
+      title: 'Criar Cotação',
+      route: '/criar_cotacao',
+    ),
+    _MenuItem(
+      icon:  Icons.assignment_turned_in_rounded,
+      title: 'Cotações Prontas',
+      route: '/cotacoes_prontas',
+    ),
+  ],
+),
+
+
     _MenuGroup(
       icon: Icons.people_alt_rounded,
       title: 'Clientes',
