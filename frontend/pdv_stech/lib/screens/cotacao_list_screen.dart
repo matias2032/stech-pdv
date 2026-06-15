@@ -200,7 +200,7 @@ void _abrirDetalhe(CotacaoModel cotacao) {
     return Scaffold(
       backgroundColor: _kCinzaClaro,
       appBar: _buildAppBar(),
-      drawer: const AppSidebar(currentRoute: '/cotacoes'),
+      drawer: const AppSidebar(currentRoute: '/cotacoes_prontas'),
       body: Column(
         children: [
           _BarraPesquisa(

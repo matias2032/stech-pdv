@@ -49,7 +49,7 @@ class _CotacaoCatalogoScreenState extends State<CotacaoCatalogoScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kBackground,
-      drawer: const AppSidebar(currentRoute: '/cotacoes/catalogo'),
+      drawer: const AppSidebar(currentRoute: '/criar_cotacao'),
       appBar: AppBar(
         backgroundColor: _kPrimary,
         foregroundColor: Colors.white,
