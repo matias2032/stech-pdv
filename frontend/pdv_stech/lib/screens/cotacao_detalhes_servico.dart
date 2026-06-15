@@ -29,13 +29,35 @@ class _CotacaoDetalhesServicoScreenState
   int  _quantidade  = 1;
   bool _processando = false;
 
+  @override
+void initState() {
+  super.initState();
+  CotacaoAtivaController.instance.limparSeNaoAberta();
+  _sincronizarCotacaoAtiva();
+}
+
+Future<void> _sincronizarCotacaoAtiva() async {
+  final cotacao = CotacaoAtivaController.instance.cotacaoAtiva.value;
+  if (cotacao == null) return;
+  try {
+    final fresca = await context.read<CotacaoProvider>().buscarPorId(cotacao.idCotacao);
+    if (!mounted) return;
+    if (fresca == null || !fresca.estaAberta) {
+      CotacaoAtivaController.instance.limpar();
+    } else {
+      CotacaoAtivaController.instance.definir(fresca);
+    }
+  } catch (_) {
+    CotacaoAtivaController.instance.limpar();
+  }
+}
+
   ServicoModel get servico  => widget.servico;
   double get totalParcial   => servico.precoUnitario * _quantidade;
 
   CotacaoModel? get _cotacaoAtiva =>
       CotacaoAtivaController.instance.cotacaoAtiva.value;
-  bool get _temCotacaoAtiva => _cotacaoAtiva != null;
-
+bool get _temCotacaoAtiva => _cotacaoAtiva != null && _cotacaoAtiva!.estaAberta;
   @override
   void dispose() {
     _obsCtrl.dispose();
@@ -49,28 +71,7 @@ class _CotacaoDetalhesServicoScreenState
   // ── Acção principal ───────────────────────────────────────────────────────
 Future<void> _adicionarACotacao() async {
   if (_processando) return;
-
-  if (_temCotacaoAtiva) {
-    final cotacaoProvider = context.read<CotacaoProvider>();
-    final fresca = await cotacaoProvider.buscarPorId(_cotacaoAtiva!.idCotacao);
-    if (!mounted) return;
-
-    if (fresca != null) {
-      CotacaoAtivaController.instance.definir(fresca);
-    }
-
-    final actual = CotacaoAtivaController.instance.cotacaoAtiva.value;
-    if (actual != null && !actual.estaAberta) {
-      _snack(
-        'Cotação ${actual.referencia} já não está aberta (${actual.statusCotacao}).',
-        Colors.orange,
-      );
-      CotacaoAtivaController.instance.limpar();
-      return;
-    }
-  }
-
-  final ok = await _dialogConfirmacao();
+    final ok = await _dialogConfirmacao();
   if (!ok) return;
     setState(() => _processando = true);
     try {
@@ -78,77 +79,63 @@ Future<void> _adicionarACotacao() async {
       final obs = _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim();
 
       if (_temCotacaoAtiva) {
-  final cotacaoAberta =
-      await _validarCotacaoAtivaAberta(cotacaoProvider);
+        // ── Adiciona à cotação activa ────────────────────────────────────
+        final cotacaoActualizada = await cotacaoProvider.adicionarServico(
+          _cotacaoAtiva!.idCotacao,
+          AdicionarServicoCotacaoRequestModel(
+            idServico:   servico.idServico,
+            quantidade:  _quantidade,
+            observacoes: obs,
+          ),
+        );
+        if (!mounted) return;
 
-  if (!mounted) return;
+        if (cotacaoProvider.status == CotacaoStatus.success &&
+            cotacaoActualizada != null) {
+          CotacaoAtivaController.instance.definir(cotacaoActualizada);
+          _snack(
+            '✅ Serviço adicionado à cotação ${cotacaoActualizada.referencia}',
+            Colors.green,
+          );
+          Navigator.pop(context, cotacaoActualizada);
+        } else {
+          _snack('Erro: ${cotacaoProvider.errorMessage}', _kAccent);
+        }
+      } else {
+        // ── Cria nova cotação e adiciona o item ──────────────────────────
+        final novaCotacao = await cotacaoProvider.criarCotacao(
+          CriarCotacaoRequestModel(idUsuario: SessaoService.instance.idUsuario),
+        );
+        if (!mounted) return;
 
-  if (cotacaoAberta == null) return;
+        if (novaCotacao == null ||
+            cotacaoProvider.status != CotacaoStatus.success) {
+          _snack(
+              'Erro ao criar cotação: ${cotacaoProvider.errorMessage}', _kAccent);
+          return;
+        }
 
-  final cotacaoActualizada = await cotacaoProvider.adicionarServico(
-    cotacaoAberta.idCotacao,
-    AdicionarServicoCotacaoRequestModel(
-      idServico: servico.idServico,
-      quantidade: _quantidade,
-      observacoes: obs,
-    ),
-  );
+        final cotacaoComItem = await cotacaoProvider.adicionarServico(
+          novaCotacao.idCotacao,
+          AdicionarServicoCotacaoRequestModel(
+            idServico:   servico.idServico,
+            quantidade:  _quantidade,
+            observacoes: obs,
+          ),
+        );
+        if (!mounted) return;
 
-  if (!mounted) return;
+        final cotacaoFinal = cotacaoComItem ?? novaCotacao;
+        CotacaoAtivaController.instance.definir(cotacaoFinal);
 
-  if (cotacaoProvider.status == CotacaoStatus.success &&
-      cotacaoActualizada != null) {
-    CotacaoAtivaController.instance.definir(cotacaoActualizada);
-
-    _snack(
-      '✅ Serviço adicionado à cotação ${cotacaoActualizada.referencia}',
-      Colors.green,
-    );
-
-    Navigator.pop(context, cotacaoActualizada);
-  } else {
-    _snack(
-      'Erro: ${cotacaoProvider.errorMessage}',
-      _kAccent,
-    );
-  }
-}
+        _snack('✅ Cotação ${cotacaoFinal.referencia} criada!', _kCotacao);
+        Navigator.pop(context, cotacaoFinal);
+      }
     } finally {
       if (mounted) setState(() => _processando = false);
     }
   }
-Future<CotacaoModel?> _validarCotacaoAtivaAberta(
-  CotacaoProvider cotacaoProvider,
-) async {
-  final ativa = CotacaoAtivaController.instance.cotacaoAtiva.value;
 
-  if (ativa == null) return null;
-
-  final fresca = await cotacaoProvider.buscarPorId(ativa.idCotacao);
-  if (!mounted) return null;
-
-  if (fresca == null) {
-    _snack(
-      'Não foi possível confirmar o estado actual da cotação.',
-      Colors.orange,
-    );
-    return null;
-  }
-
-  CotacaoAtivaController.instance.definir(fresca);
-
-  if (!fresca.estaAberta) {
-    _snack(
-      'Cotação ${fresca.referencia} já não está aberta.',
-      Colors.orange,
-    );
-
-    CotacaoAtivaController.instance.limpar();
-    return null;
-  }
-
-  return fresca;
-}
   // ── Diálogo de confirmação ────────────────────────────────────────────────
   Future<bool> _dialogConfirmacao() async {
     return await showDialog<bool>(
@@ -271,18 +258,16 @@ Future<CotacaoModel?> _validarCotacaoAtivaAberta(
     );
   }
 
-void _snack(String msg, Color color) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
+  void _snack(String msg, Color cor) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: color,
+      backgroundColor: cor,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
-    ),
-  );
-}
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
 
   // ════════════════════════════════════════════════════════════════════════
   // BUILD
@@ -655,50 +640,47 @@ void _snack(String msg, Color color) {
 
   // ── Botão principal ───────────────────────────────────────────────────────
   Widget _buildBotao() {
-    return ValueListenableBuilder<CotacaoModel?>(
-      valueListenable: CotacaoAtivaController.instance.cotacaoAtiva,
-      builder: (_, cotacao, __) {
-        final adicionando = cotacao != null;
+  return ValueListenableBuilder<CotacaoModel?>(
+    valueListenable: CotacaoAtivaController.instance.cotacaoAtiva,
+    builder: (_, cotacao, __) {
+      // ← só considera activa se estiver ABERTA
+      final adicionando = cotacao != null && cotacao.estaAberta;
 
-        final label = _processando
-            ? (adicionando ? 'A adicionar...' : 'A criar cotação...')
-            : adicionando
-                ? 'Adicionar à ${cotacao.referencia}'
-                : 'Criar Cotação';
+      final label = _processando
+          ? (adicionando ? 'A adicionar...' : 'A criar cotação...')
+          : adicionando
+              ? 'Adicionar à ${cotacao!.referencia}'
+              : 'Criar Cotação';
 
-        final icone = _processando
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
-              )
-            : Icon(adicionando
-                ? Icons.add_shopping_cart
-                : Icons.request_quote_outlined);
+      final icone = _processando
+          ? const SizedBox(
+              width: 18, height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+          : Icon(adicionando
+              ? Icons.add_shopping_cart
+              : Icons.request_quote_outlined);
 
-        return SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton.icon(
-            onPressed: _processando ? null : _adicionarACotacao,
-            icon: icone,
-            label: Text(label,
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  adicionando ? Colors.green[700] : _kCotacao,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 3,
-            ),
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: _processando ? null : _adicionarACotacao,
+          icon: icone,
+          label: Text(label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: adicionando ? Colors.green[700] : _kCotacao,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 3,
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
+
 
   // ── Util ──────────────────────────────────────────────────────────────────
   Widget _card({required Widget child}) {

@@ -79,7 +79,6 @@ Future<void> _gerarCotacao() async {
         ? _empresaSelecionada!.id
         : null;
 
-    // 1ª chamada — associar cliente (sem statusCotacao)
     if (idCliente != null) {
       await provider.atualizarCotacao(
         widget.cotacao.idCotacao,
@@ -92,7 +91,6 @@ Future<void> _gerarCotacao() async {
       }
     }
 
-    // 2ª chamada — mudar status para PRONTA (sem idCliente)
     final actualizada = await provider.atualizarCotacao(
       widget.cotacao.idCotacao,
       const AtualizarCotacaoRequestModel(statusCotacao: 'PRONTA'),
@@ -100,6 +98,8 @@ Future<void> _gerarCotacao() async {
     if (!mounted) return;
 
     if (provider.status == CotacaoStatus.success && actualizada != null) {
+      // ← LINHA ADICIONADA: cotação já não é ABERTA, limpar o controller
+      CotacaoAtivaController.instance.limpar();
       _snack('Cotação fechada e pronta para converter!', Colors.green);
       Navigator.pop(context, true);
     } else {

@@ -10,11 +10,24 @@ class CotacaoAtivaController {
 
   final ValueNotifier<CotacaoModel?> cotacaoAtiva = ValueNotifier(null);
 
-  /// Define (ou substitui) a cotação activa.
-  void definir(CotacaoModel cotacao) => cotacaoAtiva.value = cotacao;
+  void definir(CotacaoModel cotacao) {
+    // ← só aceita cotações ABERTAS
+    if (cotacao.estaAberta) {
+      cotacaoAtiva.value = cotacao;
+    } else {
+      cotacaoAtiva.value = null;
+    }
+  }
 
-  /// Limpa a cotação activa (após converter ou cancelar).
   void limpar() => cotacaoAtiva.value = null;
+
+  /// Limpa automaticamente se a cotação já não estiver aberta.
+  void limparSeNaoAberta() {
+    final atual = cotacaoAtiva.value;
+    if (atual != null && !atual.estaAberta) {
+      cotacaoAtiva.value = null;
+    }
+  }
 
   void dispose() => cotacaoAtiva.dispose();
 }

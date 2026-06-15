@@ -26,7 +26,7 @@ class _CotacaoDetalhesScreenState extends State<CotacaoDetalhesScreen> {
   // ACÇÕES
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<void> _converter() async {
+Future<void> _converter() async {
   if (_processando) return;
   final ok = await _dialogoConfirmacao(
     titulo: 'Converter em Pedido',
@@ -48,6 +48,8 @@ class _CotacaoDetalhesScreenState extends State<CotacaoDetalhesScreen> {
 
     final provider = context.read<CotacaoProvider>();
     if (pedido != null && provider.status == CotacaoStatus.success) {
+      // ← LINHA ADICIONADA
+      CotacaoAtivaController.instance.limpar();
       _snack('Cotação convertida no pedido ${pedido.referencia}!', Colors.green);
       Navigator.pop(context, 'convertida');
     } else {
@@ -89,36 +91,38 @@ class _CotacaoDetalhesScreenState extends State<CotacaoDetalhesScreen> {
     }
   }
 
-  Future<void> _cancelar() async {
-    if (_processando) return;
-    final ok = await _dialogoConfirmacao(
-      titulo: 'Cancelar Cotação',
-      mensagem: 'A cotação ficará CANCELADA e não poderá ser editada.',
-      labelBotao: 'Cancelar Cotação',
-      corBotao: _kAccent,
-      icone: Icons.cancel_outlined,
+Future<void> _cancelar() async {
+  if (_processando) return;
+  final ok = await _dialogoConfirmacao(
+    titulo: 'Cancelar Cotação',
+    mensagem: 'A cotação ficará CANCELADA e não poderá ser editada.',
+    labelBotao: 'Cancelar Cotação',
+    corBotao: _kAccent,
+    icone: Icons.cancel_outlined,
+  );
+  if (!ok) return;
+
+  setState(() => _processando = true);
+  try {
+    await context.read<CotacaoProvider>().atualizarCotacao(
+      widget.cotacao.idCotacao,
+      const AtualizarCotacaoRequestModel(statusCotacao: 'CANCELADA'),
     );
-    if (!ok) return;
+    if (!mounted) return;
 
-    setState(() => _processando = true);
-    try {
-      await context.read<CotacaoProvider>().atualizarCotacao(
-        widget.cotacao.idCotacao,
-        const AtualizarCotacaoRequestModel(statusCotacao: 'CANCELADA'),
-      );
-      if (!mounted) return;
-
-      final provider = context.read<CotacaoProvider>();
-      if (provider.status == CotacaoStatus.success) {
-        _snack('Cotação cancelada.', Colors.orange);
-        Navigator.pop(context, 'cancelada');
-      } else {
-        _snack('Erro: ${provider.errorMessage}', _kAccent);
-      }
-    } finally {
-      if (mounted) setState(() => _processando = false);
+    final provider = context.read<CotacaoProvider>();
+    if (provider.status == CotacaoStatus.success) {
+      // ← LINHA ADICIONADA
+      CotacaoAtivaController.instance.limpar();
+      _snack('Cotação cancelada.', Colors.orange);
+      Navigator.pop(context, 'cancelada');
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
     }
+  } finally {
+    if (mounted) setState(() => _processando = false);
   }
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // DIÁLOGOS

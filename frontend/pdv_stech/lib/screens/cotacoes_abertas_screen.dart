@@ -26,13 +26,15 @@ class _CotacoesAbertasScreenState extends State<CotacoesAbertasScreen> {
   final _currencyFmt = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
   bool _operacaoEmAndamento = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-     context.read<CotacaoProvider>().listarPorStatus('ABERTA');
-    });
-  }
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    context.read<CotacaoProvider>().listarPorStatus('ABERTA');
+    // ← ADICIONADO: limpa o controller se a cotação activa já não for ABERTA
+    CotacaoAtivaController.instance.limparSeNaoAberta();
+  });
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // DADOS
@@ -51,14 +53,22 @@ class _CotacoesAbertasScreenState extends State<CotacoesAbertasScreen> {
   // ══════════════════════════════════════════════════════════════════════════
 
   /// Define a cotação como activa e navega para o catálogo para adicionar itens.
-  Future<void> _editarCotacao(CotacaoModel cotacao) async {
-    CotacaoAtivaController.instance.definir(cotacao);
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CotacaoCatalogoScreen()),
-    );
-    if (mounted) await _carregar();
+Future<void> _editarCotacao(CotacaoModel cotacao) async {
+  // ← só define se estiver ABERTA (o definir() já filtra, mas explicitamos)
+  if (!cotacao.estaAberta) {
+    _snack('Esta cotação já não está aberta.', Colors.orange);
+    return;
   }
+  CotacaoAtivaController.instance.definir(cotacao);
+  await Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const CotacaoCatalogoScreen()),
+  );
+  if (!mounted) return;
+  // ← ADICIONADO: ao regressar, limpa se entretanto ficou não-ABERTA
+  CotacaoAtivaController.instance.limparSeNaoAberta();
+  await _carregar();
+}
 
   /// Cancela a cotação após confirmação.
   Future<void> _cancelarCotacao(CotacaoModel cotacao) async {
@@ -80,6 +90,7 @@ class _CotacoesAbertasScreenState extends State<CotacoesAbertasScreen> {
         if (CotacaoAtivaController.instance.cotacaoAtiva.value?.idCotacao ==
             cotacao.idCotacao) {
           CotacaoAtivaController.instance.limpar();
+          
         }
         _snack('Cotação ${cotacao.referencia} cancelada', Colors.orange);
         await _carregar();
@@ -450,133 +461,116 @@ Future<void> _abrirResumo(CotacaoModel cotacao) async {
   // CARD DA COTAÇÃO
   // ══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildCard(CotacaoModel cotacao) {
-    final isAtiva =
-        CotacaoAtivaController.instance.cotacaoAtiva.value?.idCotacao ==
-            cotacao.idCotacao;
-    final totalItens =
-        cotacao.itensProduto.length + cotacao.itensServico.length;
+Widget _buildCard(CotacaoModel cotacao) {
+  final totalItens =
+      cotacao.itensProduto.length + cotacao.itensServico.length;
 
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isAtiva ? _kCotacao.withOpacity(0.6) : Colors.grey.shade200,
-          width: isAtiva ? 2 : 1,
+  // ← SUBSTITUÍDO: era uma comparação estática, agora reage ao ValueNotifier
+  return ValueListenableBuilder<CotacaoModel?>(
+    valueListenable: CotacaoAtivaController.instance.cotacaoAtiva,
+    builder: (_, cotacaoAtiva, __) {
+      final isAtiva = cotacaoAtiva?.idCotacao == cotacao.idCotacao;
+
+      return Card(
+        elevation: 0,
+        color: Colors.white,
+        margin: const EdgeInsets.only(bottom: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isAtiva ? _kCotacao.withOpacity(0.6) : Colors.grey.shade200,
+            width: isAtiva ? 2 : 1,
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Cabeçalho ────────────────────────────────────────────────
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _kCotacao.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.request_quote_outlined,
-                    color: _kCotacao, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(cotacao.referencia,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: _kPrimary)),
-                    const SizedBox(height: 3),
-                    Text(
-                      _formatarData(cotacao.createdAt ?? DateTime.now()),
-                      style: TextStyle(
-                          color: Colors.grey[500], fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              _buildBadgeStatus(cotacao.statusCotacao),
-            ]),
-
-            // ── Cliente (se existir) ──────────────────────────────────────
-            if (cotacao.nomeCliente != null) ...[
-              const SizedBox(height: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(children: [
-                Icon(Icons.person_outline,
-                    size: 13, color: Colors.grey[500]),
-                const SizedBox(width: 5),
-                Text(cotacao.nomeCliente!,
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey[600])),
-              ]),
-            ],
-
-            // ── Validade (se existir) ─────────────────────────────────────
-            if (cotacao.validadeAte != null) ...[
-              const SizedBox(height: 4),
-              Row(children: [
-                Icon(Icons.schedule_outlined,
-                    size: 13, color: Colors.grey[500]),
-                const SizedBox(width: 5),
-                Text(
-                  'Válida até ${_formatarDataSimples(cotacao.validadeAte!)}',
-                  style: TextStyle(
-                      fontSize: 12, color: Colors.grey[600]),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _kCotacao.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.request_quote_outlined,
+                      color: _kCotacao, size: 22),
                 ),
-              ]),
-            ],
-
-            const SizedBox(height: 14),
-            Divider(height: 1, color: Colors.grey[200]),
-            const SizedBox(height: 14),
-
-            // ── Itens de produto ──────────────────────────────────────────
-            if (cotacao.itensProduto.isNotEmpty) ...[
-              _sectionLabel(
-                  Icons.inventory_2_outlined, 'Produtos'),
-              const SizedBox(height: 8),
-              ...cotacao.itensProduto.map(_buildLinhaItemProduto),
-            ],
-
-            // ── Itens de serviço ──────────────────────────────────────────
-            if (cotacao.itensServico.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              _sectionLabel(
-                  Icons.miscellaneous_services_outlined, 'Serviços'),
-              const SizedBox(height: 8),
-              ...cotacao.itensServico.map(_buildLinhaItemServico),
-            ],
-
-            if (!cotacao.temItens) ...[
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('Sem itens — adicione produtos ou serviços.',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.grey[400])),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(cotacao.referencia,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: _kPrimary)),
+                      const SizedBox(height: 3),
+                      Text(
+                        _formatarData(cotacao.createdAt ?? DateTime.now()),
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                _buildBadgeStatus(cotacao.statusCotacao),
+              ]),
+              if (cotacao.nomeCliente != null) ...[
+                const SizedBox(height: 8),
+                Row(children: [
+                  Icon(Icons.person_outline, size: 13, color: Colors.grey[500]),
+                  const SizedBox(width: 5),
+                  Text(cotacao.nomeCliente!,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                ]),
+              ],
+              if (cotacao.validadeAte != null) ...[
+                const SizedBox(height: 4),
+                Row(children: [
+                  Icon(Icons.schedule_outlined, size: 13, color: Colors.grey[500]),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Válida até ${_formatarDataSimples(cotacao.validadeAte!)}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 14),
+              Divider(height: 1, color: Colors.grey[200]),
+              const SizedBox(height: 14),
+              if (cotacao.itensProduto.isNotEmpty) ...[
+                _sectionLabel(Icons.inventory_2_outlined, 'Produtos'),
+                const SizedBox(height: 8),
+                ...cotacao.itensProduto.map(_buildLinhaItemProduto),
+              ],
+              if (cotacao.itensServico.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _sectionLabel(Icons.miscellaneous_services_outlined, 'Serviços'),
+                const SizedBox(height: 8),
+                ...cotacao.itensServico.map(_buildLinhaItemServico),
+              ],
+              if (!cotacao.temItens) ...[
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Sem itens — adicione produtos ou serviços.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Divider(height: 1, color: Colors.grey[200]),
+              const SizedBox(height: 12),
+              _buildRodape(cotacao, totalItens),
             ],
-
-            const SizedBox(height: 14),
-            Divider(height: 1, color: Colors.grey[200]),
-            const SizedBox(height: 12),
-
-            // ── Rodapé ────────────────────────────────────────────────────
-            _buildRodape(cotacao, totalItens),
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
+}
 
   // ── Badge de status ───────────────────────────────────────────────────────
 
