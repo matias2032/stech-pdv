@@ -22,12 +22,12 @@ const double kTaxaIva = 0.16;
 // ENUM — tipos de documento fiscal (para uso local no PDF)
 // ═══════════════════════════════════════════════════════════════════
 
-enum TipoDocumentoPdf { factura, cotacao, recibo, notaDeCompra,vendaADinheiro }
+enum TipoDocumentoPdf { factura,recibo, notaDeCompra,vendaADinheiro }
 
 extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   String get titulo => switch (this) {
         TipoDocumentoPdf.factura => 'FACTURA',
-        TipoDocumentoPdf.cotacao => 'COTAÇÃO',
+
         TipoDocumentoPdf.recibo => 'RECIBO',
         TipoDocumentoPdf.notaDeCompra => 'NOTA DE COMPRA',
           TipoDocumentoPdf.vendaADinheiro => 'VENDA A DINHEIRO',
@@ -35,7 +35,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
 
   String get prefixo => switch (this) {
         TipoDocumentoPdf.factura => 'FAT',
-        TipoDocumentoPdf.cotacao => 'COT',
+
         TipoDocumentoPdf.recibo => 'REC',
         TipoDocumentoPdf.notaDeCompra => 'NCO',
         TipoDocumentoPdf.vendaADinheiro => 'VD',
@@ -43,7 +43,6 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
 
   String get labelReferencia => switch (this) {
         TipoDocumentoPdf.factura => 'Factura Nº',
-        TipoDocumentoPdf.cotacao => 'Cotação Nº',
         TipoDocumentoPdf.recibo => 'Recibo Nº',
         TipoDocumentoPdf.notaDeCompra => 'N. Compra Nº',
         TipoDocumentoPdf.vendaADinheiro => 'Venda a Dinheiro Nº',
@@ -52,7 +51,6 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   /// Converte o prefixo da BD para o enum local de PDF.
   static TipoDocumentoPdf dePrefixo(String prefixo) => switch (prefixo.toUpperCase()) {
         'FAT' => TipoDocumentoPdf.factura,
-        'COT' => TipoDocumentoPdf.cotacao,
         'REC' => TipoDocumentoPdf.recibo,
         'NCO' => TipoDocumentoPdf.notaDeCompra,
         'VD' => TipoDocumentoPdf.vendaADinheiro,
@@ -76,8 +74,6 @@ class DocumentoPdfModel {
 
   final DateTime dataEmissao;
 
-  /// Data de validade (opcional; ex: Cotação válida por 7 dias)
-  final DateTime? dataValidade;
 
   final String? salesperson;
   final String prazoPagamento;
@@ -93,7 +89,7 @@ class DocumentoPdfModel {
     required this.pedido,
     required this.cliente,
     required this.tipoPagamento,
-    this.dataValidade,
+
     this.salesperson,
     this.prazoPagamento = 'Pronto Pagamento',
   });
@@ -105,7 +101,6 @@ class DocumentoPdfModel {
     required PedidoModel pedido,
     required ClienteModel cliente,
     required String tipoPagamento,
-    DateTime? dataValidade,
     String? salesperson,
     String prazoPagamento = 'Pronto Pagamento',
   }) {
@@ -117,7 +112,6 @@ class DocumentoPdfModel {
       pedido: pedido,
       cliente: cliente,
       tipoPagamento: tipoPagamento,
-      dataValidade: dataValidade,
       salesperson: salesperson,
       prazoPagamento: prazoPagamento,
     );
@@ -186,7 +180,7 @@ abstract final class _Empresa {
   ];
 
   static const List<String> termos = [
-    'Validade: Cotação válida por 7 dias.',
+
     'Preços: Incluem apenas os itens descritos; extras serão cobrados à parte.',
     'Pagamento: Pode exigir adiantamento. Atrasos podem suspender os serviços.',
     'Prazos: Contam após confirmação e pagamento. Podem variar por factores externos.',
@@ -534,8 +528,7 @@ pw.Widget _docFiscalCabecalho(DocumentoPdfModel doc, pw.MemoryImage icon) {
             children: [
 _metaRow('Data:', _fmt.format(doc.dataEmissao)),
 _metaRow('Gerado em:', DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())),
-              if (doc.dataValidade != null)
-                _metaRow('Data de V.C.:', _fmt.format(doc.dataValidade!)),
+            
               _metaRow('Prazo de Pagamento:', doc.prazoPagamento),
               if (doc.salesperson != null && doc.salesperson!.isNotEmpty)
                 _metaRow('Salesperson:', doc.salesperson!),
@@ -710,9 +703,7 @@ for (final s in pedido.itensServico)
   // ─── 6. Termos e condições ────────────────────────────────────
 
   pw.Widget _docFiscalTermos(DocumentoPdfModel doc) {
-    final tituloTermos = doc.tipo == TipoDocumentoPdf.cotacao
-        ? 'Termos e Condições'
-        : 'Termos e Condições de Pagamento';
+const tituloTermos = 'Termos e Condições de Pagamento';
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,

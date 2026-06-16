@@ -44,6 +44,8 @@ export 'services/cliente_service.dart';
 export 'services/documento_fiscal_service.dart'; // ← DocumentoFiscalService
 export 'services/extrato_service.dart'; 
 export 'services/extrato_pdf_service.dart'; 
+export 'services/cotacao_pdf_service.dart'; 
+
 
 
 // 4. Providers

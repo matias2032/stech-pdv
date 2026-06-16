@@ -42,6 +42,7 @@ import 'screens/cotacao_list_screen.dart';
 import 'screens/cotacao_detalhes_screen.dart';
 import 'screens/cotacoes_abertas_screen.dart';
 import 'screens/cotacao_catalogo_screen.dart';
+import 'screens/historico_cotacoes.dart';
 
 
 void main() async {
@@ -286,6 +287,7 @@ SyncScheduler.instance.init(
           '/cadastrar_extractos'      : (_) => const ExtratosFormScreen(),
              '/criar_cotacao'      : (_) => const CotacaoCatalogoScreen(),
                  '/cotacoes_prontas'      : (_) => const CotacaoListScreen(),
+                        '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
         },
 
         onGenerateRoute: (settings) {

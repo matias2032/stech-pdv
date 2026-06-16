@@ -163,6 +163,12 @@ _MenuGroup(
       title: 'Cotações Prontas',
       route: '/cotacoes_prontas',
     ),
+
+     _MenuItem(
+  icon:  Icons.history_edu_rounded,
+  title: 'Histórico de Cotações',
+  route: '/historico_cotacoes',
+),
   ],
 ),
 

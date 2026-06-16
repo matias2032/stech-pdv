@@ -485,7 +485,8 @@ class _Listagem extends StatelessWidget {
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w700))),
-                SizedBox(width: 88),
+                SizedBox(width: 120),
+
               ],
             ),
           ),
@@ -698,10 +699,17 @@ class _LinhaCotacao extends StatelessWidget {
               // Ações
               // Ações
 SizedBox(
-  width: 88,
+  width: 120,
   child: Row(
     mainAxisAlignment: MainAxisAlignment.end,
     children: [
+      // ── PDF ──
+      Tooltip(
+        message: 'Gerar PDF',
+        child: _BotaoPdfCotacao(cotacao: cotacao),
+      ),
+      const SizedBox(width: 6),
+      // ── Detalhes ──
       Tooltip(
         message: 'Detalhes',
         child: InkWell(
@@ -718,7 +726,7 @@ SizedBox(
           ),
         ),
       ),
-      // ── só mostra o botão remover se a cotação for eliminável ──
+      // ── Remover ──
       if (!['CONVERTIDA', 'CANCELADA', 'EXPIRADA']
           .contains(cotacao.statusCotacao)) ...[
         const SizedBox(width: 6),
@@ -745,6 +753,70 @@ SizedBox(
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Botão PDF da Cotação
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BotaoPdfCotacao extends StatefulWidget {
+  final CotacaoModel cotacao;
+  const _BotaoPdfCotacao({required this.cotacao});
+
+  @override
+  State<_BotaoPdfCotacao> createState() => _BotaoPdfCotacaoState();
+}
+
+class _BotaoPdfCotacaoState extends State<_BotaoPdfCotacao> {
+  bool _gerando = false;
+
+  Future<void> _gerarPdf() async {
+    if (_gerando) return;
+    setState(() => _gerando = true);
+    try {
+      final file = await CotacaoPdfService.instance.gerarCotacao(widget.cotacao);
+      if (!mounted) return;
+      await CotacaoPdfService.instance.abrirPdf(file);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao gerar PDF: $e'),
+          backgroundColor: _kVermelho,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _gerando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _gerarPdf,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: _kVerde.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: _gerando
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _kVerde,
+                ),
+              )
+            : const Icon(Icons.picture_as_pdf_outlined,
+                size: 16, color: _kVerde),
       ),
     );
   }

@@ -6,7 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -56,6 +58,36 @@ public class Pedido extends AuditableEntity {
     @Column(name = "id_cliente")
     private Long idCliente;
 
+    @Column(name = "tipo_venda", nullable = false, length = 20)
+private String tipoVenda = "IMEDIATA";
+
+@Column(name = "modalidade_credito", length = 20)
+private String modalidadeCredito; // SEM_PARCELAS | PARCELADO
+
+@Column(name = "status_pagamento", nullable = false, length = 20)
+private String statusPagamento = "PENDENTE";
+
+@Column(name = "id_documento_factura_credito")
+private Integer idDocumentoFacturaCredito;
+
+@Column(name = "data_abertura_credito")
+private OffsetDateTime dataAberturaCredito;
+
+@Column(name = "data_vencimento_credito")
+private LocalDate dataVencimentoCredito;
+
+@Column(name = "data_liquidacao_credito")
+private OffsetDateTime dataLiquidacaoCredito;
+
+@Column(name = "observacoes_credito", columnDefinition = "TEXT")
+private String observacoesCredito;
+
+// saldo_devedor_credito é GENERATED (calculado pela BD) — mapeado como read-only
+@Column(name = "saldo_devedor_credito", insertable = false, updatable = false,
+        precision = 12, scale = 2)
+private BigDecimal saldoDevedorCredito;
+
+
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ItemPedido> itensProduto = new HashSet<>();
 
@@ -84,6 +116,15 @@ public class Pedido extends AuditableEntity {
         public Builder dataPedido(LocalDateTime v)      { p.dataPedido = v;        return this; }
         public Builder dataFinalizacao(LocalDateTime v) { p.dataFinalizacao = v;   return this; }
         public Builder idCliente(Long v)                { p.idCliente = v;         return this; }
+        public Builder tipoVenda(String v)                  { p.tipoVenda = v;                    return this; }
+public Builder modalidadeCredito(String v)          { p.modalidadeCredito = v;            return this; }
+public Builder statusPagamento(String v)            { p.statusPagamento = v;              return this; }
+public Builder idDocumentoFacturaCredito(Integer v) { p.idDocumentoFacturaCredito = v;    return this; }
+public Builder dataVencimentoCredito(LocalDate v)   { p.dataVencimentoCredito = v;        return this; }
+public Builder observacoesCredito(String v)         { p.observacoesCredito = v;           return this; }
+public Builder dataAberturaCredito(OffsetDateTime v) { p.dataAberturaCredito = v; return this; }
+public Builder dataLiquidacaoCredito(OffsetDateTime v) { p.dataLiquidacaoCredito = v; return this; }
+
         public Pedido build()                           { return p; }
     }
 

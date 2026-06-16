@@ -100,4 +100,6 @@ List<Pedido> findByIdUsuarioAndDeletedFalseOrderByDataPedidoDesc(Integer idUsuar
 
             @Query("SELECT COUNT(p) FROM Pedido p WHERE p.statusPedido = 'aberto'")
             long contarPedidosAbertos();
+
+            List<Pedido> findByIdClienteAndTipoVendaAndDeletedFalse(Long idCliente, String tipoVenda);
 }

@@ -256,4 +256,61 @@ public ResponseEntity<Map<String, Long>> contarPedidosAbertos() {
     resp.put("total", pedidoRepository.contarPedidosAbertos());
     return ResponseEntity.ok(resp);
 }
+
+// ─── CRÉDITO ─────────────────────────────────────────────────────────────────
+
+/** POST /api/pedidos/{idPedido}/credito */
+@PostMapping("/{idPedido}/credito")
+public ResponseEntity<PedidoResponseDTO> declararCredito(
+        @PathVariable Integer idPedido,
+        @Valid @RequestBody DeclararCreditoRequestDTO dto) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+            .body(pedidoService.declararCredito(idPedido, dto));
+}
+
+/** POST /api/pedidos/{idPedido}/credito/parcelas */
+@PostMapping("/{idPedido}/credito/parcelas")
+public ResponseEntity<List<ParcelaResponseDTO>> criarParcelas(
+        @PathVariable Integer idPedido,
+        @Valid @RequestBody CriarParcelasRequestDTO dto) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+            .body(pedidoService.criarParcelas(idPedido, dto));
+}
+
+/** POST /api/pedidos/{idPedido}/credito/pagamentos */
+@PostMapping("/{idPedido}/credito/pagamentos")
+public ResponseEntity<PagamentoCreditoResponseDTO> registarPagamento(
+        @PathVariable Integer idPedido,
+        @Valid @RequestBody RegistarPagamentoCreditoRequestDTO dto) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+            .body(pedidoService.registarPagamento(idPedido, dto));
+}
+
+/** GET /api/pedidos/{idPedido}/credito/parcelas */
+@GetMapping("/{idPedido}/credito/parcelas")
+public ResponseEntity<List<ParcelaResponseDTO>> listarParcelas(
+        @PathVariable Integer idPedido) {
+    return ResponseEntity.ok(pedidoService.listarParcelas(idPedido));
+}
+
+/** GET /api/pedidos/{idPedido}/credito/pagamentos */
+@GetMapping("/{idPedido}/credito/pagamentos")
+public ResponseEntity<List<PagamentoCreditoResponseDTO>> listarPagamentos(
+        @PathVariable Integer idPedido) {
+    return ResponseEntity.ok(pedidoService.listarPagamentos(idPedido));
+}
+
+/** GET /api/pedidos/credito/em-divida */
+@GetMapping("/credito/em-divida")
+public ResponseEntity<List<PedidoResponseDTO>> listarEmDivida() {
+    return ResponseEntity.ok(pedidoService.listarEmDivida());
+}
+
+/** GET /api/clientes/{idCliente}/extracto  
+ *  (mantido aqui para não criar ClienteController só para isto) */
+@GetMapping("/clientes/{idCliente}/extracto")
+public ResponseEntity<ExtractoClienteResponseDTO> extractoCliente(
+        @PathVariable Long idCliente) {
+    return ResponseEntity.ok(pedidoService.extractoCliente(idCliente));
+}
 }

@@ -24,6 +24,9 @@ import com.stechengenharia.pdv_backend.sync.dto.SyncOperacaoDTO;
 import com.stechengenharia.pdv_backend.sync.dto.SyncRequestDTO;
 import com.stechengenharia.pdv_backend.sync.dto.SyncResponseDTO;
 import com.stechengenharia.pdv_backend.sync.dto.SyncResultadoDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.DeclararCreditoRequestDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.CriarParcelasRequestDTO;
+import com.stechengenharia.pdv_backend.pedido.dto.RegistarPagamentoCreditoRequestDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -285,6 +288,27 @@ private SyncResultadoDTO processarPedido(SyncOperacaoDTO op) {
                 pedidoService.eliminar(op.getId().intValue());
                 yield sucesso(op, op.getId());
             }
+            
+            case "DECLARAR_CREDITO" -> {
+    Integer idPedido = extrairIdPedido(op);
+    DeclararCreditoRequestDTO dto = converter(op.getPayload(), DeclararCreditoRequestDTO.class);
+    var response = pedidoService.declararCredito(idPedido, dto);
+    yield sucesso(op, (long) response.idPedido);
+}
+
+case "CRIAR_PARCELAS" -> {
+    Integer idPedido = extrairIdPedido(op);
+    CriarParcelasRequestDTO dto = converter(op.getPayload(), CriarParcelasRequestDTO.class);
+    pedidoService.criarParcelas(idPedido, dto);
+    yield sucesso(op, (long) idPedido);
+}
+
+case "REGISTAR_PAGAMENTO" -> {
+    Integer idPedido = extrairIdPedido(op);
+    RegistarPagamentoCreditoRequestDTO dto = converter(op.getPayload(), RegistarPagamentoCreditoRequestDTO.class);
+    var response = pedidoService.registarPagamento(idPedido, dto);
+    yield sucesso(op, response.idPagamentoCredito());
+}
 
             default -> erroIndividual(op,
                     "Operação não suportada para pedido via sync: " + op.getOperacao());

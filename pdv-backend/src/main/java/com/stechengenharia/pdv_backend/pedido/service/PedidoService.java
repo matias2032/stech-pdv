@@ -1,6 +1,9 @@
 package com.stechengenharia.pdv_backend.pedido.service;
 
 import com.stechengenharia.pdv_backend.cliente.repository.ClienteRepository;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.DocumentoResponse;
+import com.stechengenharia.pdv_backend.documento.service.DocumentoFiscalService;
 import com.stechengenharia.pdv_backend.pedido.dto.*;
 import com.stechengenharia.pdv_backend.pedido.entity.*;
 import com.stechengenharia.pdv_backend.pedido.exception.*;
@@ -11,6 +14,7 @@ import com.stechengenharia.pdv_backend.servico.entity.Servico;
 import com.stechengenharia.pdv_backend.servico.service.ServicoService;
 import com.stechengenharia.pdv_backend.cliente.repository.*;
 
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -35,6 +40,11 @@ public class PedidoService {
     private final ProdutoRepository             produtoRepository;
     private final TipoPagamentoRepository       tipoPagamentoRepository;
     private final ClienteRepository clienteRepository;
+    // Adicionar às injecções existentes (@RequiredArgsConstructor trata o resto)
+private final PedidoCreditoParcelaRepository    parcelaRepository;
+private final PedidoCreditoPagamentoRepository  pagamentoRepository;
+private final DocumentoFiscalRelacaoRepository  relacaoRepository;
+private final DocumentoFiscalService            documentoFiscalService;
 
     // ─── Serviços cross-module ───────────────────────────────────────────────
     private final ServicoService servicoService;
@@ -381,6 +391,227 @@ public List<PedidoResponseDTO> listarPorUsuario(Integer idUsuario) {
             return dto;
         }).collect(Collectors.toList());
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+// CRÉDITO
+// ════════════════════════════════════════════════════════════════════════
+
+@Transactional
+public PedidoResponseDTO declararCredito(Integer idPedido, DeclararCreditoRequestDTO dto) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
+
+    if (pedido.getIdCliente() == null)
+        throw new IllegalStateException(
+            "O pedido deve ter um cliente associado antes de ser declarado a crédito.");
+
+    if ("CREDITO".equals(pedido.getTipoVenda()))
+        throw new CreditoJaDeclaradoException(idPedido);
+
+    if (!"aberto".equalsIgnoreCase(pedido.getStatusPedido()))
+        throw new StatusPedidoInvalidoException(pedido.getStatusPedido(), "declaração de crédito");
+
+    if (!List.of("SEM_PARCELAS", "PARCELADO").contains(dto.modalidadeCredito()))
+        throw new IllegalArgumentException("modalidadeCredito deve ser SEM_PARCELAS ou PARCELADO");
+
+    DocumentoResponse factura = documentoFiscalService.emitir(
+        new EmitirDocumentoRequest(
+            idPedido, "FAT", dto.idUsuario(),
+            dto.codigoAt() != null ? dto.codigoAt() : "STECH-MZ-CREDITO"
+        )
+    );
+
+    pedido.setTipoVenda("CREDITO");
+    pedido.setModalidadeCredito(dto.modalidadeCredito());
+    pedido.setStatusPedido("em dívida");
+    pedido.setStatusPagamento("PENDENTE");
+    pedido.setIdDocumentoFacturaCredito(factura.id());
+    pedido.setDataAberturaCredito(OffsetDateTime.now());
+    pedido.setDataVencimentoCredito(dto.dataVencimento());
+    pedido.setObservacoesCredito(dto.observacoesCredito());
+    pedido.setSyncStatus("PENDING_UPDATE");
+    pedidoRepository.save(pedido);
+
+    log.info("Pedido {} declarado como crédito | factura {}", idPedido, factura.referencia());
+    return toResponseDTO(pedido);
+}
+
+@Transactional
+public List<ParcelaResponseDTO> criarParcelas(Integer idPedido, CriarParcelasRequestDTO dto) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
+    validarPedidoCredito(pedido, "criação de parcelas");
+
+    if (!"PARCELADO".equals(pedido.getModalidadeCredito()))
+        throw new IllegalStateException("Este pedido não usa modalidade PARCELADO.");
+
+    List<PedidoCreditoParcela> existentes =
+        parcelaRepository.findByPedido_IdPedidoOrderByNumeroParcela(idPedido);
+    if (!existentes.isEmpty()) {
+        boolean temPago = existentes.stream()
+            .anyMatch(p -> "PAGA".equals(p.getStatusParcela())
+                        || "PARCIAL".equals(p.getStatusParcela()));
+        if (temPago)
+            throw new IllegalStateException(
+                "Não é possível re-parcelar: existem parcelas já pagas.");
+        parcelaRepository.deleteAll(existentes);
+    }
+
+    BigDecimal somaParcelas = dto.parcelas().stream()
+        .map(CriarParcelasRequestDTO.ParcelaItemDTO::valorParcela)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    if (somaParcelas.compareTo(pedido.getTotal()) != 0)
+        throw new IllegalArgumentException(
+            "Soma das parcelas (" + somaParcelas + ") não corresponde ao total do pedido ("
+            + pedido.getTotal() + ")");
+
+    List<PedidoCreditoParcela> parcelas = dto.parcelas().stream().map(item -> {
+        PedidoCreditoParcela parcela = new PedidoCreditoParcela();
+        parcela.setPedido(pedido);
+        parcela.setNumeroParcela(item.numeroParcela());
+        parcela.setValorParcela(item.valorParcela());
+        parcela.setValorPago(BigDecimal.ZERO);
+        parcela.setDataVencimento(item.dataVencimento());
+        parcela.setStatusParcela("PENDENTE");
+        parcela.setSyncStatus("PENDING_CREATE");
+        return parcela;
+    }).toList();
+
+    parcelaRepository.saveAll(parcelas);
+    log.info("Pedido {}: {} parcelas criadas", idPedido, parcelas.size());
+    return parcelas.stream().map(ParcelaResponseDTO::from).toList();
+}
+
+@Transactional
+public PagamentoCreditoResponseDTO registarPagamento(Integer idPedido, RegistarPagamentoCreditoRequestDTO dto) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
+    validarPedidoCredito(pedido, "registo de pagamento");
+
+    BigDecimal saldoDevedor = pedido.getTotal()
+        .subtract(pedido.getValorPago() != null ? pedido.getValorPago() : BigDecimal.ZERO);
+
+    if (dto.valorPago().compareTo(saldoDevedor) > 0)
+        throw new PagamentoExcedeSaldoException(dto.valorPago(), saldoDevedor);
+
+    PedidoCreditoParcela parcela = null;
+    if (dto.idParcela() != null) {
+        parcela = parcelaRepository
+            .findByIdParcelaAndPedido_IdPedido(dto.idParcela(), idPedido)
+            .orElseThrow(() -> new ParcelaNaoPertenceAoPedidoException(dto.idParcela(), idPedido));
+
+        BigDecimal saldoParcela = parcela.getValorParcela().subtract(parcela.getValorPago());
+        if (dto.valorPago().compareTo(saldoParcela) > 0)
+            throw new PagamentoExcedeSaldoException(dto.valorPago(), saldoParcela);
+    }
+
+    DocumentoResponse recibo = documentoFiscalService.emitir(
+        new EmitirDocumentoRequest(
+            idPedido, "REC", dto.idUsuario(),
+            dto.codigoAt() != null ? dto.codigoAt() : "STECH-MZ-RECIBO"
+        )
+    );
+
+    if (pedido.getIdDocumentoFacturaCredito() != null) {
+        DocumentoFiscalRelacao relacao = new DocumentoFiscalRelacao();
+        relacao.setIdDocumentoOrigem(pedido.getIdDocumentoFacturaCredito());
+        relacao.setIdDocumentoRelacionado(recibo.id());
+        relacao.setTipoRelacao("PAGAMENTO_CREDITO");
+        relacaoRepository.save(relacao);
+    }
+
+    PedidoCreditoPagamento pagamento = new PedidoCreditoPagamento();
+    pagamento.setReferencia("PAG-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+    pagamento.setPedido(pedido);
+    pagamento.setParcela(parcela);
+    pagamento.setIdTipoPagamento(dto.idTipoPagamento());
+    pagamento.setIdUsuario(dto.idUsuario());
+    pagamento.setIdDocumentoRecibo(recibo.id());
+    pagamento.setValorPago(dto.valorPago());
+    pagamento.setDataPagamento(OffsetDateTime.now());
+    pagamento.setObservacoes(dto.observacoes());
+    pagamento.setSyncStatus("PENDING_CREATE");
+    pagamentoRepository.save(pagamento);
+
+    BigDecimal novoValorPago = pedido.getValorPago().add(dto.valorPago());
+    pedido.setValorPago(novoValorPago);
+
+    if (novoValorPago.compareTo(pedido.getTotal()) >= 0) {
+        pedido.setStatusPagamento("PAGO");
+        pedido.setStatusPedido("finalizado");
+        pedido.setDataLiquidacaoCredito(OffsetDateTime.now());
+        pedido.setDataFinalizacao(LocalDateTime.now());
+    } else {
+        pedido.setStatusPagamento("PARCIAL");
+    }
+    pedido.setSyncStatus("PENDING_UPDATE");
+    pedidoRepository.save(pedido);
+
+    if (parcela != null) {
+        BigDecimal novoValorPagoParcela = parcela.getValorPago().add(dto.valorPago());
+        parcela.setValorPago(novoValorPagoParcela);
+        boolean quitada = novoValorPagoParcela.compareTo(parcela.getValorParcela()) >= 0;
+        parcela.setStatusParcela(quitada ? "PAGA" : "PARCIAL");
+        if (quitada) parcela.setDataPagamento(OffsetDateTime.now());
+        parcela.setSyncStatus("PENDING_UPDATE");
+        parcelaRepository.save(parcela);
+    }
+
+    log.info("Pagamento {} | pedido {} | valor {} | recibo {}",
+        pagamento.getReferencia(), idPedido, dto.valorPago(), recibo.referencia());
+    return PagamentoCreditoResponseDTO.from(pagamento);
+}
+
+@Transactional(readOnly = true)
+public List<ParcelaResponseDTO> listarParcelas(Integer idPedido) {
+    buscarPedidoComItens(idPedido);
+    return parcelaRepository.findByPedido_IdPedidoOrderByNumeroParcela(idPedido)
+        .stream().map(ParcelaResponseDTO::from).toList();
+}
+
+@Transactional(readOnly = true)
+public List<PagamentoCreditoResponseDTO> listarPagamentos(Integer idPedido) {
+    buscarPedidoComItens(idPedido);
+    return pagamentoRepository.findByPedido_IdPedidoOrderByDataPagamentoDesc(idPedido)
+        .stream().map(PagamentoCreditoResponseDTO::from).toList();
+}
+
+@Transactional(readOnly = true)
+public ExtractoClienteResponseDTO extractoCliente(Long idCliente) {
+    List<Pedido> pedidos = pedidoRepository
+        .findByIdClienteAndTipoVendaAndDeletedFalse(idCliente, "CREDITO");
+
+    BigDecimal totalDivida = pedidos.stream()
+        .map(Pedido::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalPago = pedidos.stream()
+        .map(p -> p.getValorPago() != null ? p.getValorPago() : BigDecimal.ZERO)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    List<ExtractoClienteResponseDTO.ExtractoPedidoDTO> linhas = pedidos.stream()
+        .map(p -> new ExtractoClienteResponseDTO.ExtractoPedidoDTO(
+            p.getIdPedido(), p.getReferencia(), p.getTotal(), p.getValorPago(),
+            p.getTotal().subtract(p.getValorPago() != null ? p.getValorPago() : BigDecimal.ZERO),
+            p.getStatusPagamento(),
+            p.getIdDocumentoFacturaCredito()
+        )).toList();
+
+    return new ExtractoClienteResponseDTO(
+        idCliente, totalDivida, totalPago, totalDivida.subtract(totalPago), linhas);
+}
+
+@Transactional(readOnly = true)
+public List<PedidoResponseDTO> listarEmDivida() {
+    return pedidoRepository
+        .findByStatusPedidoAndDeletedFalseOrderByDataPedidoDesc("em dívida")
+        .stream().map(this::toResponseDTO).toList();
+}
+
+private void validarPedidoCredito(Pedido pedido, String operacao) {
+    if (!"CREDITO".equals(pedido.getTipoVenda()))
+        throw new IllegalStateException(
+            "Operação '" + operacao + "' só é válida para pedidos a crédito.");
+    if ("finalizado".equalsIgnoreCase(pedido.getStatusPedido())
+        && "PAGO".equals(pedido.getStatusPagamento()))
+        throw new IllegalStateException("Este pedido já está liquidado.");
+}
 
     // ════════════════════════════════════════════════════════════════════════
     // MÉTODOS PRIVADOS
