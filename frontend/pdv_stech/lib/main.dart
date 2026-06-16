@@ -43,6 +43,7 @@ import 'screens/cotacao_detalhes_screen.dart';
 import 'screens/cotacoes_abertas_screen.dart';
 import 'screens/cotacao_catalogo_screen.dart';
 import 'screens/historico_cotacoes.dart';
+import 'screens/pedidos_credito.dart';
 
 
 void main() async {
@@ -285,9 +286,10 @@ SyncScheduler.instance.init(
           '/cadastrar_documentos'     : (_) => const DocumentosFormScreen(),
           '/gerenciar_extractos'      : (_) => const ExtratosListScreen(),
           '/cadastrar_extractos'      : (_) => const ExtratosFormScreen(),
-             '/criar_cotacao'      : (_) => const CotacaoCatalogoScreen(),
-                 '/cotacoes_prontas'      : (_) => const CotacaoListScreen(),
-                        '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
+          '/criar_cotacao'      : (_) => const CotacaoCatalogoScreen(),
+          '/cotacoes_prontas'      : (_) => const CotacaoListScreen(),
+          '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
+           '/pedidos_credito'      : (_) => const PedidosCreditoScreen(),  
         },
 
         onGenerateRoute: (settings) {

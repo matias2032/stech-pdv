@@ -76,15 +76,32 @@ Future<void> _cancelarPedido(PedidoModel pedido) async {
   }
 }
 
-Future<void> _abrirFinalizar(PedidoModel pedido) async {
+Future<void> _abrirFinalizar(
+  PedidoModel pedido, {
+  ModoFinalizacaoPedido modo = ModoFinalizacaoPedido.normal,
+}) async {
   final finalizado = await Navigator.push<bool>(
     context,
-    MaterialPageRoute(builder: (_) => FinalizarPedidoScreen(pedido: pedido)),
+    MaterialPageRoute(
+      builder: (_) => FinalizarPedidoScreen(
+        pedido: pedido,
+        modo: modo,
+      ),
+    ),
   );
+
   if (finalizado == true && mounted) {
     await _carregar();
   }
 }
+
+Future<void> _abrirCredito(PedidoModel pedido) async {
+  await _abrirFinalizar(
+    pedido,
+    modo: ModoFinalizacaoPedido.credito,
+  );
+}
+
 
   Future<bool> _dialogoCancelamento(PedidoModel pedido) async {
     return await showDialog<bool>(
@@ -549,20 +566,49 @@ Widget _buildCard(PedidoModel pedido) {
         ),
         const SizedBox(width: 12),
         // Finalizar
-        ElevatedButton.icon(
-          onPressed:
-              _operacaoEmAndamento ? null : () => _abrirFinalizar(pedido),
-          icon: const Icon(Icons.check, size: 18),
-          label: const Text('Finalizar',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _kPrimary,
-            foregroundColor: Colors.white,
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          ),
+Column(
+  crossAxisAlignment: CrossAxisAlignment.end,
+  children: [
+    ElevatedButton.icon(
+      onPressed: _operacaoEmAndamento
+          ? null
+          : () => _abrirFinalizar(pedido),
+      icon: const Icon(Icons.check, size: 18),
+      label: const Text(
+        'Finalizar',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _kPrimary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      ),
+    ),
+    const SizedBox(height: 8),
+    OutlinedButton.icon(
+      onPressed: _operacaoEmAndamento
+          ? null
+          : () => _abrirCredito(pedido),
+      icon: const Icon(Icons.credit_score_outlined, size: 17),
+      label: const Text(
+        'Vender a crédito',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _kPrimary,
+        side: const BorderSide(color: _kPrimary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      ),
+    ),
+  ],
+),
       ],
     );
   }

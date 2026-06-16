@@ -12,10 +12,21 @@ const _kBackground = Color(0xFFF4F5F7);
 
 class FinalizarPedidoScreen extends StatefulWidget {
   final PedidoModel pedido;
-  const FinalizarPedidoScreen({Key? key, required this.pedido}) : super(key: key);
+  final ModoFinalizacaoPedido modo;
+
+  const FinalizarPedidoScreen({
+    Key? key,
+    required this.pedido,
+    this.modo = ModoFinalizacaoPedido.normal,
+  }) : super(key: key);
 
   @override
   State<FinalizarPedidoScreen> createState() => _FinalizarPedidoScreenState();
+}
+
+enum ModoFinalizacaoPedido {
+  normal,
+  credito,
 }
 
 class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
@@ -48,11 +59,39 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
 String? _nomeClienteBloqueado;
 
   bool get _ehDinheiro => _idTipoPagamento == 1;
+  bool get _modoCredito => widget.modo == ModoFinalizacaoPedido.credito;
+
+bool get _temEntradaInicial => _valorPago > 0;
+
+double get _saldoCredito {
+  final saldo = widget.pedido.total - _valorPago;
+  return saldo < 0 ? 0 : saldo;
+}
+
+int? get _idClienteFinal {
+  if (_clienteBloqueado) return widget.pedido.idCliente;
+  return _empresaSelecionada?.id;
+}
 
 bool get _podeFinalizar {
+  if (_modoCredito) {
+    // Crédito exige cliente cadastrado.
+    if (_idClienteFinal == null) return false;
 
+    // Entrada inicial é opcional, mas não pode exceder o total.
+    if (_valorPago < 0) return false;
+    if (_valorPago > widget.pedido.total) return false;
+
+    // Se houver entrada, precisa de método de pagamento.
+    if (_temEntradaInicial && _idTipoPagamento == null) return false;
+
+    return true;
+  }
+
+  // Fluxo normal
   if (_idTipoPagamento == null) return false;
   if (_ehDinheiro && _valorPago < widget.pedido.total) return false;
+
   return true;
 }
 
@@ -100,9 +139,16 @@ Future<void> _carregar() async {
   setState(() {
     _tiposPagamento       = pedidoProvider.tiposPagamento;
     _empresas             = clienteProvider.clientes;
-    _idTipoPagamento      = _tiposPagamento.isNotEmpty
-        ? _tiposPagamento.first.idTipoPagamento
-        : null;
+    _idTipoPagamento = _tiposPagamento.isNotEmpty
+    ? _tiposPagamento.first.idTipoPagamento
+    : null;
+
+if (_modoCredito) {
+  _tipoCliente = 'empresa';
+  _valorPagoCtrl.text = '0.00';
+} else if (!_ehDinheiro && _idTipoPagamento != null) {
+  _valorPagoCtrl.text = widget.pedido.total.toStringAsFixed(2);
+}
     _clienteBloqueado     = widget.pedido.idCliente != null;
     _nomeClienteBloqueado = clienteDoPedido?.nomeCompleto
         ?? (widget.pedido.idCliente != null
@@ -115,16 +161,24 @@ Future<void> _carregar() async {
 
   // ── Finalizar via Provider ────────────────────────────────────────────────
 
-  Future<void> _finalizar() async {
+Future<void> _finalizar() async {
   if (_finalizando) return;
+
+  if (_modoCredito) {
+    return _finalizarCredito();
+  }
 
   if (_idTipoPagamento == null) {
     return _snack('Seleccione o tipo de pagamento', Colors.orange);
   }
+
   if (_ehDinheiro && _valorPago < widget.pedido.total) {
     return _snack('O valor recebido é insuficiente', Colors.orange);
   }
-  if (!_clienteBloqueado && _tipoCliente == 'empresa' && _empresaSelecionada == null) {
+
+  if (!_clienteBloqueado &&
+      _tipoCliente == 'empresa' &&
+      _empresaSelecionada == null) {
     return _snack('Seleccione a empresa', Colors.orange);
   }
 
@@ -138,15 +192,17 @@ Future<void> _carregar() async {
     await context.read<PedidoProvider>().finalizarPedido(
       widget.pedido.idPedido,
       FinalizarPedidoRequestModel(
-        idTipoPagamento:        _idTipoPagamento!,
-        valorPago:              _ehDinheiro ? _valorPago : widget.pedido.total,
-        idCliente:              idClienteFinal,
-        nomeClienteSingular:    (!_clienteBloqueado && _tipoCliente == 'singular')
-                                    ? _nomeCtrl.text.trim().nullIfEmpty
-                                    : null,
-        apelidoClienteSingular: (!_clienteBloqueado && _tipoCliente == 'singular')
-                                    ? _apelidoCtrl.text.trim().nullIfEmpty
-                                    : null,
+        idTipoPagamento: _idTipoPagamento!,
+        valorPago: _ehDinheiro ? _valorPago : widget.pedido.total,
+        idCliente: idClienteFinal,
+        nomeClienteSingular:
+            (!_clienteBloqueado && _tipoCliente == 'singular')
+                ? _nomeCtrl.text.trim().nullIfEmpty
+                : null,
+        apelidoClienteSingular:
+            (!_clienteBloqueado && _tipoCliente == 'singular')
+                ? _apelidoCtrl.text.trim().nullIfEmpty
+                : null,
       ),
     );
 
@@ -163,6 +219,69 @@ Future<void> _carregar() async {
     if (mounted) setState(() => _finalizando = false);
   }
 }
+
+Future<void> _finalizarCredito() async {
+  if (_idClienteFinal == null) {
+    return _snack('Seleccione um cliente cadastrado para venda a crédito.', Colors.orange);
+  }
+
+  if (_valorPago > widget.pedido.total) {
+    return _snack('A entrada inicial não pode ser maior que o total.', Colors.orange);
+  }
+
+  if (_temEntradaInicial && _idTipoPagamento == null) {
+    return _snack('Seleccione o método de pagamento da entrada.', Colors.orange);
+  }
+
+  setState(() => _finalizando = true);
+
+  try {
+    final provider = context.read<PedidoProvider>();
+
+    final pedidoCredito = await provider.declararCredito(
+      widget.pedido.idPedido,
+      DeclararCreditoRequestModel(
+        modalidadeCredito: 'SEM_PARCELAS',
+        idUsuario: SessaoService.instance.idUsuario,
+        dataVencimento: null,
+        observacoesCredito: null,
+      ),
+    );
+
+    if (pedidoCredito == null) {
+      throw Exception(provider.errorMessage ?? 'Não foi possível declarar crédito.');
+    }
+
+    if (_temEntradaInicial) {
+      await provider.registarPagamentoCredito(
+        widget.pedido.idPedido,
+        RegistarPagamentoCreditoRequestModel(
+          idTipoPagamento: _idTipoPagamento!,
+          idUsuario: SessaoService.instance.idUsuario,
+          valorPago: _valorPago,
+          observacoes: 'Entrada inicial na venda a crédito',
+        ),
+      );
+    }
+
+    if (!mounted) return;
+
+    if (provider.errorMessage == null) {
+      PedidoAtivoController.instance.limpar();
+      Navigator.pop(context, true);
+    } else {
+      _snack('Erro: ${provider.errorMessage}', _kAccent);
+    }
+  } catch (e) {
+    if (mounted) {
+      _snack('Erro ao finalizar a crédito: $e', _kAccent);
+    }
+  } finally {
+    if (mounted) setState(() => _finalizando = false);
+  }
+}
+
+
 
   void _snack(String msg, Color cor) {
     if (!mounted) return;
@@ -196,15 +315,25 @@ Future<void> _carregar() async {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildResumoCard(),
-                        const SizedBox(height: 10),
-                        _buildClienteCard(),
-                        const SizedBox(height: 10),
-                        _buildPagamentoCard(),
-                        const SizedBox(height: 10),
-                        if (_ehDinheiro) _buildTrocoCard(),
-                        const SizedBox(height: 16),
-                        _buildBotao(),
+_buildResumoCard(),
+const SizedBox(height: 10),
+_buildClienteCard(),
+const SizedBox(height: 10),
+
+if (_modoCredito) ...[
+  _buildEntradaCreditoCard(),
+  const SizedBox(height: 10),
+  if (_temEntradaInicial) _buildPagamentoCard(),
+  if (_temEntradaInicial) const SizedBox(height: 10),
+  _buildSaldoCreditoCard(),
+] else ...[
+  _buildPagamentoCard(),
+  const SizedBox(height: 10),
+  if (_ehDinheiro) _buildTrocoCard(),
+],
+
+const SizedBox(height: 16),
+_buildBotao(),
                       ],
                     ),
                   ),
@@ -258,7 +387,7 @@ Future<void> _carregar() async {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Finalizar Pedido',
+Text(_modoCredito ? 'Finalizar a Crédito' : 'Finalizar Pedido',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -311,6 +440,24 @@ Future<void> _carregar() async {
   // ─── Cliente ──────────────────────────────────────────────────────────────
 
 Widget _buildClienteCard() {
+  if (_modoCredito && !_clienteBloqueado) {
+  return _card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _secLabel(Icons.person_outline, 'Cliente cadastrado'),
+        const SizedBox(height: 10),
+        _buildEmpresaSelector(),
+        const SizedBox(height: 8),
+        _infoBox(
+          icon: Icons.info_outline,
+          texto: 'Venda a crédito exige cliente cadastrado para permitir extracto, pagamentos e cobranças.',
+          cor: _kPrimary,
+        ),
+      ],
+    ),
+  );
+}
   if (_clienteBloqueado) {
     return _card(
       child: Column(
@@ -453,18 +600,56 @@ Widget _buildClienteCard() {
     switch (id) {
       case 1: return const Color(0xFF2E7D32);
       case 2: return const Color(0xFF1565C0);
+      
       case 3: return const Color(0xFFE53935);
       case 4: return const Color(0xFFFF8C00);
       default: return _kPrimary;
     }
   }
 
+  Widget _buildEntradaCreditoCard() {
+  return _card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _secLabel(Icons.account_balance_wallet_outlined, 'Entrada inicial'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _valorPagoCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: _kPrimary,
+          ),
+          decoration: _inputDecoration('0.00').copyWith(
+            labelText: 'Valor pago agora (opcional)',
+            labelStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+            prefixText: 'MZN  ',
+            prefixStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        _infoBox(
+          icon: Icons.info_outline,
+          texto: 'Deixe 0 caso o cliente não pague nenhuma entrada agora.',
+          cor: _kPrimary,
+        ),
+      ],
+    ),
+  );
+}
+
   Widget _buildPagamentoCard() {
     return _card(
         child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _secLabel(Icons.payment_outlined, 'Pagamento'),
+_secLabel(
+  Icons.payment_outlined,
+  _modoCredito ? 'Método de pagamento da entrada' : 'Pagamento',
+),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
@@ -475,10 +660,9 @@ Widget _buildClienteCard() {
             return GestureDetector(
               onTap: () => setState(() {
                 _idTipoPagamento = t.idTipoPagamento;
-                if (!_ehDinheiro) {
-                  _valorPagoCtrl.text =
-                      widget.pedido.total.toStringAsFixed(2);
-                }
+                if (!_modoCredito && !_ehDinheiro) {
+  _valorPagoCtrl.text = widget.pedido.total.toStringAsFixed(2);
+}
               }),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
@@ -534,29 +718,27 @@ Widget _buildClienteCard() {
         AnimatedSize(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
-          child: _ehDinheiro
-              ? Column(children: [
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _valorPagoCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true),
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: _kPrimary),
-                    decoration: _inputDecoration('0.00').copyWith(
-                      labelText: 'Valor recebido',
-                      labelStyle: TextStyle(
-                          color: Colors.grey[500], fontSize: 13),
-                      prefixText: 'MZN  ',
-                      prefixStyle: TextStyle(
-                          color: Colors.grey[500], fontSize: 14),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ])
-              : const SizedBox.shrink(),
+child: (!_modoCredito && _ehDinheiro)
+    ? Column(children: [
+        const SizedBox(height: 12),
+        TextField(
+          controller: _valorPagoCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: _kPrimary,
+          ),
+          decoration: _inputDecoration('0.00').copyWith(
+            labelText: 'Valor recebido',
+            labelStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+            prefixText: 'MZN  ',
+            prefixStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ])
+    : const SizedBox.shrink(),
         ),
       ],
     ));
@@ -601,40 +783,99 @@ Widget _buildClienteCard() {
     );
   }
 
+  Widget _buildSaldoCreditoCard() {
+  final cor = _saldoCredito <= 0 ? Colors.green : _kAccent;
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(
+      color: cor.withOpacity(0.07),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: cor.withOpacity(0.25)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(children: [
+          Icon(Icons.pending_actions_outlined, color: cor, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            'Saldo em dívida',
+            style: TextStyle(
+              color: cor,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        ]),
+        Text(
+          _currencyFmt.format(_saldoCredito),
+          style: TextStyle(
+            color: cor,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
   // ─── Botão ────────────────────────────────────────────────────────────────
 
 Widget _buildBotao() {
-    final activo = _podeFinalizar && !_finalizando;
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton.icon(
-        onPressed: activo ? _finalizar : null,
-        icon: _finalizando
-            ? const SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Icon(activo ? Icons.check_circle_outline : Icons.lock_outline_rounded),
-label: Text(
-  _finalizando
-      ? 'A finalizar…'
-      : activo
-          ? 'Confirmar Finalização'
-          : _idTipoPagamento == null
-              ? 'Seleccione o método de pagamento'
-              : 'Valor recebido insuficiente',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          overflow: TextOverflow.ellipsis,
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: activo ? _kPrimary : Colors.grey[300],
-          foregroundColor: activo ? Colors.white : Colors.grey[600],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: activo ? 3 : 0,
-        ),
-      ),
-    );
+  final activo = _podeFinalizar && !_finalizando;
+
+  String texto;
+  if (_finalizando) {
+    texto = _modoCredito ? 'A confirmar crédito…' : 'A finalizar…';
+  } else if (activo) {
+    texto = _modoCredito ? 'Confirmar Venda a Crédito' : 'Confirmar Finalização';
+  } else if (_modoCredito && _idClienteFinal == null) {
+    texto = 'Seleccione um cliente cadastrado';
+  } else if (_modoCredito && _valorPago > widget.pedido.total) {
+    texto = 'Entrada maior que o total';
+  } else if (_idTipoPagamento == null) {
+    texto = 'Seleccione o método de pagamento';
+  } else {
+    texto = _modoCredito ? 'Verifique os dados do crédito' : 'Valor recebido insuficiente';
   }
+
+  return SizedBox(
+    width: double.infinity,
+    height: 50,
+    child: ElevatedButton.icon(
+      onPressed: activo ? _finalizar : null,
+      icon: _finalizando
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Icon(
+              activo
+                  ? (_modoCredito
+                      ? Icons.assignment_turned_in_outlined
+                      : Icons.check_circle_outline)
+                  : Icons.lock_outline_rounded,
+            ),
+      label: Text(
+        texto,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        overflow: TextOverflow.ellipsis,
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: activo ? _kPrimary : Colors.grey[300],
+        foregroundColor: activo ? Colors.white : Colors.grey[600],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: activo ? 3 : 0,
+      ),
+    ),
+  );
+}
 
   // ─── Utilitários de UI ────────────────────────────────────────────────────
 

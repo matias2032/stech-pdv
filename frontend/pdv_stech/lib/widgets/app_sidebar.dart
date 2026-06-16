@@ -133,8 +133,13 @@ class _AppSidebarState extends State<AppSidebar>
     ),
     _MenuItem(
       icon:  Icons.receipt_long_rounded,
-      title: 'Encomendas / Pedidos',
+      title: 'Pedidos Finalizados',
       route: '/pedidos_finalizados',
+    ),
+       _MenuItem(
+      icon:  Icons.receipt_long_rounded,
+      title: 'Pedidos á Crédito',
+      route: '/pedidos_credito',
     ),
     _MenuItem(
       icon:  Icons.description_rounded,

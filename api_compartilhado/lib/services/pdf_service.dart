@@ -151,6 +151,101 @@ factory DocumentoPdfModel.deApiModelMultiplos({
 }
 }
 
+class ReciboCreditoPdfModel {
+  /// Documento fiscal REC gerado pelo backend.
+  final String referenciaRecibo;
+
+  /// Factura principal da venda a crédito, ex: FAT-0001/2026.
+  final String referenciaFactura;
+
+  /// Código AT.
+  final String codigoAT;
+
+  final DateTime dataEmissao;
+  final PedidoModel pedido;
+  final ClienteModel cliente;
+  final PagamentoCreditoModel pagamento;
+  final String tipoPagamento;
+
+  /// Saldo antes deste pagamento.
+  final double saldoAnterior;
+
+  /// Saldo depois deste pagamento.
+  final double saldoRemanescente;
+
+  /// Parcela associada, se o pagamento estiver ligado a uma parcela.
+  final int? numeroParcela;
+  final int? totalParcelas;
+
+  final String? salesperson;
+  final String? observacoes;
+
+  const ReciboCreditoPdfModel({
+    required this.referenciaRecibo,
+    required this.referenciaFactura,
+    required this.codigoAT,
+    required this.dataEmissao,
+    required this.pedido,
+    required this.cliente,
+    required this.pagamento,
+    required this.tipoPagamento,
+    required this.saldoAnterior,
+    required this.saldoRemanescente,
+    this.numeroParcela,
+    this.totalParcelas,
+    this.salesperson,
+    this.observacoes,
+  });
+
+  factory ReciboCreditoPdfModel.deApiModel({
+    required DocumentoFiscalModel apiModel,
+    required String referenciaFactura,
+    required PedidoModel pedido,
+    required ClienteModel cliente,
+    required PagamentoCreditoModel pagamento,
+    required String tipoPagamento,
+    required double saldoAnterior,
+    required double saldoRemanescente,
+    int? numeroParcela,
+    int? totalParcelas,
+    String? salesperson,
+    String? observacoes,
+  }) {
+    return ReciboCreditoPdfModel(
+      referenciaRecibo: apiModel.referencia,
+      referenciaFactura: referenciaFactura,
+      codigoAT: apiModel.codigoAt,
+      dataEmissao: apiModel.emitidoEm,
+      pedido: pedido,
+      cliente: cliente,
+      pagamento: pagamento,
+      tipoPagamento: tipoPagamento,
+      saldoAnterior: saldoAnterior,
+      saldoRemanescente: saldoRemanescente,
+      numeroParcela: numeroParcela,
+      totalParcelas: totalParcelas,
+      salesperson: salesperson,
+      observacoes: observacoes,
+    );
+  }
+
+  String get descricaoPagamento {
+    if (numeroParcela != null && totalParcelas != null) {
+      return 'Pagamento da parcela $numeroParcela/$totalParcelas';
+    }
+
+    if (numeroParcela != null) {
+      return 'Pagamento da parcela $numeroParcela';
+    }
+
+    if ((pagamento.observacoes ?? '').toLowerCase().contains('entrada')) {
+      return 'Entrada inicial da venda a crédito';
+    }
+
+    return 'Pagamento parcial da venda a crédito';
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // DADOS FIXOS DA EMPRESA
 // ═══════════════════════════════════════════════════════════════════
@@ -243,6 +338,12 @@ double _calcularIva(double valorComIva) {
     return _savePdfWithName(pdf, _nomeArquivo(doc));
   }
 
+  Future<File> gerarReciboCredito(ReciboCreditoPdfModel doc) async {
+  final pdf = await _buildReciboCredito(doc);
+  return _savePdfWithName(pdf, _nomeArquivoReciboCredito(doc));
+}
+
+
   Future<void> imprimirDocumentoFiscalViaSumatra({
     required DocumentoPdfModel doc,
     required String impressoraNome,
@@ -262,6 +363,32 @@ double _calcularIva(double valorComIva) {
     }
   }
 
+  Future<void> imprimirReciboCreditoViaSumatra({
+  required ReciboCreditoPdfModel doc,
+  required String impressoraNome,
+}) async {
+  _assertWindows();
+
+  final sumatra = _sumatraPath();
+  final pdf = await _buildReciboCredito(doc);
+  final file = await _savePdfWithName(pdf, _nomeArquivoReciboCredito(doc));
+
+  final result = await Process.run(sumatra, [
+    '-print-to',
+    impressoraNome,
+    '-print-settings',
+    'fit',
+    '-silent',
+    file.path,
+  ]);
+
+  if (result.exitCode != 0) {
+    throw Exception('SumatraPDF erro (${result.exitCode}): ${result.stderr}');
+  }
+}
+
+
+
   Future<void> imprimirDocumentoFiscalComDialogo({
     required DocumentoPdfModel doc,
   }) async {
@@ -271,6 +398,18 @@ double _calcularIva(double valorComIva) {
     final file = await _savePdfWithName(pdf, _nomeArquivo(doc));
     await Process.run(sumatra, ['-print-dialog', file.path]);
   }
+
+  Future<void> imprimirReciboCreditoComDialogo({
+  required ReciboCreditoPdfModel doc,
+}) async {
+  _assertWindows();
+
+  final sumatra = _sumatraPath();
+  final pdf = await _buildReciboCredito(doc);
+  final file = await _savePdfWithName(pdf, _nomeArquivoReciboCredito(doc));
+
+  await Process.run(sumatra, ['-print-dialog', file.path]);
+}
 
   // ─────────────────────────────────────────────────────────────────
   // PÚBLICO: Comprovativo térmico (fluxo antigo — mantido intacto)
@@ -428,6 +567,96 @@ double _calcularIva(double valorComIva) {
     return pdf;
   }
 
+Future<pw.Document> _buildReciboCredito(ReciboCreditoPdfModel doc) async {
+  final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
+  final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
+
+  final pdf = pw.Document(
+    title: doc.referenciaRecibo,
+    author: _Empresa.nomeCompleto,
+    creator: 'Sistema de Gestão Stech',
+  );
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
+      footer: (ctx) => _docFiscalFooterPagina(ctx),
+      build: (ctx) => [
+        _reciboCreditoCabecalho(doc, iconImage),
+        pw.SizedBox(height: 6),
+        _reciboCreditoEmissorCliente(doc),
+        pw.SizedBox(height: 6),
+        pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+        pw.SizedBox(height: 4),
+        _reciboCreditoMetadados(doc),
+        pw.SizedBox(height: 10),
+        _reciboCreditoResumo(doc),
+        pw.SizedBox(height: 14),
+        _reciboCreditoObservacoes(doc),
+        pw.SizedBox(height: 16),
+        _reciboCreditoAssinatura(),
+        pw.SizedBox(height: 8),
+        _docFiscalCodigoAT(doc.codigoAT),
+      ],
+    ),
+  );
+
+  return pdf;
+}
+
+pw.Widget _reciboCreditoCabecalho(
+  ReciboCreditoPdfModel doc,
+  pw.MemoryImage icon,
+) {
+  return pw.Column(
+    children: [
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Image(
+            icon,
+            width: 135,
+            height: 80,
+            fit: pw.BoxFit.contain,
+          ),
+          pw.SizedBox(width: 20),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'RECIBO',
+                  style: pw.TextStyle(
+                    fontSize: 26,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _kAzul,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Pagamento de venda a crédito',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.grey700,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 10),
+      pw.Divider(color: _kAzul, thickness: 2.5),
+    ],
+  );
+}
+
+
+
   // ─── 1. Cabeçalho ──────────────────────────────────────────────
 
 // ─── 1. Cabeçalho ──────────────────────────────────────────────
@@ -516,9 +745,241 @@ pw.Widget _docFiscalCabecalho(DocumentoPdfModel doc, pw.MemoryImage icon) {
     );
   }
 
+
+pw.Widget _reciboCreditoEmissorCliente(ReciboCreditoPdfModel doc) {
+  final c = doc.cliente;
+  final nomeCliente = '${c.nome ?? ''} ${c.apelido ?? ''}'.trim();
+
+  return pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _t(_Empresa.nomeCompleto, bold: true, size: 8.5),
+            pw.SizedBox(height: 2),
+            _t(_Empresa.bairro, size: 8),
+            _t(_Empresa.telefone, size: 8),
+            _t(_Empresa.email, size: 8),
+            _t(_Empresa.website, size: 8),
+            _t(_Empresa.nuit, size: 8),
+          ],
+        ),
+      ),
+      pw.SizedBox(width: 20),
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _t('Exmo. (s) Sr(s)', size: 8, color: PdfColors.grey700),
+            pw.SizedBox(height: 2),
+            if (nomeCliente.isNotEmpty)
+              _t('Nome:  $nomeCliente', bold: true, size: 8.5),
+            if (c.nuit != null && c.nuit!.isNotEmpty)
+              _t('NUIT:  ${c.nuit}', size: 8),
+            if (c.morada != null && c.morada!.isNotEmpty)
+              _t('Endereço:  ${c.morada}', size: 8),
+            if (c.contacto != null && c.contacto!.isNotEmpty)
+              _t('Tel:  ${c.contacto}', size: 8),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+pw.Widget _reciboCreditoMetadados(ReciboCreditoPdfModel doc) {
+  final parcelaTexto = doc.numeroParcela == null
+      ? '—'
+      : doc.totalParcelas == null
+          ? '${doc.numeroParcela}'
+          : '${doc.numeroParcela}/${doc.totalParcelas}';
+
+  return pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _metaRow('Data:', _fmt.format(doc.dataEmissao)),
+            _metaRow(
+              'Gerado em:',
+              DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now()),
+            ),
+            _metaRow('Pedido:', doc.pedido.referencia),
+            _metaRow('Factura associada:', doc.referenciaFactura),
+            _metaRow('Método de pagamento:', doc.tipoPagamento),
+            _metaRow('Parcela:', parcelaTexto),
+            if (doc.salesperson != null && doc.salesperson!.isNotEmpty)
+              _metaRow('Salesperson:', doc.salesperson!),
+            _metaRow('Moeda:', 'MT'),
+          ],
+        ),
+      ),
+      pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        children: [
+          pw.Text(
+            'Recibo Nº ${doc.referenciaRecibo}',
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+              color: _kVermelho,
+            ),
+          ),
+          pw.SizedBox(height: 3),
+          pw.Text(
+            'Referente à Factura Nº ${doc.referenciaFactura}',
+            style: const pw.TextStyle(
+              fontSize: 7,
+              color: PdfColors.grey700,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+pw.Widget _reciboCreditoResumo(ReciboCreditoPdfModel doc) {
+  final valorPago = doc.pagamento.valorPago;
+
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      _t('Resumo do pagamento', bold: true, size: 9, color: _kAzul),
+      pw.SizedBox(height: 6),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(),
+          1: pw.FixedColumnWidth(120),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: _kAzul),
+            children: [
+              _thCell(
+                'Descrição',
+                const pw.TextStyle(fontSize: 8, color: PdfColors.white),
+              ),
+              _thCell(
+                'Valor',
+                const pw.TextStyle(fontSize: 8, color: PdfColors.white),
+                align: pw.TextAlign.right,
+              ),
+            ],
+          ),
+          _reciboRow('Total da factura', doc.pedido.total),
+          _reciboRow('Saldo anterior', doc.saldoAnterior),
+          _reciboRow(doc.descricaoPagamento, valorPago),
+          _reciboRow('Saldo remanescente', doc.saldoRemanescente, destaque: true),
+        ],
+      ),
+    ],
+  );
+}
+
+pw.TableRow _reciboRow(
+  String label,
+  double valor, {
+  bool destaque = false,
+}) {
+  final estiloLabel = pw.TextStyle(
+    fontSize: destaque ? 9 : 8,
+    fontWeight: destaque ? pw.FontWeight.bold : pw.FontWeight.normal,
+    color: destaque ? _kAzul : PdfColors.black,
+  );
+
+  final estiloValor = pw.TextStyle(
+    fontSize: destaque ? 9 : 8,
+    fontWeight: pw.FontWeight.bold,
+    color: destaque ? _kVermelho : PdfColors.black,
+  );
+
+  return pw.TableRow(
+    decoration: destaque
+        ? const pw.BoxDecoration(color: PdfColors.grey200)
+        : null,
+    children: [
+      _tdCell(label, estiloLabel),
+      _tdCell(
+        'MZN ${valor.toStringAsFixed(2)}',
+        estiloValor,
+        align: pw.TextAlign.right,
+      ),
+    ],
+  );
+}
+
+
+
+pw.Widget _reciboCreditoObservacoes(ReciboCreditoPdfModel doc) {
+  final obs = doc.observacoes ?? doc.pagamento.observacoes;
+
+  if (obs == null || obs.trim().isEmpty) {
+    return pw.SizedBox.shrink();
+  }
+
+  return pw.Container(
+    width: double.infinity,
+    padding: const pw.EdgeInsets.all(8),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.grey100,
+      border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+      borderRadius: pw.BorderRadius.circular(4),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _t('Observações', bold: true, size: 8, color: _kAzul),
+        pw.SizedBox(height: 3),
+        _t(obs, size: 8, color: PdfColors.grey800),
+      ],
+    ),
+  );
+}
+
+pw.Widget _reciboCreditoAssinatura() {
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+      pw.SizedBox(height: 8),
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _t('Recebido por: ___________________________', size: 8),
+                pw.SizedBox(height: 14),
+                _t('Assinatura: _____________________________', size: 8),
+              ],
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: _t('Data: _______ / _______ / ___________', size: 8),
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+
+
+
+
   // ─── 3. Metadados ─────────────────────────────────────────────
 
   pw.Widget _docFiscalMetadados(DocumentoPdfModel doc) {
+
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -1232,6 +1693,13 @@ pw.Widget _docFiscalCodigoAT(String codigoAT) {
     final safeRef = doc.referencia.replaceAll('/', '-');
     return '${doc.tipo.prefixo}-$safeRef';
   }
+
+  String _nomeArquivoReciboCredito(ReciboCreditoPdfModel doc) {
+  final safeRef = doc.referenciaRecibo.replaceAll('/', '-');
+  final safeFat = doc.referenciaFactura.replaceAll('/', '-');
+
+  return 'REC-$safeRef-FAT-$safeFat';
+}
 
   String _nomeAutomaticoComprovativo(int pedidoId) {
     final agora = DateTime.now();
