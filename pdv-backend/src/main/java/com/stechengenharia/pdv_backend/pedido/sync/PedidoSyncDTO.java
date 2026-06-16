@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 public record PedidoSyncDTO(
     Integer idPedido,
@@ -18,6 +20,18 @@ public record PedidoSyncDTO(
     String observacoes,
     LocalDateTime dataPedido,
     LocalDateTime dataFinalizacao,
+
+    // ── Crédito ─────────────────────────────────────────────
+    String tipoVenda,
+    String modalidadeCredito,
+    String statusPagamento,
+    Integer idDocumentoFacturaCredito,
+    OffsetDateTime dataAberturaCredito,
+    LocalDate dataVencimentoCredito,
+    OffsetDateTime dataLiquidacaoCredito,
+    String observacoesCredito,
+    BigDecimal saldoDevedorCredito,
+
     List<ItemPedidoSyncDTO> itensProduto,
     List<ItemServicoPedidoSyncDTO> itensServico,
     String syncStatus,

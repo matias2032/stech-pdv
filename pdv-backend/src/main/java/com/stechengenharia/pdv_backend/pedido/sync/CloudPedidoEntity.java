@@ -7,6 +7,8 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "pedido")
@@ -49,6 +51,37 @@ public class CloudPedidoEntity {
 
     @Column(name = "data_finalizacao")
     private LocalDateTime dataFinalizacao;
+
+    // ── Crédito ─────────────────────────────────────────────
+
+@Column(name = "tipo_venda", nullable = false, length = 20)
+private String tipoVenda = "IMEDIATA";
+
+@Column(name = "modalidade_credito", length = 20)
+private String modalidadeCredito;
+
+@Column(name = "status_pagamento", nullable = false, length = 20)
+private String statusPagamento = "PENDENTE";
+
+@Column(name = "id_documento_factura_credito")
+private Integer idDocumentoFacturaCredito;
+
+@Column(name = "data_abertura_credito")
+private OffsetDateTime dataAberturaCredito;
+
+@Column(name = "data_vencimento_credito")
+private LocalDate dataVencimentoCredito;
+
+@Column(name = "data_liquidacao_credito")
+private OffsetDateTime dataLiquidacaoCredito;
+
+@Column(name = "observacoes_credito", columnDefinition = "TEXT")
+private String observacoesCredito;
+
+// GENERATED na BD — read-only
+@Column(name = "saldo_devedor_credito", insertable = false, updatable = false,
+        precision = 12, scale = 2)
+private BigDecimal saldoDevedorCredito;
 
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;
