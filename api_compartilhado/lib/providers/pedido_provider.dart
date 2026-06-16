@@ -30,6 +30,9 @@ PedidoProvider({
   List<TipoPagamentoResponseDTO>  _tiposPagamento = [];
   Map<String, dynamic>            _dashboardData  = {};
   Map<String, dynamic>            _relatorioData  = {};
+  List<ParcelaCreditoModel>       _parcelasCredito = [];
+List<PagamentoCreditoModel>     _pagamentosCredito = [];
+Map<String, dynamic>            _extractoCliente = {};
 
   PedidoStatus _status       = PedidoStatus.idle;
   String?      _errorMessage;
@@ -40,6 +43,14 @@ PedidoProvider({
   List<TipoPagamentoResponseDTO> get tiposPagamento  => List.unmodifiable(_tiposPagamento);
   Map<String, dynamic>           get dashboardData   => Map.unmodifiable(_dashboardData);
   Map<String, dynamic>           get relatorioData   => Map.unmodifiable(_relatorioData);
+  List<ParcelaCreditoModel> get parcelasCredito =>
+    List.unmodifiable(_parcelasCredito);
+
+List<PagamentoCreditoModel> get pagamentosCredito =>
+    List.unmodifiable(_pagamentosCredito);
+
+Map<String, dynamic> get extractoCliente =>
+    Map.unmodifiable(_extractoCliente);
   PedidoStatus                   get status         => _status;
   String?                        get errorMessage    => _errorMessage;
   bool                           get isLoading       => _status == PedidoStatus.loading;
@@ -285,16 +296,122 @@ Future<bool> cancelarPedido(
     notifyListeners();
   }
 
-  void limparPedidos() {
-    _pedidos = [];
-    notifyListeners();
-  }
+void limparPedidos() {
+  _pedidos = [];
+  _parcelasCredito = [];
+  _pagamentosCredito = [];
+  _extractoCliente = {};
+  notifyListeners();
+}
 
   void limparErro() {
     _errorMessage = null;
     _status = PedidoStatus.idle;
     notifyListeners();
   }
+
+  Future<PedidoModel?> declararCredito(
+  int idPedido,
+  DeclararCreditoRequestModel dto,
+) async {
+  final result = await _run(() => _repository.declararCredito(idPedido, dto));
+
+  if (result != null) {
+    _pedidoActual = result;
+
+    final index = _pedidos.indexWhere((p) => p.idPedido == result.idPedido);
+    if (index >= 0) {
+      _pedidos[index] = result;
+    } else {
+      _pedidos.insert(0, result);
+    }
+  }
+
+  return result;
+}
+
+Future<List<ParcelaCreditoModel>> criarParcelas(
+  int idPedido,
+  CriarParcelasRequestModel dto,
+) async {
+  final result = await _run(() => _repository.criarParcelas(idPedido, dto));
+
+  if (result != null) {
+    _parcelasCredito = result;
+    notifyListeners();
+    return result;
+  }
+
+  return [];
+}
+
+Future<PagamentoCreditoModel?> registarPagamentoCredito(
+  int idPedido,
+  RegistarPagamentoCreditoRequestModel dto,
+) async {
+  final result = await _run(
+    () => _repository.registarPagamentoCredito(idPedido, dto),
+  );
+
+  if (result != null) {
+    _pagamentosCredito.insert(0, result);
+
+    final pedidoAtualizado = await _repository.buscarPorId(idPedido);
+
+    if (pedidoAtualizado != null) {
+      _pedidoActual = pedidoAtualizado;
+
+      final index = _pedidos.indexWhere((p) => p.idPedido == idPedido);
+      if (index >= 0) {
+        _pedidos[index] = pedidoAtualizado;
+      } else {
+        _pedidos.insert(0, pedidoAtualizado);
+      }
+    }
+
+    await carregarParcelas(idPedido);
+    notifyListeners();
+  }
+
+  return result;
+}
+
+Future<void> carregarParcelas(int idPedido) async {
+  final result = await _run(() => _repository.listarParcelas(idPedido));
+
+  if (result != null) {
+    _parcelasCredito = result;
+  }
+}
+
+Future<void> carregarPagamentosCredito(int idPedido) async {
+  final result =
+      await _run(() => _repository.listarPagamentosCredito(idPedido));
+
+  if (result != null) {
+    _pagamentosCredito = result;
+  }
+}
+
+Future<void> listarEmDivida() async {
+  final result = await _run(() => _repository.listarEmDivida());
+
+  if (result != null) {
+    _pedidos = result;
+  }
+}
+
+Future<void> carregarExtractoCliente(int idCliente) async {
+  final result = await _run(() => _repository.extractoCliente(idCliente));
+
+  if (result != null) {
+    _extractoCliente = result;
+  }
+}
+
+
+
+
 
   @override
   void dispose() {

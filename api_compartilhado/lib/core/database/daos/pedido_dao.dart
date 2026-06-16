@@ -160,4 +160,115 @@ class PedidoDao {
       'item_pedido_servico', where: 'id_pedido = ?', whereArgs: [idPedido],
     );
   }
+
+  Future<List<Map<String, dynamic>>> getParcelasByPedido(int idPedido) async {
+  final rows = await _db.query(
+    'pedido_credito_parcela',
+    where: 'id_pedido = ?',
+    whereArgs: [idPedido],
+    orderBy: 'numero_parcela ASC',
+  );
+
+  return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+}
+
+Future<Map<String, dynamic>?> getParcelaById(int idParcela) async {
+  final rows = await _db.query(
+    'pedido_credito_parcela',
+    where: 'id = ?',
+    whereArgs: [idParcela],
+    limit: 1,
+  );
+
+  return rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
+}
+
+Future<void> upsertParcela(Map<String, dynamic> parcela) async {
+  await _db.insert(
+    'pedido_credito_parcela',
+    parcela,
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+Future<void> upsertAllParcelas(List<Map<String, dynamic>> parcelas) async {
+  final batch = _db.batch();
+
+  for (final p in parcelas) {
+    batch.insert(
+      'pedido_credito_parcela',
+      p,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  await batch.commit(noResult: true);
+}
+
+Future<void> deleteParcelasByPedido(int idPedido) async {
+  await _db.delete(
+    'pedido_credito_parcela',
+    where: 'id_pedido = ?',
+    whereArgs: [idPedido],
+  );
+}
+
+Future<List<Map<String, dynamic>>> getPagamentosCreditoByPedido(
+  int idPedido,
+) async {
+  final rows = await _db.query(
+    'pedido_credito_pagamento',
+    where: 'id_pedido = ?',
+    whereArgs: [idPedido],
+    orderBy: 'data_pagamento DESC',
+  );
+
+  return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+}
+
+Future<Map<String, dynamic>?> getPagamentoCreditoById(
+  int idPagamentoCredito,
+) async {
+  final rows = await _db.query(
+    'pedido_credito_pagamento',
+    where: 'id = ?',
+    whereArgs: [idPagamentoCredito],
+    limit: 1,
+  );
+
+  return rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
+}
+
+Future<void> upsertPagamentoCredito(Map<String, dynamic> pagamento) async {
+  await _db.insert(
+    'pedido_credito_pagamento',
+    pagamento,
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+Future<void> upsertAllPagamentosCredito(
+  List<Map<String, dynamic>> pagamentos,
+) async {
+  final batch = _db.batch();
+
+  for (final p in pagamentos) {
+    batch.insert(
+      'pedido_credito_pagamento',
+      p,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  await batch.commit(noResult: true);
+}
+
+Future<void> deletePagamentosCreditoByPedido(int idPedido) async {
+  await _db.delete(
+    'pedido_credito_pagamento',
+    where: 'id_pedido = ?',
+    whereArgs: [idPedido],
+  );
+}
+
 }

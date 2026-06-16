@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 5,       
+  version: 6,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -131,6 +131,103 @@ if (oldVersion < 5) {
       'CREATE INDEX IF NOT EXISTS idx_cotacao_item_servico ON cotacao_item_servico(id_cotacao)');
   }
 
+  if (oldVersion < 6) {
+  // ── Campos de crédito em pedido ─────────────────────────────
+  await db.execute(
+    "ALTER TABLE pedido ADD COLUMN tipo_venda TEXT NOT NULL DEFAULT 'IMEDIATA'",
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN modalidade_credito TEXT',
+  );
+
+  await db.execute(
+    "ALTER TABLE pedido ADD COLUMN status_pagamento TEXT NOT NULL DEFAULT 'PENDENTE'",
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN id_documento_factura_credito INTEGER',
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN data_abertura_credito TEXT',
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN data_vencimento_credito TEXT',
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN data_liquidacao_credito TEXT',
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN observacoes_credito TEXT',
+  );
+
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN saldo_devedor_credito REAL',
+  );
+
+  // ── Parcelas de crédito ─────────────────────────────────────
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS pedido_credito_parcela (
+      id               INTEGER PRIMARY KEY,
+      id_pedido        INTEGER NOT NULL,
+      numero_parcela   INTEGER NOT NULL,
+      valor_parcela    REAL    NOT NULL DEFAULT 0,
+      valor_pago       REAL    NOT NULL DEFAULT 0,
+      saldo_parcela    REAL,
+      data_vencimento  TEXT    NOT NULL,
+      data_pagamento   TEXT,
+      status_parcela   TEXT    NOT NULL DEFAULT 'PENDENTE',
+      observacoes      TEXT,
+      deleted          INTEGER NOT NULL DEFAULT 0,
+      sync_status      TEXT    NOT NULL DEFAULT 'synced',
+      updated_at       TEXT
+    )
+  ''');
+
+  // ── Pagamentos de crédito ───────────────────────────────────
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS pedido_credito_pagamento (
+      id                    INTEGER PRIMARY KEY,
+      referencia            TEXT,
+      id_pedido             INTEGER NOT NULL,
+      id_parcela            INTEGER,
+      id_tipo_pagamento     INTEGER NOT NULL,
+      id_usuario            INTEGER NOT NULL,
+      id_documento_recibo   INTEGER,
+      valor_pago            REAL    NOT NULL DEFAULT 0,
+      data_pagamento        TEXT    NOT NULL,
+      observacoes           TEXT,
+      deleted               INTEGER NOT NULL DEFAULT 0,
+      sync_status           TEXT    NOT NULL DEFAULT 'synced',
+      updated_at            TEXT
+    )
+  ''');
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_pedido_credito_parcela_pedido '
+    'ON pedido_credito_parcela(id_pedido)',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_pedido_credito_pagamento_pedido '
+    'ON pedido_credito_pagamento(id_pedido)',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_pedido_credito_parcela_sync '
+    'ON pedido_credito_parcela(sync_status)',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_pedido_credito_pagamento_sync '
+    'ON pedido_credito_pagamento(sync_status)',
+  );
+}
+
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -195,25 +292,36 @@ if (oldVersion < 5) {
       ''');
 
       // ── pedido ────────────────────────────────────────────────────
-      await txn.execute('''
-        CREATE TABLE pedido (
-          id                INTEGER PRIMARY KEY,
-          local_id          TEXT UNIQUE,
-          referencia        TEXT,
-          status_pedido     TEXT NOT NULL,
-          total             REAL NOT NULL DEFAULT 0,
-          valor_pago        REAL,
-          troco             REAL,
-          observacoes       TEXT,
-          id_cliente        INTEGER,
-          id_tipo_pagamento INTEGER,
-          id_usuario        INTEGER NOT NULL,
-          data_pedido       TEXT    NOT NULL,
-          data_finalizacao  TEXT,
-          sync_status       TEXT    NOT NULL DEFAULT 'synced',
-          updated_at        TEXT
-        )
-      ''');
+await txn.execute('''
+  CREATE TABLE pedido (
+    id                              INTEGER PRIMARY KEY,
+    local_id                        TEXT UNIQUE,
+    referencia                      TEXT,
+    status_pedido                   TEXT NOT NULL,
+    total                           REAL NOT NULL DEFAULT 0,
+    valor_pago                      REAL,
+    troco                           REAL,
+    observacoes                     TEXT,
+    id_cliente                      INTEGER,
+    id_tipo_pagamento               INTEGER,
+    id_usuario                      INTEGER NOT NULL,
+    data_pedido                     TEXT NOT NULL,
+    data_finalizacao                TEXT,
+
+    tipo_venda                      TEXT NOT NULL DEFAULT 'IMEDIATA',
+    modalidade_credito              TEXT,
+    status_pagamento                TEXT NOT NULL DEFAULT 'PENDENTE',
+    id_documento_factura_credito    INTEGER,
+    data_abertura_credito           TEXT,
+    data_vencimento_credito         TEXT,
+    data_liquidacao_credito         TEXT,
+    observacoes_credito             TEXT,
+    saldo_devedor_credito           REAL,
+
+    sync_status                     TEXT NOT NULL DEFAULT 'synced',
+    updated_at                      TEXT
+  )
+''');
 
       // ── item_pedido ───────────────────────────────────────────────
       await txn.execute('''
@@ -238,6 +346,42 @@ if (oldVersion < 5) {
     quantidade      INTEGER NOT NULL DEFAULT 1,
     subtotal        REAL    NOT NULL DEFAULT 0,
     observacoes     TEXT
+  )
+''');
+
+await txn.execute('''
+  CREATE TABLE pedido_credito_parcela (
+    id               INTEGER PRIMARY KEY,
+    id_pedido        INTEGER NOT NULL,
+    numero_parcela   INTEGER NOT NULL,
+    valor_parcela    REAL    NOT NULL DEFAULT 0,
+    valor_pago       REAL    NOT NULL DEFAULT 0,
+    saldo_parcela    REAL,
+    data_vencimento  TEXT    NOT NULL,
+    data_pagamento   TEXT,
+    status_parcela   TEXT    NOT NULL DEFAULT 'PENDENTE',
+    observacoes      TEXT,
+    deleted          INTEGER NOT NULL DEFAULT 0,
+    sync_status      TEXT    NOT NULL DEFAULT 'synced',
+    updated_at       TEXT
+  )
+''');
+
+await txn.execute('''
+  CREATE TABLE pedido_credito_pagamento (
+    id                    INTEGER PRIMARY KEY,
+    referencia            TEXT,
+    id_pedido             INTEGER NOT NULL,
+    id_parcela            INTEGER,
+    id_tipo_pagamento     INTEGER NOT NULL,
+    id_usuario            INTEGER NOT NULL,
+    id_documento_recibo   INTEGER,
+    valor_pago            REAL    NOT NULL DEFAULT 0,
+    data_pagamento        TEXT    NOT NULL,
+    observacoes           TEXT,
+    deleted               INTEGER NOT NULL DEFAULT 0,
+    sync_status           TEXT    NOT NULL DEFAULT 'synced',
+    updated_at            TEXT
   )
 ''');
 
@@ -377,6 +521,33 @@ await txn.execute('''
       await txn.execute('CREATE INDEX idx_produto_sync   ON produto(sync_status)');
       await txn.execute('CREATE INDEX idx_pedido_sync    ON pedido(sync_status)');
       await txn.execute('CREATE INDEX idx_pedido_status  ON pedido(status_pedido)');
+      await txn.execute(
+  'CREATE INDEX idx_pedido_tipo_venda ON pedido(tipo_venda)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_pedido_status_pagamento ON pedido(status_pagamento)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_pedido_credito_parcela_pedido '
+  'ON pedido_credito_parcela(id_pedido)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_pedido_credito_pagamento_pedido '
+  'ON pedido_credito_pagamento(id_pedido)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_pedido_credito_parcela_sync '
+  'ON pedido_credito_parcela(sync_status)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_pedido_credito_pagamento_sync '
+  'ON pedido_credito_pagamento(sync_status)',
+);
       await txn.execute('CREATE INDEX idx_item_pedido    ON item_pedido(id_pedido)');
       await txn.execute('CREATE INDEX idx_item_pedido_servico ON item_pedido_servico(id_pedido)');
       await txn.execute('CREATE INDEX idx_categoria_sync ON categoria(sync_status)');
@@ -405,6 +576,8 @@ await txn.execute('CREATE INDEX idx_cotacao_item_servico ON cotacao_item_servico
     await db.transaction((txn) async {
       await txn.delete('item_pedido');
       await txn.delete('item_pedido_servico');
+      await txn.delete('pedido_credito_pagamento');
+await txn.delete('pedido_credito_parcela');
       await txn.delete('pedido');
       await txn.delete('cliente');
       await txn.delete('produto');

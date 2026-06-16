@@ -394,6 +394,8 @@ class PedidoRepository {
         : _pedidoVazio(idPedido);
   }
 
+  
+
   // ══════════════════════════════════════════════════════════════════
   // ADICIONAR ITEM DE SERVIÇO
   // ══════════════════════════════════════════════════════════════════
@@ -619,4 +621,307 @@ Future<PedidoModel> finalizarPedido(
         valorPago:       0,
         dataPedido:      DateTime.now(),
       );
+
+Future<void> _enqueuePedidoOperation({
+  required String operacao,
+  required int idPedido,
+  required Map<String, dynamic> payload,
+}) async {
+  final fullPayload = {
+    ...payload,
+
+    // Se o pedido ainda for temporário/offline, o SyncScheduler deve resolver depois.
+    'idPedido': idPedido.isNegative ? null : idPedido,
+    'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
+  };
+
+  await _syncQueueDao.enqueue(
+    'pedido',
+    operacao,
+    fullPayload,
+  );
 }
+Future<PedidoModel> declararCredito(
+  int idPedido,
+  DeclararCreditoRequestModel dto,
+) async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      final pedido = await _service.declararCredito(idPedido, dto);
+      await _upsertPedidoComItens(pedido);
+      return pedido;
+    } catch (e) {
+      debugPrint('⚠️ PedidoRepository.declararCredito online falhou; enfileirando: $e');
+    }
+  }
+
+  final payload = dto.toJson();
+
+  await _enqueuePedidoOperation(
+    operacao: 'DECLARAR_CREDITO',
+    idPedido: idPedido,
+    payload: payload,
+  );
+
+  await _db.update(
+    'pedido',
+    {
+      'tipo_venda': 'CREDITO',
+      'modalidade_credito': dto.modalidadeCredito,
+      'status_pedido': 'em dívida',
+      'status_pagamento': 'PENDENTE',
+      'data_abertura_credito': DateTime.now().toIso8601String(),
+      'data_vencimento_credito':
+          dto.dataVencimento?.toIso8601String().split('T').first,
+      'observacoes_credito': dto.observacoesCredito,
+      'sync_status': 'pending_update',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    where: 'id = ?',
+    whereArgs: [idPedido],
+  );
+
+  final row = await _dao.getById(idPedido);
+  if (row == null) {
+    throw Exception('Pedido $idPedido não encontrado no cache local.');
+  }
+
+  return _pedidoComItensDoCache(row);
+}
+
+Future<List<ParcelaCreditoModel>> criarParcelas(
+  int idPedido,
+  CriarParcelasRequestModel dto,
+) async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      final parcelas = await _service.criarParcelas(idPedido, dto);
+      // O cache local das parcelas será feito no PedidoDao no próximo passo.
+      return parcelas;
+    } catch (e) {
+      debugPrint('⚠️ PedidoRepository.criarParcelas online falhou; enfileirando: $e');
+    }
+  }
+
+  await _enqueuePedidoOperation(
+    operacao: 'CRIAR_PARCELAS',
+    idPedido: idPedido,
+    payload: dto.toJson(),
+  );
+
+  final agora = DateTime.now();
+
+  final parcelasLocais = dto.parcelas
+      .map((p) => ParcelaCreditoModel(
+            idParcela: -agora.microsecondsSinceEpoch - p.numeroParcela,
+            idPedido: idPedido,
+            numeroParcela: p.numeroParcela,
+            valorParcela: p.valorParcela,
+            valorPago: 0.0,
+            saldoParcela: p.valorParcela,
+            dataVencimento: p.dataVencimento,
+            dataPagamento: null,
+            statusParcela: 'PENDENTE',
+            observacoes: null,
+          ))
+      .toList();
+
+  // Persistência local real das parcelas fica para o PedidoDao.
+  return parcelasLocais;
+}
+
+Future<PagamentoCreditoModel> registarPagamentoCredito(
+  int idPedido,
+  RegistarPagamentoCreditoRequestModel dto,
+) async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      final pagamento = await _service.registarPagamentoCredito(idPedido, dto);
+
+      final atualizado = await _service.buscarPorId(idPedido);
+      await _upsertPedidoComItens(atualizado);
+
+      return pagamento;
+    } catch (e) {
+      debugPrint(
+        '⚠️ PedidoRepository.registarPagamentoCredito online falhou; enfileirando: $e',
+      );
+    }
+  }
+
+  final row = await _dao.getById(idPedido);
+  if (row == null) {
+    throw Exception('Pedido $idPedido não encontrado no cache local.');
+  }
+
+  final pedido = await _pedidoComItensDoCache(row);
+  if (!pedido.ehCredito) {
+    throw Exception("Operação 'registo de pagamento' só é válida para pedidos a crédito.");
+  }
+
+  final saldoDevedor = pedido.total - pedido.valorPago;
+  if (dto.valorPago > saldoDevedor) {
+    throw Exception(
+      'Pagamento excede o saldo. Valor: ${dto.valorPago}, saldo: $saldoDevedor',
+    );
+  }
+
+  await _enqueuePedidoOperation(
+    operacao: 'REGISTAR_PAGAMENTO',
+    idPedido: idPedido,
+    payload: dto.toJson(),
+  );
+
+  final novoValorPago = pedido.valorPago + dto.valorPago;
+  final liquidado = novoValorPago >= pedido.total;
+  final agora = DateTime.now();
+
+  await _db.update(
+    'pedido',
+    {
+      'valor_pago': novoValorPago,
+      'status_pagamento': liquidado ? 'PAGO' : 'PARCIAL',
+      'status_pedido': liquidado ? 'finalizado' : pedido.statusPedido,
+      'data_liquidacao_credito': liquidado ? agora.toIso8601String() : null,
+      'data_finalizacao': liquidado ? agora.toIso8601String() : null,
+      'sync_status': 'pending_update',
+      'updated_at': agora.toIso8601String(),
+    },
+    where: 'id = ?',
+    whereArgs: [idPedido],
+  );
+
+  final pagamentoLocal = PagamentoCreditoModel(
+    idPagamentoCredito: -agora.microsecondsSinceEpoch,
+    referencia: 'PAG-LOCAL-${agora.millisecondsSinceEpoch}',
+    idPedido: idPedido,
+    idParcela: dto.idParcela,
+    idTipoPagamento: dto.idTipoPagamento,
+    idUsuario: dto.idUsuario,
+    idDocumentoRecibo: -agora.microsecondsSinceEpoch,
+    valorPago: dto.valorPago,
+    dataPagamento: agora,
+    observacoes: dto.observacoes,
+  );
+
+  return pagamentoLocal;
+}
+
+Future<List<ParcelaCreditoModel>> listarParcelas(int idPedido) async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      return await _service.listarParcelas(idPedido);
+    } catch (e) {
+      debugPrint('⚠️ PedidoRepository.listarParcelas online falhou: $e');
+    }
+  }
+
+  // Cache local das parcelas será implementado no PedidoDao.
+  return [];
+}
+
+Future<List<PagamentoCreditoModel>> listarPagamentosCredito(int idPedido) async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      return await _service.listarPagamentosCredito(idPedido);
+    } catch (e) {
+      debugPrint('⚠️ PedidoRepository.listarPagamentosCredito online falhou: $e');
+    }
+  }
+
+  // Cache local dos pagamentos será implementado no PedidoDao.
+  return [];
+}
+
+Future<List<PedidoModel>> listarEmDivida() async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      final pedidos = await _service.listarEmDivida();
+      for (final p in pedidos) {
+        await _upsertPedidoComItens(p);
+      }
+      return pedidos;
+    } catch (e) {
+      debugPrint('⚠️ PedidoRepository.listarEmDivida online falhou; usando cache: $e');
+    }
+  }
+
+  final rows = await _db.query(
+    'pedido',
+    where: 'tipo_venda = ? AND deleted = 0',
+    whereArgs: ['CREDITO'],
+    orderBy: 'data_pedido DESC',
+  );
+
+  return Future.wait(rows.map(_pedidoComItensDoCache));
+}
+
+
+
+Future<Map<String, dynamic>> extractoCliente(int idCliente) async {
+  final online = _connectivity.isOnline;
+
+  if (online) {
+    try {
+      return await _service.extractoCliente(idCliente);
+    } catch (e) {
+      debugPrint(
+        '⚠️ PedidoRepository.extractoCliente online falhou; calculando local: $e',
+      );
+    }
+  }
+
+  final rows = await _db.query(
+    'pedido',
+    where: 'id_cliente = ? AND tipo_venda = ? AND deleted = 0',
+    whereArgs: [idCliente, 'CREDITO'],
+  );
+
+  double totalDivida = 0;
+  double totalPago = 0;
+
+  final linhas = <Map<String, dynamic>>[];
+
+  for (final row in rows) {
+    final p = PedidoModel.fromLocalDb(row);
+    final saldo = p.total - p.valorPago;
+
+    totalDivida += p.total;
+    totalPago += p.valorPago;
+
+    linhas.add({
+      'idPedido': p.idPedido,
+      'referencia': p.referencia,
+      'total': p.total,
+      'valorPago': p.valorPago,
+      'saldo': saldo,
+      'statusPagamento': p.statusPagamento,
+      'idDocumentoFacturaCredito': p.idDocumentoFacturaCredito,
+    });
+  }
+
+  return {
+    'idCliente': idCliente,
+    'totalDivida': totalDivida,
+    'totalPago': totalPago,
+    'saldo': totalDivida - totalPago,
+    'linhas': linhas,
+  };
+}
+
+
+
+}
+

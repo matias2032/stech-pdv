@@ -122,6 +122,16 @@ class PedidoModel {
   final List<ItemPedidoModel>        itensProduto;
   final List<ItemPedidoServicoModel> itensServico;
   final int? idCliente;
+  // ── Crédito ─────────────────────────────────────────────
+final String tipoVenda; // IMEDIATA | CREDITO
+final String? modalidadeCredito; // SEM_PARCELAS | PARCELADO
+final String statusPagamento; // PENDENTE | PARCIAL | PAGO
+final int? idDocumentoFacturaCredito;
+final DateTime? dataAberturaCredito;
+final DateTime? dataVencimentoCredito;
+final DateTime? dataLiquidacaoCredito;
+final String? observacoesCredito;
+final double? saldoDevedorCredito;
 
   const PedidoModel({
     required this.idPedido,
@@ -139,11 +149,37 @@ class PedidoModel {
     this.itensProduto = const [],
     this.itensServico = const [],
     this.idCliente,
+    this.tipoVenda = 'IMEDIATA',
+this.modalidadeCredito,
+this.statusPagamento = 'PENDENTE',
+this.idDocumentoFacturaCredito,
+this.dataAberturaCredito,
+this.dataVencimentoCredito,
+this.dataLiquidacaoCredito,
+this.observacoesCredito,
+this.saldoDevedorCredito,
   });
 
   bool get estaAberto     => statusPedido == 'aberto';
   bool get estaFinalizado => statusPedido == 'finalizado';
   bool get estaCancelado  => statusPedido == 'cancelado';
+  bool get ehCredito => tipoVenda == 'CREDITO';
+bool get ehVendaImediata => tipoVenda == 'IMEDIATA';
+
+bool get creditoSemParcelas => modalidadeCredito == 'SEM_PARCELAS';
+bool get creditoParcelado => modalidadeCredito == 'PARCELADO';
+
+bool get pagamentoPendente => statusPagamento == 'PENDENTE';
+bool get pagamentoParcial => statusPagamento == 'PARCIAL';
+bool get pagamentoPago => statusPagamento == 'PAGO';
+
+bool get estaEmDivida => statusPedido == 'em dívida';
+bool get creditoLiquidado => ehCredito && pagamentoPago;
+
+double get saldoDevedorCalculado {
+  if (saldoDevedorCredito != null) return saldoDevedorCredito!;
+  return total - valorPago;
+}
 
   // ── HTTP → Model ──────────────────────────────────────────────────
 
@@ -175,7 +211,29 @@ class PedidoModel {
         idCliente: json['idCliente'] != null
             ? int.tryParse(json['idCliente'].toString())
             : null,
+
+            tipoVenda: (json['tipoVenda'] as String?) ?? 'IMEDIATA',
+modalidadeCredito: json['modalidadeCredito'] as String?,
+statusPagamento: (json['statusPagamento'] as String?) ?? 'PENDENTE',
+idDocumentoFacturaCredito: json['idDocumentoFacturaCredito'] != null
+    ? int.tryParse(json['idDocumentoFacturaCredito'].toString())
+    : null,
+dataAberturaCredito: json['dataAberturaCredito'] != null
+    ? DateTime.tryParse(json['dataAberturaCredito'] as String)
+    : null,
+dataVencimentoCredito: json['dataVencimentoCredito'] != null
+    ? DateTime.tryParse(json['dataVencimentoCredito'] as String)
+    : null,
+dataLiquidacaoCredito: json['dataLiquidacaoCredito'] != null
+    ? DateTime.tryParse(json['dataLiquidacaoCredito'] as String)
+    : null,
+observacoesCredito: json['observacoesCredito'] as String?,
+saldoDevedorCredito: json['saldoDevedorCredito'] != null
+    ? (json['saldoDevedorCredito'] as num).toDouble()
+    : null,
       );
+
+      
 
   // ── SQLite → Model ────────────────────────────────────────────────
 
@@ -194,6 +252,21 @@ class PedidoModel {
         dataFinalizacao: row['data_finalizacao'] != null
             ? DateTime.tryParse(row['data_finalizacao'] as String)
             : null,
+            tipoVenda: (row['tipo_venda'] as String?) ?? 'IMEDIATA',
+modalidadeCredito: row['modalidade_credito'] as String?,
+statusPagamento: (row['status_pagamento'] as String?) ?? 'PENDENTE',
+idDocumentoFacturaCredito: row['id_documento_factura_credito'] as int?,
+dataAberturaCredito: row['data_abertura_credito'] != null
+    ? DateTime.tryParse(row['data_abertura_credito'] as String)
+    : null,
+dataVencimentoCredito: row['data_vencimento_credito'] != null
+    ? DateTime.tryParse(row['data_vencimento_credito'] as String)
+    : null,
+dataLiquidacaoCredito: row['data_liquidacao_credito'] != null
+    ? DateTime.tryParse(row['data_liquidacao_credito'] as String)
+    : null,
+observacoesCredito: row['observacoes_credito'] as String?,
+saldoDevedorCredito: (row['saldo_devedor_credito'] as num?)?.toDouble(),
         itensProduto: const [], // carregados separadamente via PedidoDao
         itensServico: const [],
       );
@@ -216,6 +289,15 @@ class PedidoModel {
         'itensProduto':    itensProduto.map((e) => e.toJson()).toList(),
         'itensServico':    itensServico.map((e) => e.toJson()).toList(),
         'idCliente':       idCliente,
+        'tipoVenda': tipoVenda,
+'modalidadeCredito': modalidadeCredito,
+'statusPagamento': statusPagamento,
+'idDocumentoFacturaCredito': idDocumentoFacturaCredito,
+'dataAberturaCredito': dataAberturaCredito?.toIso8601String(),
+'dataVencimentoCredito': dataVencimentoCredito?.toIso8601String().split('T').first,
+'dataLiquidacaoCredito': dataLiquidacaoCredito?.toIso8601String(),
+'observacoesCredito': observacoesCredito,
+'saldoDevedorCredito': saldoDevedorCredito,
       };
 
   // ── Model → SQLite ────────────────────────────────────────────────
@@ -234,6 +316,15 @@ class PedidoModel {
         'id_usuario':        idUsuario,
         'data_pedido':       dataPedido.toIso8601String(),
         'data_finalizacao':  dataFinalizacao?.toIso8601String(),
+        'tipo_venda': tipoVenda,
+'modalidade_credito': modalidadeCredito,
+'status_pagamento': statusPagamento,
+'id_documento_factura_credito': idDocumentoFacturaCredito,
+'data_abertura_credito': dataAberturaCredito?.toIso8601String(),
+'data_vencimento_credito': dataVencimentoCredito?.toIso8601String().split('T').first,
+'data_liquidacao_credito': dataLiquidacaoCredito?.toIso8601String(),
+'observacoes_credito': observacoesCredito,
+'saldo_devedor_credito': saldoDevedorCredito,
         'sync_status':       'synced',
         'updated_at':        DateTime.now().toIso8601String(),
       };
@@ -256,6 +347,15 @@ class PedidoModel {
     List<ItemPedidoModel>?        itensProduto,
     List<ItemPedidoServicoModel>? itensServico,
     int?    idCliente,
+    String? tipoVenda,
+String? modalidadeCredito,
+String? statusPagamento,
+int? idDocumentoFacturaCredito,
+DateTime? dataAberturaCredito,
+DateTime? dataVencimentoCredito,
+DateTime? dataLiquidacaoCredito,
+String? observacoesCredito,
+double? saldoDevedorCredito,
   }) => PedidoModel(
         idPedido:        idPedido        ?? this.idPedido,
         referencia:      referencia      ?? this.referencia,
@@ -272,6 +372,16 @@ class PedidoModel {
         itensProduto:    itensProduto    ?? this.itensProduto,
         itensServico:    itensServico    ?? this.itensServico,
         idCliente:       idCliente       ?? this.idCliente,
+        tipoVenda: tipoVenda ?? this.tipoVenda,
+modalidadeCredito: modalidadeCredito ?? this.modalidadeCredito,
+statusPagamento: statusPagamento ?? this.statusPagamento,
+idDocumentoFacturaCredito:
+    idDocumentoFacturaCredito ?? this.idDocumentoFacturaCredito,
+dataAberturaCredito: dataAberturaCredito ?? this.dataAberturaCredito,
+dataVencimentoCredito: dataVencimentoCredito ?? this.dataVencimentoCredito,
+dataLiquidacaoCredito: dataLiquidacaoCredito ?? this.dataLiquidacaoCredito,
+observacoesCredito: observacoesCredito ?? this.observacoesCredito,
+saldoDevedorCredito: saldoDevedorCredito ?? this.saldoDevedorCredito,
       );
 
   @override
@@ -283,6 +393,130 @@ class PedidoModel {
   @override
   String toString() =>
       'PedidoModel{idPedido: $idPedido, referencia: $referencia, status: $statusPedido}';
+}
+
+class ParcelaCreditoModel {
+  final int idParcela;
+  final int idPedido;
+  final int numeroParcela;
+  final double valorParcela;
+  final double valorPago;
+  final double? saldoParcela;
+  final DateTime dataVencimento;
+  final DateTime? dataPagamento;
+  final String statusParcela;
+  final String? observacoes;
+
+  const ParcelaCreditoModel({
+    required this.idParcela,
+    required this.idPedido,
+    required this.numeroParcela,
+    required this.valorParcela,
+    required this.valorPago,
+    this.saldoParcela,
+    required this.dataVencimento,
+    this.dataPagamento,
+    required this.statusParcela,
+    this.observacoes,
+  });
+
+  bool get pendente => statusParcela == 'PENDENTE';
+  bool get parcial => statusParcela == 'PARCIAL';
+  bool get paga => statusParcela == 'PAGA';
+  bool get vencida => statusParcela == 'VENCIDA';
+  bool get cancelada => statusParcela == 'CANCELADA';
+
+  double get saldoCalculado {
+    if (saldoParcela != null) return saldoParcela!;
+    return valorParcela - valorPago;
+  }
+
+  factory ParcelaCreditoModel.fromJson(Map<String, dynamic> json) =>
+      ParcelaCreditoModel(
+        idParcela: int.parse(json['idParcela'].toString()),
+        idPedido: int.parse(json['idPedido'].toString()),
+        numeroParcela: int.parse(json['numeroParcela'].toString()),
+        valorParcela: (json['valorParcela'] as num).toDouble(),
+        valorPago: (json['valorPago'] as num?)?.toDouble() ?? 0.0,
+        saldoParcela: json['saldoParcela'] != null
+            ? (json['saldoParcela'] as num).toDouble()
+            : null,
+        dataVencimento: DateTime.parse(json['dataVencimento'] as String),
+        dataPagamento: json['dataPagamento'] != null
+            ? DateTime.tryParse(json['dataPagamento'] as String)
+            : null,
+        statusParcela: (json['statusParcela'] as String?) ?? 'PENDENTE',
+        observacoes: json['observacoes'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'idParcela': idParcela,
+        'idPedido': idPedido,
+        'numeroParcela': numeroParcela,
+        'valorParcela': valorParcela,
+        'valorPago': valorPago,
+        'saldoParcela': saldoParcela,
+        'dataVencimento': dataVencimento.toIso8601String().split('T').first,
+        'dataPagamento': dataPagamento?.toIso8601String(),
+        'statusParcela': statusParcela,
+        'observacoes': observacoes,
+      };
+}
+
+class PagamentoCreditoModel {
+  final int idPagamentoCredito;
+  final String referencia;
+  final int idPedido;
+  final int? idParcela;
+  final int idTipoPagamento;
+  final int idUsuario;
+  final int idDocumentoRecibo;
+  final double valorPago;
+  final DateTime dataPagamento;
+  final String? observacoes;
+
+  const PagamentoCreditoModel({
+    required this.idPagamentoCredito,
+    required this.referencia,
+    required this.idPedido,
+    this.idParcela,
+    required this.idTipoPagamento,
+    required this.idUsuario,
+    required this.idDocumentoRecibo,
+    required this.valorPago,
+    required this.dataPagamento,
+    this.observacoes,
+  });
+
+  factory PagamentoCreditoModel.fromJson(Map<String, dynamic> json) =>
+      PagamentoCreditoModel(
+        idPagamentoCredito:
+            int.parse(json['idPagamentoCredito'].toString()),
+        referencia: json['referencia'] as String,
+        idPedido: int.parse(json['idPedido'].toString()),
+        idParcela: json['idParcela'] != null
+            ? int.tryParse(json['idParcela'].toString())
+            : null,
+        idTipoPagamento: int.parse(json['idTipoPagamento'].toString()),
+        idUsuario: int.parse(json['idUsuario'].toString()),
+        idDocumentoRecibo: int.parse(json['idDocumentoRecibo'].toString()),
+        valorPago: (json['valorPago'] as num).toDouble(),
+        dataPagamento: DateTime.parse(json['dataPagamento'] as String),
+        observacoes: json['observacoes'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'idPagamentoCredito': idPagamentoCredito,
+        'referencia': referencia,
+        'idPedido': idPedido,
+        'idParcela': idParcela,
+        'idTipoPagamento': idTipoPagamento,
+        'idUsuario': idUsuario,
+        'idDocumentoRecibo': idDocumentoRecibo,
+        'valorPago': valorPago,
+        'dataPagamento': dataPagamento.toIso8601String(),
+        'observacoes': observacoes,
+      };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -396,3 +630,87 @@ class CancelamentoPedidoRequestModel {
         'motivo':            motivo,
       };
 }
+
+class DeclararCreditoRequestModel {
+  final String modalidadeCredito; // SEM_PARCELAS | PARCELADO
+  final int idUsuario;
+  final String? codigoAt;
+  final DateTime? dataVencimento;
+  final String? observacoesCredito;
+
+  const DeclararCreditoRequestModel({
+    required this.modalidadeCredito,
+    required this.idUsuario,
+    this.codigoAt,
+    this.dataVencimento,
+    this.observacoesCredito,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'modalidadeCredito': modalidadeCredito,
+        'idUsuario': idUsuario,
+        if (codigoAt != null) 'codigoAt': codigoAt,
+        if (dataVencimento != null)
+          'dataVencimento': dataVencimento!.toIso8601String().split('T').first,
+        if (observacoesCredito != null)
+          'observacoesCredito': observacoesCredito,
+      };
+}
+
+class CriarParcelaItemRequestModel {
+  final int numeroParcela;
+  final double valorParcela;
+  final DateTime dataVencimento;
+
+  const CriarParcelaItemRequestModel({
+    required this.numeroParcela,
+    required this.valorParcela,
+    required this.dataVencimento,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'numeroParcela': numeroParcela,
+        'valorParcela': valorParcela,
+        'dataVencimento': dataVencimento.toIso8601String().split('T').first,
+      };
+}
+
+class CriarParcelasRequestModel {
+  final List<CriarParcelaItemRequestModel> parcelas;
+
+  const CriarParcelasRequestModel({
+    required this.parcelas,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'parcelas': parcelas.map((e) => e.toJson()).toList(),
+      };
+}
+
+class RegistarPagamentoCreditoRequestModel {
+  final int? idParcela;
+  final int idTipoPagamento;
+  final int idUsuario;
+  final double valorPago;
+  final String? codigoAt;
+  final String? observacoes;
+
+  const RegistarPagamentoCreditoRequestModel({
+    this.idParcela,
+    required this.idTipoPagamento,
+    required this.idUsuario,
+    required this.valorPago,
+    this.codigoAt,
+    this.observacoes,
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (idParcela != null) 'idParcela': idParcela,
+        'idTipoPagamento': idTipoPagamento,
+        'idUsuario': idUsuario,
+        'valorPago': valorPago,
+        if (codigoAt != null) 'codigoAt': codigoAt,
+        if (observacoes != null) 'observacoes': observacoes,
+      };
+}
+

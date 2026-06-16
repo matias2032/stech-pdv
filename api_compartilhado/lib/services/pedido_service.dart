@@ -180,6 +180,20 @@ class PedidoService {
       final json = jsonDecode(body) as Map<String, dynamic>;
       final msg = (json['message'] ?? json['error'] ?? body).toString();
 
+      final lower = msg.toLowerCase();
+
+if (lower.contains('crédito') || lower.contains('credito')) {
+  throw Exception('Erro de crédito: $msg');
+}
+
+if (lower.contains('parcela')) {
+  throw Exception('Erro de parcela: $msg');
+}
+
+if (lower.contains('saldo')) {
+  throw Exception('Erro de saldo: $msg');
+}
+
       if (res.statusCode == 404) throw PedidoNaoEncontradoException(0);
       if (res.statusCode == 409 || msg.toLowerCase().contains('estoque')) {
         throw EstoqueInsuficienteException(msg, 0, 0);
@@ -564,8 +578,149 @@ class PedidoService {
   }
   _throwFromResponse(res);
 }
+Future<PedidoModel> declararCredito(
+  int idPedido,
+  DeclararCreditoRequestModel dto,
+) async {
+  debugPrint('💳 PedidoService.declararCredito — pedido $idPedido');
 
-  // ─── Dispose ─────────────────────────────────────────────────────────────
+  final res = await _client
+      .post(
+        Uri.parse('$_baseUrl/$idPedido/credito'),
+        headers: _headers,
+        body: jsonEncode(dto.toJson()),
+      )
+      .timeout(ApiConfig.timeout);
 
-  void dispose() => _client.close();
+  return _parsePedido(res);
+}
+
+Future<List<ParcelaCreditoModel>> criarParcelas(
+  int idPedido,
+  CriarParcelasRequestModel dto,
+) async {
+  debugPrint('📆 PedidoService.criarParcelas — pedido $idPedido');
+
+  final res = await _client
+      .post(
+        Uri.parse('$_baseUrl/$idPedido/credito/parcelas'),
+        headers: _headers,
+        body: jsonEncode(dto.toJson()),
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode >= 200 && res.statusCode < 300) {
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => ParcelaCreditoModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  _throwFromResponse(res);
+}
+
+Future<PagamentoCreditoModel> registarPagamentoCredito(
+  int idPedido,
+  RegistarPagamentoCreditoRequestModel dto,
+) async {
+  debugPrint('💰 PedidoService.registarPagamentoCredito — pedido $idPedido');
+
+  final res = await _client
+      .post(
+        Uri.parse('$_baseUrl/$idPedido/credito/pagamentos'),
+        headers: _headers,
+        body: jsonEncode(dto.toJson()),
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode >= 200 && res.statusCode < 300) {
+    return PagamentoCreditoModel.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  _throwFromResponse(res);
+}
+
+Future<List<ParcelaCreditoModel>> listarParcelas(int idPedido) async {
+  debugPrint('🔍 PedidoService.listarParcelas — pedido $idPedido');
+
+  final res = await _client
+      .get(
+        Uri.parse('$_baseUrl/$idPedido/credito/parcelas'),
+        headers: _headers,
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode == 200) {
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => ParcelaCreditoModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  _throwFromResponse(res);
+}
+
+Future<List<PagamentoCreditoModel>> listarPagamentosCredito(
+  int idPedido,
+) async {
+  debugPrint('🔍 PedidoService.listarPagamentosCredito — pedido $idPedido');
+
+  final res = await _client
+      .get(
+        Uri.parse('$_baseUrl/$idPedido/credito/pagamentos'),
+        headers: _headers,
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode == 200) {
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => PagamentoCreditoModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  _throwFromResponse(res);
+}
+
+Future<List<PedidoModel>> listarEmDivida() async {
+  debugPrint('🔍 PedidoService.listarEmDivida');
+
+  final res = await _client
+      .get(
+        Uri.parse('$_baseUrl/credito/em-divida'),
+        headers: _headers,
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode == 200) {
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => PedidoModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  _throwFromResponse(res);
+}
+
+Future<Map<String, dynamic>> extractoCliente(int idCliente) async {
+  debugPrint('📄 PedidoService.extractoCliente — cliente $idCliente');
+
+  final res = await _client
+      .get(
+        Uri.parse('$_baseUrl/clientes/$idCliente/extracto'),
+        headers: _headers,
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode == 200) {
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  _throwFromResponse(res);
+}
+
+// ─── Dispose ─────────────────────────────────────────────────────────────
+void dispose() => _client.close();
 }
