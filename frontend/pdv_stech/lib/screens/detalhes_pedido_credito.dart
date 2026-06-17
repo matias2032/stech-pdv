@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:api_compartilhado/services/pdf_service.dart';
 
 // ── Cores STech Engenharia ────────────────────────────────────────────────────
 const _kVermelho = Color(0xFFC8102E);
@@ -385,6 +388,203 @@ class _DetalhesPedidoCreditoScreenState
     }
   }
 
+  Future<DocumentoFiscalModel> _buscarDocumentoFiscal(int idDocumento) async {
+  final uri = Uri.parse('${ApiConfig.documentosFiscaisUrl}/$idDocumento');
+
+  final response = await http
+      .get(uri, headers: ApiConfig.defaultHeaders)
+      .timeout(ApiConfig.timeout);
+
+  if (response.statusCode != 200) {
+    throw Exception(
+      'Não foi possível buscar documento fiscal #$idDocumento. '
+      'HTTP ${response.statusCode}: ${response.body}',
+    );
+  }
+
+  final json = jsonDecode(response.body) as Map<String, dynamic>;
+  return DocumentoFiscalModel.fromJson(json);
+}
+
+Future<ClienteModel> _buscarClienteDoPedido() async {
+  final idCliente = _pedido.idCliente;
+
+  if (idCliente == null) {
+    throw Exception('Este pedido não tem cliente associado.');
+  }
+
+  final uri = Uri.parse('${ApiConfig.clientesUrl}/$idCliente');
+
+  final response = await http
+      .get(uri, headers: ApiConfig.defaultHeaders)
+      .timeout(ApiConfig.timeout);
+
+  if (response.statusCode != 200) {
+    throw Exception(
+      'Não foi possível buscar cliente #$idCliente. '
+      'HTTP ${response.statusCode}: ${response.body}',
+    );
+  }
+
+  final json = jsonDecode(response.body) as Map<String, dynamic>;
+  return ClienteModel.fromJson(json);
+}
+
+String _nomeTipoPagamento(int idTipoPagamento) {
+  final provider = context.read<PedidoProvider>();
+
+  try {
+    return provider.tiposPagamento
+        .firstWhere((t) => t.idTipoPagamento == idTipoPagamento)
+        .tipoPagamento;
+  } catch (_) {
+    return 'Pagamento #$idTipoPagamento';
+  }
+}
+
+Future<void> _abrirFacturaCredito() async {
+  if (_operacaoEmAndamento) return;
+
+  final idDocumento = _pedido.idDocumentoFacturaCredito;
+
+  if (idDocumento == null || idDocumento == 0) {
+    _snack(
+      'Factura ainda não disponível. Sincronize o pedido primeiro.',
+      Colors.orange,
+    );
+    return;
+  }
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    final documentoFiscal = await _buscarDocumentoFiscal(idDocumento);
+    final cliente = await _buscarClienteDoPedido();
+
+    final docPdf = DocumentoPdfModel.deApiModel(
+      apiModel: documentoFiscal,
+      pedido: _pedido,
+      cliente: cliente,
+      tipoPagamento: 'Crédito',
+      prazoPagamento: 'Venda a crédito',
+    );
+
+    final file = await PdfService.instance.gerarDocumentoFiscal(docPdf);
+    await PdfService.instance.abrirPdf(file);
+  } catch (e) {
+    if (mounted) {
+      _snack('Erro ao abrir factura: $e', _kVermelho);
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _operacaoEmAndamento = false);
+    }
+  }
+}
+
+double _calcularSaldoAnteriorDoPagamento(
+  PagamentoCreditoModel pagamento,
+  List<PagamentoCreditoModel> pagamentos,
+) {
+  final ordenados = [...pagamentos]
+    ..sort((a, b) => a.dataPagamento.compareTo(b.dataPagamento));
+
+  double pagoAntes = 0;
+
+  for (final p in ordenados) {
+    if (p.idPagamentoCredito == pagamento.idPagamentoCredito) {
+      break;
+    }
+
+    pagoAntes += p.valorPago;
+  }
+
+  final saldoAnterior = _pedido.total - pagoAntes;
+
+  return saldoAnterior < 0 ? 0 : saldoAnterior;
+}
+
+Future<void> _abrirReciboCredito(
+  PagamentoCreditoModel pagamento,
+  List<PagamentoCreditoModel> pagamentos,
+  List<ParcelaCreditoModel> parcelas,
+) async {
+  if (_operacaoEmAndamento) return;
+
+  final idRecibo = pagamento.idDocumentoRecibo;
+  final idFactura = _pedido.idDocumentoFacturaCredito;
+
+  if (idFactura == null || idFactura == 0) {
+    _snack(
+      'Factura principal ainda não disponível.',
+      Colors.orange,
+    );
+    return;
+  }
+
+  if (idRecibo == null || idRecibo == 0) {
+    _snack(
+      'Recibo ainda não disponível. Sincronize o pagamento primeiro.',
+      Colors.orange,
+    );
+    return;
+  }
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    final facturaFiscal = await _buscarDocumentoFiscal(idFactura);
+    final reciboFiscal = await _buscarDocumentoFiscal(idRecibo);
+    final cliente = await _buscarClienteDoPedido();
+
+    final saldoAnterior = _calcularSaldoAnteriorDoPagamento(
+      pagamento,
+      pagamentos,
+    );
+
+    final saldoRemanescente = (saldoAnterior - pagamento.valorPago) < 0
+        ? 0.0
+        : saldoAnterior - pagamento.valorPago;
+
+    ParcelaCreditoModel? parcela;
+
+    if (pagamento.idParcela != null) {
+      try {
+        parcela = parcelas.firstWhere(
+          (p) => p.idParcela == pagamento.idParcela,
+        );
+      } catch (_) {}
+    }
+
+    final reciboPdf = ReciboCreditoPdfModel.deApiModel(
+      apiModel: reciboFiscal,
+      referenciaFactura: facturaFiscal.referencia,
+      pedido: _pedido,
+      cliente: cliente,
+      pagamento: pagamento,
+      tipoPagamento: _nomeTipoPagamento(pagamento.idTipoPagamento),
+      saldoAnterior: saldoAnterior,
+      saldoRemanescente: saldoRemanescente,
+      numeroParcela: parcela?.numeroParcela,
+      totalParcelas: parcelas.isEmpty ? null : parcelas.length,
+      observacoes: pagamento.observacoes,
+    );
+
+    final file = await PdfService.instance.gerarReciboCredito(reciboPdf);
+    await PdfService.instance.abrirPdf(file);
+  } catch (e) {
+    if (mounted) {
+      _snack('Erro ao abrir recibo: $e', _kVermelho);
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _operacaoEmAndamento = false);
+    }
+  }
+}
+
+
+
   Future<void> _abrirDialogoParcelas({
     required List<ParcelaCreditoModel> parcelas,
     required double saldoAtual,
@@ -705,9 +905,9 @@ class _DetalhesPedidoCreditoScreenState
                       ),
                       const SizedBox(height: 12),
                       _FacturaPrincipalCard(
-                        pedido: _pedido,
-                        onAbrirFactura: () => _pdfEmBreve('Factura'),
-                      ),
+  pedido: _pedido,
+  onAbrirFactura: _abrirFacturaCredito,
+),
                       const SizedBox(height: 12),
                       _AcoesCreditoCard(
                         operacaoEmAndamento: _operacaoEmAndamento,
@@ -732,12 +932,16 @@ class _DetalhesPedidoCreditoScreenState
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _PagamentosCard(
-                        pagamentos: pagamentos,
-                        currencyFmt: _currencyFmt,
-                        dateFmt: _dateFmt,
-                        onAbrirRecibo: () => _pdfEmBreve('Recibo'),
-                      ),
+                    _PagamentosCard(
+  pagamentos: pagamentos,
+  currencyFmt: _currencyFmt,
+  dateFmt: _dateFmt,
+  onAbrirRecibo: (pagamento) => _abrirReciboCredito(
+    pagamento,
+    pagamentos,
+    parcelas,
+  ),
+),
                     ],
                   ),
                 ),
@@ -1217,7 +1421,7 @@ class _PagamentosCard extends StatelessWidget {
   final List<PagamentoCreditoModel> pagamentos;
   final NumberFormat currencyFmt;
   final DateFormat dateFmt;
-  final VoidCallback onAbrirRecibo;
+final void Function(PagamentoCreditoModel pagamento) onAbrirRecibo;
 
   const _PagamentosCard({
     required this.pagamentos,
@@ -1247,11 +1451,11 @@ class _PagamentosCard extends StatelessWidget {
               children: pagamentos
                   .map(
                     (p) => _LinhaPagamento(
-                      pagamento: p,
-                      currencyFmt: currencyFmt,
-                      dateFmt: dateFmt,
-                      onAbrirRecibo: onAbrirRecibo,
-                    ),
+  pagamento: p,
+  currencyFmt: currencyFmt,
+  dateFmt: dateFmt,
+  onAbrirRecibo: onAbrirRecibo,
+),
                   )
                   .toList(),
             ),
@@ -1265,7 +1469,7 @@ class _LinhaPagamento extends StatelessWidget {
   final PagamentoCreditoModel pagamento;
   final NumberFormat currencyFmt;
   final DateFormat dateFmt;
-  final VoidCallback onAbrirRecibo;
+final void Function(PagamentoCreditoModel pagamento) onAbrirRecibo;
 
   const _LinhaPagamento({
     required this.pagamento,
@@ -1333,14 +1537,14 @@ class _LinhaPagamento extends StatelessWidget {
               valueColor: temRecibo ? _kAzul : Colors.orange,
             ),
           ),
-          IconButton(
-            tooltip: 'Abrir recibo',
-            onPressed: temRecibo ? onAbrirRecibo : null,
-            icon: Icon(
-              Icons.picture_as_pdf_outlined,
-              color: temRecibo ? _kAzul : _kCinzaTexto,
-            ),
-          ),
+         IconButton(
+  tooltip: 'Abrir recibo',
+  onPressed: temRecibo ? () => onAbrirRecibo(pagamento) : null,
+  icon: Icon(
+    Icons.picture_as_pdf_outlined,
+    color: temRecibo ? _kAzul : _kCinzaTexto,
+  ),
+),
         ],
       ),
     );

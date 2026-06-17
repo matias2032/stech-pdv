@@ -1802,3 +1802,4 @@ class _LinhaItem {
   String get precoStr => isEmpty ? '0,00 MZN' : 'MZN ${precoUnitario.toStringAsFixed(2)}';
   String get totalStr => isEmpty ? '0,00 MZN' : 'MZN ${total.toStringAsFixed(2)}';
 }
+

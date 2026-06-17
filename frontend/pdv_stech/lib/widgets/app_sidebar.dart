@@ -131,16 +131,17 @@ class _AppSidebarState extends State<AppSidebar>
       route: '/catalogo',
       badge: pedidosAbertos,
     ),
-    _MenuItem(
-      icon:  Icons.receipt_long_rounded,
-      title: 'Pedidos Finalizados',
-      route: '/pedidos_finalizados',
-    ),
-       _MenuItem(
-      icon:  Icons.receipt_long_rounded,
-      title: 'Pedidos á Crédito',
-      route: '/pedidos_credito',
-    ),
+_MenuItem(
+  icon: Icons.fact_check_rounded,
+  title: 'Pedidos Finalizados',
+  route: '/pedidos_finalizados',
+),
+
+_MenuItem(
+  icon: Icons.account_balance_wallet_rounded,
+  title: 'Pedidos à Crédito',
+  route: '/pedidos_credito',
+),
     _MenuItem(
       icon:  Icons.description_rounded,
       title: 'Facturação',
