@@ -33,6 +33,7 @@ PedidoProvider({
   List<ParcelaCreditoModel>       _parcelasCredito = [];
 List<PagamentoCreditoModel>     _pagamentosCredito = [];
 Map<String, dynamic>            _extractoCliente = {};
+List<PedidoModel> _pedidosEmDivida = [];
 
   PedidoStatus _status       = PedidoStatus.idle;
   String?      _errorMessage;
@@ -41,6 +42,7 @@ Map<String, dynamic>            _extractoCliente = {};
   PedidoModel?                   get pedidoActual    => _pedidoActual;
   List<PedidoModel>              get pedidos         => List.unmodifiable(_pedidos);
   List<TipoPagamentoResponseDTO> get tiposPagamento  => List.unmodifiable(_tiposPagamento);
+  List<PedidoModel> get pedidosEmDivida => List.unmodifiable(_pedidosEmDivida);
   Map<String, dynamic>           get dashboardData   => Map.unmodifiable(_dashboardData);
   Map<String, dynamic>           get relatorioData   => Map.unmodifiable(_relatorioData);
   List<ParcelaCreditoModel> get parcelasCredito =>
@@ -298,6 +300,7 @@ Future<bool> cancelarPedido(
 
 void limparPedidos() {
   _pedidos = [];
+  _pedidosEmDivida = [];  
   _parcelasCredito = [];
   _pagamentosCredito = [];
   _extractoCliente = {};
@@ -318,14 +321,16 @@ Future<PedidoModel?> declararCredito(
 
   if (result != null) {
     _pedidoActual = result;
-    // Remove da lista de pedidos abertos
+    // Remove da lista de abertos
     _pedidos.removeWhere((p) => p.idPedido == result.idPedido);
+    // Adiciona à lista de crédito imediatamente (optimistic)
+    _pedidosEmDivida.removeWhere((p) => p.idPedido == result.idPedido);
+    _pedidosEmDivida.insert(0, result);
     notifyListeners();
   }
 
   return result;
 }
-
 Future<List<ParcelaCreditoModel>> criarParcelas(
   int idPedido,
   CriarParcelasRequestModel dto,
@@ -352,21 +357,9 @@ Future<PagamentoCreditoModel?> registarPagamentoCredito(
   if (result != null) {
     _pagamentosCredito.insert(0, result);
 
-    final pedidoAtualizado = await _repository.buscarPorId(idPedido);
+_pedidoActual = null;
 
-    if (pedidoAtualizado != null) {
-      _pedidoActual = pedidoAtualizado;
-
-      final index = _pedidos.indexWhere((p) => p.idPedido == idPedido);
-      if (index >= 0) {
-        _pedidos[index] = pedidoAtualizado;
-      } else {
-        _pedidos.insert(0, pedidoAtualizado);
-      }
-    }
-
-    await carregarParcelas(idPedido);
-    notifyListeners();
+notifyListeners();
   }
 
   return result;
@@ -391,9 +384,8 @@ Future<void> carregarPagamentosCredito(int idPedido) async {
 
 Future<void> listarEmDivida() async {
   final result = await _run(() => _repository.listarEmDivida());
-
   if (result != null) {
-    _pedidos = result;
+    _pedidosEmDivida = result;
   }
 }
 

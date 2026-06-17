@@ -125,7 +125,7 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PedidoProvider>();
-    final pedidos = _filtrar(provider.pedidos);
+   final pedidos = _filtrar(provider.pedidosEmDivida);
 
     return Scaffold(
       backgroundColor: _kCinzaClaro,

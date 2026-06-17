@@ -592,9 +592,14 @@ Future<PedidoModel> declararCredito(
       )
       .timeout(ApiConfig.timeout);
 
+  // 409 = crédito já declarado — pedido já é crédito, buscar estado actual
+  if (res.statusCode == 409) {
+    debugPrint('⚠️ PedidoService.declararCredito — 409, pedido já é crédito; buscando estado actual');
+    return buscarPorId(idPedido);
+  }
+
   return _parsePedido(res);
 }
-
 Future<List<ParcelaCreditoModel>> criarParcelas(
   int idPedido,
   CriarParcelasRequestModel dto,

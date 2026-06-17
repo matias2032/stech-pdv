@@ -1,6 +1,21 @@
 // lib/models/pedido_model.dart
 
-// ─── Tipo de Pagamento ────────────────────────────────────────────────────────
+int _parseInt(dynamic v) {
+  if (v == null) throw ArgumentError('Campo int obrigatório recebeu null');
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  final s = v.toString().split('.').first;
+  final result = int.tryParse(s);
+  if (result == null) throw FormatException('Não é um inteiro válido: "$v"');
+  return result;
+}
+
+int? _parseIntOpt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  return int.tryParse(v.toString().split('.').first);
+}
 
 class TipoPagamentoModel {
   final int idTipoPagamento;
@@ -208,16 +223,13 @@ double get saldoDevedorCalculado {
                 ?.map((e) => ItemPedidoServicoModel.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [],
-        idCliente: json['idCliente'] != null
-            ? int.tryParse(json['idCliente'].toString())
-            : null,
+      idCliente: _parseIntOpt(json['idCliente']),
 
             tipoVenda: (json['tipoVenda'] as String?) ?? 'IMEDIATA',
 modalidadeCredito: json['modalidadeCredito'] as String?,
 statusPagamento: (json['statusPagamento'] as String?) ?? 'PENDENTE',
-idDocumentoFacturaCredito: json['idDocumentoFacturaCredito'] != null
-    ? int.tryParse(json['idDocumentoFacturaCredito'].toString())
-    : null,
+idDocumentoFacturaCredito:
+    _parseIntOpt(json['idDocumentoFacturaCredito']),
 dataAberturaCredito: json['dataAberturaCredito'] != null
     ? DateTime.tryParse(json['dataAberturaCredito'] as String)
     : null,
@@ -470,7 +482,7 @@ class PagamentoCreditoModel {
   final int? idParcela;
   final int idTipoPagamento;
   final int idUsuario;
-  final int idDocumentoRecibo;
+final int? idDocumentoRecibo;
   final double valorPago;
   final DateTime dataPagamento;
   final String? observacoes;
@@ -482,41 +494,39 @@ class PagamentoCreditoModel {
     this.idParcela,
     required this.idTipoPagamento,
     required this.idUsuario,
-    required this.idDocumentoRecibo,
+    this.idDocumentoRecibo,
     required this.valorPago,
     required this.dataPagamento,
     this.observacoes,
   });
 
-  factory PagamentoCreditoModel.fromJson(Map<String, dynamic> json) =>
-      PagamentoCreditoModel(
-        idPagamentoCredito:
-            int.parse(json['idPagamentoCredito'].toString()),
-        referencia: json['referencia'] as String,
-        idPedido: int.parse(json['idPedido'].toString()),
-        idParcela: json['idParcela'] != null
-            ? int.tryParse(json['idParcela'].toString())
-            : null,
-        idTipoPagamento: int.parse(json['idTipoPagamento'].toString()),
-        idUsuario: int.parse(json['idUsuario'].toString()),
-        idDocumentoRecibo: int.parse(json['idDocumentoRecibo'].toString()),
-        valorPago: (json['valorPago'] as num).toDouble(),
-        dataPagamento: DateTime.parse(json['dataPagamento'] as String),
-        observacoes: json['observacoes'] as String?,
-      );
+factory PagamentoCreditoModel.fromJson(Map<String, dynamic> json) =>
+    PagamentoCreditoModel(
+      idPagamentoCredito: _parseInt(json['idPagamentoCredito']),
+      referencia:         (json['referencia'] as String?) ?? '',
+      idPedido:           _parseInt(json['idPedido']),
+      idParcela:          _parseIntOpt(json['idParcela']),
+      idTipoPagamento:    _parseIntOpt(json['idTipoPagamento']) ?? 0,
+idUsuario:          _parseIntOpt(json['idUsuario']) ?? 0,
+idDocumentoRecibo:  _parseIntOpt(json['idDocumentoRecibo']),
+      valorPago:          (json['valorPago'] as num).toDouble(),
+      dataPagamento:      DateTime.parse(json['dataPagamento'] as String),
+      observacoes:        json['observacoes'] as String?,
+    );
 
   Map<String, dynamic> toJson() => {
         'idPagamentoCredito': idPagamentoCredito,
-        'referencia': referencia,
-        'idPedido': idPedido,
-        'idParcela': idParcela,
-        'idTipoPagamento': idTipoPagamento,
-        'idUsuario': idUsuario,
-        'idDocumentoRecibo': idDocumentoRecibo,
-        'valorPago': valorPago,
-        'dataPagamento': dataPagamento.toIso8601String(),
-        'observacoes': observacoes,
+        'referencia':         referencia,
+        'idPedido':           idPedido,
+        'idParcela':          idParcela,
+        'idTipoPagamento':    idTipoPagamento,
+        'idUsuario':          idUsuario,
+        'idDocumentoRecibo':  idDocumentoRecibo,
+        'valorPago':          valorPago,
+        'dataPagamento':      dataPagamento.toIso8601String(),
+        'observacoes':        observacoes,
       };
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

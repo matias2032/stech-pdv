@@ -226,11 +226,9 @@ Future<void> _finalizarCredito() async {
   if (_idClienteFinal == null) {
     return _snack('Seleccione um cliente cadastrado para venda a crédito.', Colors.orange);
   }
-
   if (_valorPago > widget.pedido.total) {
     return _snack('A entrada inicial não pode ser maior que o total.', Colors.orange);
   }
-
   if (_temEntradaInicial && _idTipoPagamento == null) {
     return _snack('Seleccione o método de pagamento da entrada.', Colors.orange);
   }
@@ -240,22 +238,28 @@ Future<void> _finalizarCredito() async {
   try {
     final provider = context.read<PedidoProvider>();
 
-    final pedidoCredito = await provider.declararCredito(
-      widget.pedido.idPedido,
-      DeclararCreditoRequestModel(
-        modalidadeCredito: 'SEM_PARCELAS',
-        idUsuario: SessaoService.instance.idUsuario,
-        idCliente: _idClienteFinal,   // ← NOVO: envia o cliente
-        dataVencimento: null,
-        observacoesCredito: null,
-      ),
-    );
+    PedidoModel? pedidoCredito;
+
+    // Se o pedido já é crédito (retry após falha parcial), não declarar de novo
+    if (widget.pedido.ehCredito) {
+      pedidoCredito = widget.pedido;
+    } else {
+      pedidoCredito = await provider.declararCredito(
+        widget.pedido.idPedido,
+        DeclararCreditoRequestModel(
+          modalidadeCredito: 'SEM_PARCELAS',
+          idUsuario: SessaoService.instance.idUsuario,
+          idCliente: _idClienteFinal,
+          dataVencimento: null,
+          observacoesCredito: null,
+        ),
+      );
+    }
 
     if (pedidoCredito == null || provider.errorMessage != null) {
       throw Exception(provider.errorMessage ?? 'Não foi possível declarar crédito.');
     }
 
-    // Só regista pagamento se crédito foi declarado com sucesso
     if (_temEntradaInicial) {
       await provider.registarPagamentoCredito(
         widget.pedido.idPedido,
@@ -276,9 +280,7 @@ Future<void> _finalizarCredito() async {
     PedidoAtivoController.instance.limpar();
     Navigator.pop(context, true);
   } catch (e) {
-    if (mounted) {
-      _snack('Erro ao finalizar a crédito: $e', _kAccent);
-    }
+    if (mounted) _snack('Erro ao finalizar a crédito: $e', _kAccent);
   } finally {
     if (mounted) setState(() => _finalizando = false);
   }
