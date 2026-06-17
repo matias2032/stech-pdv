@@ -102,4 +102,5 @@ List<Pedido> findByIdUsuarioAndDeletedFalseOrderByDataPedidoDesc(Integer idUsuar
             long contarPedidosAbertos();
 
             List<Pedido> findByIdClienteAndTipoVendaAndDeletedFalse(Long idCliente, String tipoVenda);
+            List<Pedido> findByTipoVendaAndDeletedFalseOrderByDataPedidoDesc(String tipoVenda);
 }

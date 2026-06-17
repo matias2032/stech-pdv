@@ -44,6 +44,7 @@ import 'screens/cotacoes_abertas_screen.dart';
 import 'screens/cotacao_catalogo_screen.dart';
 import 'screens/historico_cotacoes.dart';
 import 'screens/pedidos_credito.dart';
+import 'screens/detalhes_pedido_credito.dart';
 
 
 void main() async {
@@ -290,6 +291,7 @@ SyncScheduler.instance.init(
           '/cotacoes_prontas'      : (_) => const CotacaoListScreen(),
           '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
            '/pedidos_credito'      : (_) => const PedidosCreditoScreen(),  
+           
         },
 
         onGenerateRoute: (settings) {
@@ -299,6 +301,18 @@ SyncScheduler.instance.init(
               settings: settings,
             );
           }
+
+            if (settings.name == '/pedidos_credito/detalhes') {
+    final pedido = settings.arguments as PedidoModel;
+
+    return MaterialPageRoute(
+      builder: (_) => DetalhesPedidoCreditoScreen(
+        pedido: pedido,
+      ),
+      settings: settings,
+    );
+  }
+  
           if (settings.name == '/clientes/empresa/form') {
             final cliente = settings.arguments as ClienteModel?;
             return MaterialPageRoute(

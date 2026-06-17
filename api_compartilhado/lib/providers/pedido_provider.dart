@@ -354,10 +354,20 @@ Future<PagamentoCreditoModel?> registarPagamentoCredito(
 
   if (result != null) {
     _pagamentosCredito.insert(0, result);
+    _pedidoActual = null;
 
-_pedidoActual = null;
+    // ── NOVO: mantém pedidosEmDivida sincronizada, sem precisar de recarregar ──
+    final atualizado = await _repository.buscarPorId(idPedido);
+    if (atualizado != null) {
+      final idx = _pedidosEmDivida.indexWhere((p) => p.idPedido == idPedido);
+      if (idx != -1) {
+        _pedidosEmDivida[idx] = atualizado;
+      } else {
+        _pedidosEmDivida.insert(0, atualizado);
+      }
+    }
 
-notifyListeners();
+    notifyListeners();
   }
 
   return result;

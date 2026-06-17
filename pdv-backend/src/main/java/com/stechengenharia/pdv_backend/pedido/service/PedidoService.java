@@ -610,7 +610,7 @@ public ExtractoClienteResponseDTO extractoCliente(Long idCliente) {
 @Transactional(readOnly = true)
 public List<PedidoResponseDTO> listarEmDivida() {
     return pedidoRepository
-        .findByStatusPedidoAndDeletedFalseOrderByDataPedidoDesc("em dívida")
+        .findByTipoVendaAndDeletedFalseOrderByDataPedidoDesc("CREDITO")
         .stream().map(this::toResponseDTO).toList();
 }
 
