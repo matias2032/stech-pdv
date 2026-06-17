@@ -276,9 +276,10 @@ Future<void> _finalizarCredito() async {
       }
     }
 
-    if (!mounted) return;
-    PedidoAtivoController.instance.limpar();
-    Navigator.pop(context, true);
+ if (!mounted) return;
+PedidoAtivoController.instance.limpar();
+context.read<PedidoProvider>().limparPedidoActual();
+Navigator.pop(context, true);
   } catch (e) {
     if (mounted) _snack('Erro ao finalizar a crédito: $e', _kAccent);
   } finally {

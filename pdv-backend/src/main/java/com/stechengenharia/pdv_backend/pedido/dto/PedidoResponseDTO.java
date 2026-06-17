@@ -1,9 +1,12 @@
 package com.stechengenharia.pdv_backend.pedido.dto;
  
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
- 
+ import java.time.LocalDate;
+import java.time.OffsetDateTime;
 public class PedidoResponseDTO {
  
     public Integer       idPedido;
@@ -24,5 +27,15 @@ public class PedidoResponseDTO {
     // Em PedidoResponseDTO.java
 public String nomeClienteSingular;
 public String apelidoClienteSingular;
+
+public String         tipoVenda;
+public String         modalidadeCredito;
+public String         statusPagamento;
+public Integer        idDocumentoFacturaCredito;
+public OffsetDateTime dataAberturaCredito;
+public LocalDate       dataVencimentoCredito;
+public OffsetDateTime dataLiquidacaoCredito;
+public String         observacoesCredito;
+public BigDecimal     saldoDevedorCredito;
 }
  

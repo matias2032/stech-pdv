@@ -502,13 +502,14 @@ final int? idDocumentoRecibo;
 
 factory PagamentoCreditoModel.fromJson(Map<String, dynamic> json) =>
     PagamentoCreditoModel(
-      idPagamentoCredito: _parseInt(json['idPagamentoCredito']),
+
+idPagamentoCredito: _parseIntOpt(json['idPagamentoCredito']) ?? 0,
       referencia:         (json['referencia'] as String?) ?? '',
-      idPedido:           _parseInt(json['idPedido']),
+      idPedido:           _parseIntOpt(json['idPedido']) ?? 0,
       idParcela:          _parseIntOpt(json['idParcela']),
       idTipoPagamento:    _parseIntOpt(json['idTipoPagamento']) ?? 0,
-idUsuario:          _parseIntOpt(json['idUsuario']) ?? 0,
-idDocumentoRecibo:  _parseIntOpt(json['idDocumentoRecibo']),
+      idUsuario:          _parseIntOpt(json['idUsuario']) ?? 0,
+      idDocumentoRecibo:  _parseIntOpt(json['idDocumentoRecibo']),
       valorPago:          (json['valorPago'] as num).toDouble(),
       dataPagamento:      DateTime.parse(json['dataPagamento'] as String),
       observacoes:        json['observacoes'] as String?,

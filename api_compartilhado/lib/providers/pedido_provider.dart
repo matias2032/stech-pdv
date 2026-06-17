@@ -320,10 +320,8 @@ Future<PedidoModel?> declararCredito(
   final result = await _run(() => _repository.declararCredito(idPedido, dto));
 
   if (result != null) {
-    _pedidoActual = result;
-    // Remove da lista de abertos
+    _pedidoActual = null; // pedido em dívida não é mais "activo"
     _pedidos.removeWhere((p) => p.idPedido == result.idPedido);
-    // Adiciona à lista de crédito imediatamente (optimistic)
     _pedidosEmDivida.removeWhere((p) => p.idPedido == result.idPedido);
     _pedidosEmDivida.insert(0, result);
     notifyListeners();
@@ -383,6 +381,7 @@ Future<void> carregarPagamentosCredito(int idPedido) async {
 }
 
 Future<void> listarEmDivida() async {
+  _errorMessage = null; // limpa erro de chamadas anteriores
   final result = await _run(() => _repository.listarEmDivida());
   if (result != null) {
     _pedidosEmDivida = result;

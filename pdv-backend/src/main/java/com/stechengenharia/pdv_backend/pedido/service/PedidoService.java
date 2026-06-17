@@ -539,8 +539,8 @@ public PagamentoCreditoResponseDTO registarPagamento(Integer idPedido, RegistarP
     pagamento.setDataPagamento(OffsetDateTime.now());
     pagamento.setObservacoes(dto.observacoes());
     pagamento.setSyncStatus("PENDING_CREATE");
-    pagamentoRepository.save(pagamento);
-
+   pagamento = pagamentoRepository.save(pagamento);
+   
     BigDecimal novoValorPago = pedido.getValorPago().add(dto.valorPago());
     pedido.setValorPago(novoValorPago);
 
@@ -746,6 +746,15 @@ private void adicionarItemServicoInterno(Pedido pedido, ItemServicoRequestDTO dt
                 dto.nomeClienteSingular    = pedido.getNomeClienteSingular();
 dto.apelidoClienteSingular = pedido.getApelidoClienteSingular();
 dto.idCliente = pedido.getIdCliente();
+dto.tipoVenda                 = pedido.getTipoVenda();
+dto.modalidadeCredito         = pedido.getModalidadeCredito();
+dto.statusPagamento           = pedido.getStatusPagamento();
+dto.idDocumentoFacturaCredito = pedido.getIdDocumentoFacturaCredito();
+dto.dataAberturaCredito       = pedido.getDataAberturaCredito();
+dto.dataVencimentoCredito     = pedido.getDataVencimentoCredito();
+dto.dataLiquidacaoCredito     = pedido.getDataLiquidacaoCredito();
+dto.observacoesCredito        = pedido.getObservacoesCredito();
+dto.saldoDevedorCredito       = pedido.getSaldoDevedorCredito();
 
         return dto;
     }

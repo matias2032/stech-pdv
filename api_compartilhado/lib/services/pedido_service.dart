@@ -639,6 +639,7 @@ Future<PagamentoCreditoModel> registarPagamentoCredito(
       .timeout(ApiConfig.timeout);
 
   if (res.statusCode >= 200 && res.statusCode < 300) {
+    debugPrint('📦 resposta pagamento: ${res.body}');
     return PagamentoCreditoModel.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -698,6 +699,8 @@ Future<List<PedidoModel>> listarEmDivida() async {
         headers: _headers,
       )
       .timeout(ApiConfig.timeout);
+
+  debugPrint('📦 em dívida raw: ${res.body}');
 
   if (res.statusCode == 200) {
     final list = jsonDecode(res.body) as List<dynamic>;

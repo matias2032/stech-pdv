@@ -20,3 +20,4 @@ class PedidoAtivoController {
 
   void dispose() => pedidoAtivo.dispose();
 }
+

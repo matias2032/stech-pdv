@@ -47,9 +47,18 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
     super.dispose();
   }
 
-  Future<void> _carregar() async {
-    await context.read<PedidoProvider>().listarEmDivida();
+// DEPOIS
+String? _erroLocal;
+
+Future<void> _carregar() async {
+  setState(() => _erroLocal = null);
+  await context.read<PedidoProvider>().listarEmDivida();
+  if (mounted) {
+    setState(() {
+      _erroLocal = context.read<PedidoProvider>().errorMessage;
+    });
   }
+}
 
   void _onPesquisar(String termo) {
     setState(() => _termo = termo.trim().toLowerCase());
@@ -155,7 +164,7 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
               child: _ListagemDividas(
                 pedidos: pedidos,
                 carregando: provider.isLoading,
-                erro: provider.errorMessage,
+                erro: _erroLocal,
                 currencyFmt: _currencyFmt,
                 onRecarregar: _carregar,
                 onDetalhes: _abrirDetalhes,
