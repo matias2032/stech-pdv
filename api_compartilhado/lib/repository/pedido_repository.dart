@@ -641,24 +641,29 @@ Future<void> _enqueuePedidoOperation({
     fullPayload,
   );
 }
+// Mensagens que indicam erro de regra de negócio (não de rede)
+static bool _erroDeNegocio(dynamic e) {
+  final msg = e.toString().toLowerCase();
+  return msg.contains('cliente') ||
+      msg.contains('crédito') ||
+      msg.contains('credito') ||
+      msg.contains('status') ||
+      msg.contains('500');
+}
+
 Future<PedidoModel> declararCredito(
   int idPedido,
   DeclararCreditoRequestModel dto,
 ) async {
-  final online = _connectivity.isOnline;
-
-  if (online) {
-    try {
-      final pedido = await _service.declararCredito(idPedido, dto);
-      await _upsertPedidoComItens(pedido);
-      return pedido;
-    } catch (e) {
-      debugPrint('⚠️ PedidoRepository.declararCredito online falhou; enfileirando: $e');
-    }
+  if (_connectivity.isOnline) {
+    // Online: propaga sempre o erro — nunca enfileira
+    final pedido = await _service.declararCredito(idPedido, dto);
+    await _upsertPedidoComItens(pedido);
+    return pedido;
   }
 
+  // Offline: enfileira para sync posterior
   final payload = dto.toJson();
-
   await _enqueuePedidoOperation(
     operacao: 'DECLARAR_CREDITO',
     idPedido: idPedido,
@@ -672,6 +677,7 @@ Future<PedidoModel> declararCredito(
       'modalidade_credito': dto.modalidadeCredito,
       'status_pedido': 'em dívida',
       'status_pagamento': 'PENDENTE',
+      'id_cliente': dto.idCliente,
       'data_abertura_credito': DateTime.now().toIso8601String(),
       'data_vencimento_credito':
           dto.dataVencimento?.toIso8601String().split('T').first,
@@ -684,10 +690,7 @@ Future<PedidoModel> declararCredito(
   );
 
   final row = await _dao.getById(idPedido);
-  if (row == null) {
-    throw Exception('Pedido $idPedido não encontrado no cache local.');
-  }
-
+  if (row == null) throw Exception('Pedido $idPedido não encontrado no cache local.');
   return _pedidoComItensDoCache(row);
 }
 
@@ -738,27 +741,17 @@ Future<PagamentoCreditoModel> registarPagamentoCredito(
   int idPedido,
   RegistarPagamentoCreditoRequestModel dto,
 ) async {
-  final online = _connectivity.isOnline;
-
-  if (online) {
-    try {
-      final pagamento = await _service.registarPagamentoCredito(idPedido, dto);
-
-      final atualizado = await _service.buscarPorId(idPedido);
-      await _upsertPedidoComItens(atualizado);
-
-      return pagamento;
-    } catch (e) {
-      debugPrint(
-        '⚠️ PedidoRepository.registarPagamentoCredito online falhou; enfileirando: $e',
-      );
-    }
+  if (_connectivity.isOnline) {
+    // Online: propaga sempre o erro — nunca enfileira
+    final pagamento = await _service.registarPagamentoCredito(idPedido, dto);
+    final atualizado = await _service.buscarPorId(idPedido);
+    await _upsertPedidoComItens(atualizado);
+    return pagamento;
   }
 
+  // Offline: validação local antes de enfileirar
   final row = await _dao.getById(idPedido);
-  if (row == null) {
-    throw Exception('Pedido $idPedido não encontrado no cache local.');
-  }
+  if (row == null) throw Exception('Pedido $idPedido não encontrado no cache local.');
 
   final pedido = await _pedidoComItensDoCache(row);
   if (!pedido.ehCredito) {
@@ -767,9 +760,7 @@ Future<PagamentoCreditoModel> registarPagamentoCredito(
 
   final saldoDevedor = pedido.total - pedido.valorPago;
   if (dto.valorPago > saldoDevedor) {
-    throw Exception(
-      'Pagamento excede o saldo. Valor: ${dto.valorPago}, saldo: $saldoDevedor',
-    );
+    throw Exception('Pagamento excede o saldo. Valor: ${dto.valorPago}, saldo: $saldoDevedor');
   }
 
   await _enqueuePedidoOperation(
@@ -797,7 +788,7 @@ Future<PagamentoCreditoModel> registarPagamentoCredito(
     whereArgs: [idPedido],
   );
 
-  final pagamentoLocal = PagamentoCreditoModel(
+  return PagamentoCreditoModel(
     idPagamentoCredito: -agora.microsecondsSinceEpoch,
     referencia: 'PAG-LOCAL-${agora.millisecondsSinceEpoch}',
     idPedido: idPedido,
@@ -809,8 +800,6 @@ Future<PagamentoCreditoModel> registarPagamentoCredito(
     dataPagamento: agora,
     observacoes: dto.observacoes,
   );
-
-  return pagamentoLocal;
 }
 
 Future<List<ParcelaCreditoModel>> listarParcelas(int idPedido) async {

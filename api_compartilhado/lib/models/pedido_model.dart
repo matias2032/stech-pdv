@@ -632,8 +632,9 @@ class CancelamentoPedidoRequestModel {
 }
 
 class DeclararCreditoRequestModel {
-  final String modalidadeCredito; // SEM_PARCELAS | PARCELADO
+  final String modalidadeCredito;
   final int idUsuario;
+  final int? idCliente;           // ← NOVO
   final String? codigoAt;
   final DateTime? dataVencimento;
   final String? observacoesCredito;
@@ -641,6 +642,7 @@ class DeclararCreditoRequestModel {
   const DeclararCreditoRequestModel({
     required this.modalidadeCredito,
     required this.idUsuario,
+    this.idCliente,               // ← NOVO
     this.codigoAt,
     this.dataVencimento,
     this.observacoesCredito,
@@ -649,6 +651,7 @@ class DeclararCreditoRequestModel {
   Map<String, dynamic> toJson() => {
         'modalidadeCredito': modalidadeCredito,
         'idUsuario': idUsuario,
+        if (idCliente != null) 'idCliente': idCliente,  // ← NOVO
         if (codigoAt != null) 'codigoAt': codigoAt,
         if (dataVencimento != null)
           'dataVencimento': dataVencimento!.toIso8601String().split('T').first,

@@ -96,12 +96,14 @@ bool get _podeFinalizar {
 }
 
 
- @override
-  void initState() {
-    super.initState();
-    // _clienteService já não é necessário aqui
+@override
+
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
     _carregar();
-  }
+  });
+}
 
 
   @override
@@ -243,15 +245,17 @@ Future<void> _finalizarCredito() async {
       DeclararCreditoRequestModel(
         modalidadeCredito: 'SEM_PARCELAS',
         idUsuario: SessaoService.instance.idUsuario,
+        idCliente: _idClienteFinal,   // ← NOVO: envia o cliente
         dataVencimento: null,
         observacoesCredito: null,
       ),
     );
 
-    if (pedidoCredito == null) {
+    if (pedidoCredito == null || provider.errorMessage != null) {
       throw Exception(provider.errorMessage ?? 'Não foi possível declarar crédito.');
     }
 
+    // Só regista pagamento se crédito foi declarado com sucesso
     if (_temEntradaInicial) {
       await provider.registarPagamentoCredito(
         widget.pedido.idPedido,
@@ -262,16 +266,15 @@ Future<void> _finalizarCredito() async {
           observacoes: 'Entrada inicial na venda a crédito',
         ),
       );
+
+      if (provider.errorMessage != null) {
+        throw Exception(provider.errorMessage);
+      }
     }
 
     if (!mounted) return;
-
-    if (provider.errorMessage == null) {
-      PedidoAtivoController.instance.limpar();
-      Navigator.pop(context, true);
-    } else {
-      _snack('Erro: ${provider.errorMessage}', _kAccent);
-    }
+    PedidoAtivoController.instance.limpar();
+    Navigator.pop(context, true);
   } catch (e) {
     if (mounted) {
       _snack('Erro ao finalizar a crédito: $e', _kAccent);

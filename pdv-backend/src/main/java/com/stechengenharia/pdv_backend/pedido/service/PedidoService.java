@@ -400,6 +400,15 @@ public List<PedidoResponseDTO> listarPorUsuario(Integer idUsuario) {
 public PedidoResponseDTO declararCredito(Integer idPedido, DeclararCreditoRequestDTO dto) {
     Pedido pedido = buscarPedidoComItens(idPedido);
 
+    // ── NOVO: associar cliente recebido no DTO antes de qualquer validação ──
+    if (dto.idCliente() != null) {
+        clienteRepository.findById(dto.idCliente())
+            .orElseThrow(() -> new IllegalStateException(
+                "Cliente não encontrado: " + dto.idCliente()));
+        pedido.setIdCliente(dto.idCliente());
+    }
+
+    // Agora a validação passa, pois o cliente já foi associado
     if (pedido.getIdCliente() == null)
         throw new IllegalStateException(
             "O pedido deve ter um cliente associado antes de ser declarado a crédito.");
@@ -431,7 +440,8 @@ public PedidoResponseDTO declararCredito(Integer idPedido, DeclararCreditoReques
     pedido.setSyncStatus("PENDING_UPDATE");
     pedidoRepository.save(pedido);
 
-    log.info("Pedido {} declarado como crédito | factura {}", idPedido, factura.referencia());
+    log.info("Pedido {} declarado como crédito | cliente {} | factura {}",
+        idPedido, pedido.getIdCliente(), factura.referencia());
     return toResponseDTO(pedido);
 }
 

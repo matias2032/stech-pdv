@@ -6,8 +6,9 @@ import java.time.LocalDate;
 
 public record DeclararCreditoRequestDTO(
     @NotNull Long idUsuario,
-    @NotNull String modalidadeCredito,   // SEM_PARCELAS | PARCELADO
-    LocalDate dataVencimento,            // para SEM_PARCELAS
+    @NotNull String modalidadeCredito,
+    Long idCliente,          // ← NOVO campo
+    LocalDate dataVencimento,
     String observacoesCredito,
-    String codigoAt                      // para emissão da factura
+    String codigoAt
 ) {}

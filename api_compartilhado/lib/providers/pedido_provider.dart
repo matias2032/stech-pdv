@@ -310,7 +310,7 @@ void limparPedidos() {
     notifyListeners();
   }
 
-  Future<PedidoModel?> declararCredito(
+Future<PedidoModel?> declararCredito(
   int idPedido,
   DeclararCreditoRequestModel dto,
 ) async {
@@ -318,13 +318,9 @@ void limparPedidos() {
 
   if (result != null) {
     _pedidoActual = result;
-
-    final index = _pedidos.indexWhere((p) => p.idPedido == result.idPedido);
-    if (index >= 0) {
-      _pedidos[index] = result;
-    } else {
-      _pedidos.insert(0, result);
-    }
+    // Remove da lista de pedidos abertos
+    _pedidos.removeWhere((p) => p.idPedido == result.idPedido);
+    notifyListeners();
   }
 
   return result;
