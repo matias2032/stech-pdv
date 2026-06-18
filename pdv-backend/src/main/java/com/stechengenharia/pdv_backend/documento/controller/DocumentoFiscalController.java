@@ -7,6 +7,7 @@ import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.Emit
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.DocumentoResponse;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.TipoDocumentoResponse;
+import com.stechengenharia.pdv_backend.documento.dto.ExtractoDocumentalClienteResponseDTO;
 import com.stechengenharia.pdv_backend.documento.service.DocumentoFiscalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -118,5 +119,15 @@ public ResponseEntity<DocumentoResponse> emitirMultiplos(
     return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(service.emitirMultiplos(request));
+}
+
+/**
+ * GET /api/documentos-fiscais/clientes/{idCliente}/extracto
+ * Extracto documental do cliente: facturas e VDs emitidos.
+ */
+@GetMapping("/clientes/{idCliente}/extracto")
+public ResponseEntity<ExtractoDocumentalClienteResponseDTO> extractoDocumentalCliente(
+        @PathVariable Long idCliente) {
+    return ResponseEntity.ok(service.extractoDocumentalCliente(idCliente));
 }
 }

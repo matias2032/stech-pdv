@@ -189,6 +189,22 @@ await _syncQueueDao.enqueue(
     await _dao.delete(id);
   }
 
+
+Future<Map<String, dynamic>> extractoDocumentalCliente(int idCliente) async {
+  if (_connectivity.isOnline) {
+    try {
+      return await _service.extractoDocumentalCliente(idCliente);
+    } catch (e) {
+      debugPrint(
+        '⚠️ DocumentoFiscalRepository.extractoDocumentalCliente falhou: $e',
+      );
+      rethrow; // extracto documental não tem fallback offline útil
+    }
+  }
+  throw Exception(
+    'Sem ligação — extracto documental requer internet.',
+  );
+}
   // ── Guard offline ─────────────────────────────────────────────────
 
   void _requireOnline(String operacao) {

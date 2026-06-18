@@ -14,6 +14,7 @@ class DocumentoFiscalProvider extends ChangeNotifier {
 
   List<DocumentoFiscalModel> _documentos = [];
   List<TipoDocumentoModel> _tipos = [];
+  Map<String, dynamic> _extractoDocumentalCliente = {};
   bool _carregando = false;
   bool _emitindo = false;
   String? _erro;
@@ -22,6 +23,8 @@ class DocumentoFiscalProvider extends ChangeNotifier {
 
   List<DocumentoFiscalModel> get documentos => List.unmodifiable(_documentos);
   List<TipoDocumentoModel> get tipos => List.unmodifiable(_tipos);
+  Map<String, dynamic> get extractoDocumentalCliente =>
+    Map.unmodifiable(_extractoDocumentalCliente);
   bool get carregando => _carregando;
   bool get emitindo => _emitindo;
   String? get erro => _erro;
@@ -227,6 +230,21 @@ _documentos = lista
       notifyListeners();
     }
   }
+
+  Future<void> carregarExtractoDocumentalCliente(int idCliente) async {
+  _setCarregando(true);
+  _erro = null;
+  try {
+    _extractoDocumentalCliente =
+        await _repository.extractoDocumentalCliente(idCliente);
+    notifyListeners();
+  } catch (e) {
+    _erro = e.toString();
+    notifyListeners();
+  } finally {
+    _setCarregando(false);
+  }
+}
 
 
   // ─── Helper ───────────────────────────────────────────────────────────────

@@ -18,9 +18,17 @@ import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.stechengenharia.pdv_backend.cliente.repository.ClienteRepository;
+import com.stechengenharia.pdv_backend.cliente.entity.Cliente;
+import com.stechengenharia.pdv_backend.pedido.repository.PedidoRepository;
+import com.stechengenharia.pdv_backend.pedido.entity.Pedido;
+import com.stechengenharia.pdv_backend.documento.dto.ExtractoDocumentalClienteResponseDTO;
+import java.math.BigDecimal;
 
-import java.time.OffsetDateTime;
+
 import java.util.List;
+import java.util.Map;
+
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +36,8 @@ public class DocumentoFiscalService {
 
     private final DocumentoFiscalRepository documentoRepository;
     private final TipoDocumentoFiscalRepository tipoDocumentoRepository;
+    private final ClienteRepository clienteRepository;
+private final PedidoRepository pedidoRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -206,5 +216,62 @@ public DocumentoResponse emitirMultiplos(EmitirDocumentoMultiplosRequest request
     documentoRepository.save(doc);
 
     return DocumentoResponse.from(doc);
+}
+
+@Transactional(readOnly = true)
+public ExtractoDocumentalClienteResponseDTO extractoDocumentalCliente(Long idCliente) {
+    Cliente cliente = clienteRepository.findById(idCliente)
+        .orElseThrow(() -> new RuntimeException("Cliente não encontrado: " + idCliente));
+
+    List<DocumentoFiscal> documentos =
+        documentoRepository.findFacturasEVdsPorCliente(idCliente);
+
+    // Mapa auxiliar para obter totais dos pedidos (valor do documento = total do pedido)
+    List<Integer> idsPedido = documentos.stream()
+        .map(DocumentoFiscal::getIdPedido)
+        .distinct()
+        .toList();
+
+    Map<Integer, BigDecimal> totalPorPedido = pedidoRepository
+        .findAllById(idsPedido)
+        .stream()
+        .collect(java.util.stream.Collectors.toMap(
+            p -> p.getIdPedido(),
+            p -> p.getTotal()
+        ));
+
+    Map<Integer, String> refPorPedido = pedidoRepository
+        .findAllById(idsPedido)
+        .stream()
+        .collect(java.util.stream.Collectors.toMap(
+            p -> p.getIdPedido(),
+            p -> p.getReferencia()
+        ));
+
+    List<ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO> linhas =
+        documentos.stream().map(d -> new ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO(
+            d.getId(),
+            d.getReferencia(),
+            d.getTipoDocumento().getCodigo(),
+            d.getIdPedido(),
+            refPorPedido.getOrDefault(d.getIdPedido(), "—"),
+            d.getEmitidoEm(),
+            totalPorPedido.getOrDefault(d.getIdPedido(), BigDecimal.ZERO)
+        )).toList();
+
+    BigDecimal somaTotal = linhas.stream()
+        .map(ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO::valorTotal)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    String nomeCliente = (cliente.getNome() != null ? cliente.getNome() : "")
+        + (cliente.getApelido() != null ? " " + cliente.getApelido() : "");
+
+    return new ExtractoDocumentalClienteResponseDTO(
+        idCliente,
+        nomeCliente.trim(),
+        linhas.size(),
+        somaTotal,
+        linhas
+    );
 }
 }

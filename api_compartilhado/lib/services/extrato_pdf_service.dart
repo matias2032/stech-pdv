@@ -72,6 +72,176 @@ Future<File> gerarHistoricoCliente({
   return _salvarHistoricoCliente(pdf, cliente);
 }
 
+// ── NOVO: PDF com extracto documental do cliente ─────────────────────────
+
+Future<File> gerarExtractoDocumentalCliente({
+  required ClienteModel cliente,
+  required Map<String, dynamic> extractoDocumental,
+}) async {
+  final linhasRaw = (extractoDocumental['linhas'] as List?) ?? const [];
+  final linhas = linhasRaw
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList();
+
+  final totalDocumentos =
+      (extractoDocumental['totalDocumentos'] as num?)?.toInt() ??
+      linhas.length;
+  final somaTotal =
+      (extractoDocumental['somaTotal'] as num?)?.toDouble() ?? 0.0;
+
+  // Reutiliza ExtratoModel para aproveitar _build() e _tabela() existentes
+  final linhasExtrato = linhas.map((l) {
+    final emitidoEmStr = l['emitidoEm']?.toString();
+    final emitidoEm =
+        emitidoEmStr != null ? DateTime.tryParse(emitidoEmStr) : DateTime.now();
+    return LinhaExtrato(
+      dataEmissao: emitidoEm ?? DateTime.now(),
+      numeroDocumento: (l['referencia'] ?? '—').toString(),
+      nomeEmpresa: cliente.nomeCompleto,
+      nuit: cliente.nuit,
+      valorTotal: (l['valorTotal'] as num?)?.toDouble() ?? 0.0,
+    );
+  }).toList();
+
+  final dataInicio = linhasExtrato.isNotEmpty
+      ? linhasExtrato
+          .map((l) => l.dataEmissao)
+          .reduce((a, b) => a.isBefore(b) ? a : b)
+      : DateTime.now();
+  final dataFim = linhasExtrato.isNotEmpty
+      ? linhasExtrato
+          .map((l) => l.dataEmissao)
+          .reduce((a, b) => a.isAfter(b) ? a : b)
+      : DateTime.now();
+
+  final extrato = ExtratoModel(
+    linhas: linhasExtrato,
+    dataInicio: dataInicio,
+    dataFim: dataFim,
+    labelPeriodo:
+        '${_fmtData.format(dataInicio)} a ${_fmtData.format(dataFim)}',
+  );
+
+  final pdf = await _buildExtractoDocumentalCliente(extrato, cliente);
+
+  final nomeCliente = cliente.nomeCompleto
+      .replaceAll(RegExp(r'[^\w\s-]'), '')
+      .replaceAll(' ', '_');
+  final nome =
+      'EXTRATO_DOCUMENTAL-$nomeCliente-${_fmtNomeArq.format(DateTime.now())}.pdf';
+  final dir = await _resolveDirectory();
+  final file = File('${dir.path}/$nome');
+  await file.writeAsBytes(await pdf.save());
+  return file;
+}
+
+Future<pw.Document> _buildExtractoDocumentalCliente(
+  ExtratoModel extrato,
+  ClienteModel cliente,
+) async {
+  final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
+  final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
+
+  final doc = pw.Document(
+    title: 'Extracto Documental — ${cliente.nomeCompleto}',
+    author: 'Stech Engenharia',
+  );
+
+  doc.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
+      footer: (ctx) => _rodapePagina(ctx),
+      build: (ctx) => [
+        // Reutiliza cabeçalho original mas com título adaptado
+        _cabecalhoClienteDocumental(extrato, cliente, iconImage),
+        pw.SizedBox(height: 10),
+        // Reutiliza tabela original — já tem Data, Documento, Empresa, NUIT, Valor
+        _tabela(extrato),
+        pw.SizedBox(height: 12),
+        // Reutiliza rodapé de totais original
+        _rodapeTotais(extrato),
+        pw.SizedBox(height: 8),
+        _notaFiscal(),
+      ],
+    ),
+  );
+
+  return doc;
+}
+
+pw.Widget _cabecalhoClienteDocumental(
+  ExtratoModel extrato,
+  ClienteModel cliente,
+  pw.MemoryImage icon,
+) {
+  return pw.Column(
+    children: [
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Image(icon, width: 135, height: 80, fit: pw.BoxFit.contain),
+              pw.SizedBox(height: 6),
+              _t('Segurança Tecnologica SU, LDA (Stech Engenharia)',
+                  bold: true, size: 8.5),
+              pw.SizedBox(height: 2),
+              _t('Bairro: Chingodzi, Tete', size: 8),
+              _t('Número: +258 84 239 0756 ou 87 939 0756', size: 8),
+              _t('Email: info@stech.co.mz', size: 8),
+              _t('Website: www.stecheng.co.mz', size: 8),
+              _t('NUIT: 401 684 530', size: 8),
+            ],
+          ),
+          pw.SizedBox(width: 20),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                _t(
+                  'EXTRACTO DOCUMENTAL DO CLIENTE',
+                  size: 15,
+                  bold: true,
+                  color: _kAzul,
+                ),
+                pw.SizedBox(height: 4),
+                _t(
+                  cliente.nomeCompleto,
+                  size: 11,
+                  bold: true,
+                  color: _kVermelho,
+                ),
+                if (cliente.nuit?.isNotEmpty == true)
+                  _t('NUIT: ${cliente.nuit}', size: 8,
+                      color: PdfColors.grey700),
+                pw.SizedBox(height: 4),
+                _t(
+                  'Período: ${_fmtData.format(extrato.dataInicio)}'
+                  ' a ${_fmtData.format(extrato.dataFim)}',
+                  size: 9,
+                  color: PdfColors.grey700,
+                ),
+                pw.SizedBox(height: 2),
+                _t(
+                  'Gerado em: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
+                  size: 8,
+                  color: PdfColors.grey600,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 10),
+      pw.Divider(color: _kAzul, thickness: 2.5),
+    ],
+  );
+}
+
 Future<pw.Document> _buildHistoricoCliente(
   ClienteModel cliente,
   Map<String, dynamic> extracto,

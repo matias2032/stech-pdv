@@ -173,7 +173,14 @@ Future<DocumentoFiscalModel> emitirMultiplos({
   return DocumentoFiscalModel.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>);
 }
-
+Future<Map<String, dynamic>> extractoDocumentalCliente(int idCliente) async {
+  final response = await _client.get(
+    Uri.parse('$_baseUrl/clientes/$idCliente/extracto'),
+    headers: ApiConfig.defaultHeaders,
+  );
+  _checkStatus(response);
+  return jsonDecode(response.body) as Map<String, dynamic>;
+}
   // ─── Helper ───────────────────────────────────────────────────────────────
 
   void _checkStatus(http.Response response) {

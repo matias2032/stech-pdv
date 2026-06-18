@@ -31,6 +31,7 @@ class _DetalhesClienteScreenState extends State<DetalhesClienteScreen> {
   String? _erroLocal;
 
   Map<String, dynamic> _extracto = const {};
+  Map<String, dynamic> _extractoDocumental = const {};
 
   @override
   void initState() {
@@ -41,30 +42,36 @@ class _DetalhesClienteScreenState extends State<DetalhesClienteScreen> {
   }
 
   Future<void> _carregar() async {
+  if (mounted) {
+    setState(() {
+      _carregando = true;
+      _erroLocal = null;
+    });
+  }
+
+  try {
+    // Carrega extracto documental (facturas e VDs)
+    final docProvider = context.read<DocumentoFiscalProvider>();
+    await docProvider.carregarExtractoDocumentalCliente(widget.cliente.id);
+
+    // Carrega histórico comercial de crédito
+    final pedidoProvider = context.read<PedidoProvider>();
+    await pedidoProvider.carregarExtractoCliente(widget.cliente.id);
+
+    if (!mounted) return;
+
+    setState(() {
+      _extractoDocumental = docProvider.extractoDocumentalCliente;
+      _extracto = pedidoProvider.extractoCliente;
+    });
+  } catch (e) {
+    _erroLocal = e.toString();
+  } finally {
     if (mounted) {
-      setState(() {
-        _carregando = true;
-        _erroLocal = null;
-      });
-    }
-
-    try {
-      final provider = context.read<PedidoProvider>();
-      await provider.carregarExtractoCliente(widget.cliente.id);
-
-      if (!mounted) return;
-
-      setState(() {
-        _extracto = provider.extractoCliente;
-      });
-    } catch (e) {
-      _erroLocal = e.toString();
-    } finally {
-      if (mounted) {
-        setState(() => _carregando = false);
-      }
+      setState(() => _carregando = false);
     }
   }
+}
 
   List<Map<String, dynamic>> get _linhas {
     final raw = _extracto['linhas'];
@@ -76,6 +83,25 @@ class _DetalhesClienteScreenState extends State<DetalhesClienteScreen> {
     }
     return [];
   }
+
+  // Getters do extracto documental
+List<Map<String, dynamic>> get _linhasDocumentais {
+  final raw = _extractoDocumental['linhas'];
+  if (raw is List) {
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+  return [];
+}
+
+int get _totalDocumentosEmitidos =>
+    (_extractoDocumental['totalDocumentos'] as num?)?.toInt() ??
+    _linhasDocumentais.length;
+
+double get _somaTotalDocumentos =>
+    (_extractoDocumental['somaTotal'] as num?)?.toDouble() ?? 0.0;
 
   double get _totalDivida => (_extracto['totalDivida'] as num?)?.toDouble() ?? 0;
   double get _totalPago => (_extracto['totalPago'] as num?)?.toDouble() ?? 0;
@@ -136,15 +162,12 @@ String get _mensagemSituacao {
 
 Future<void> _gerarPdf() async {
   if (_gerandoPdf) return;
-
   setState(() => _gerandoPdf = true);
-
   try {
-    final file = await ExtratoPdfService.instance.gerarHistoricoCliente(
+    final file = await ExtratoPdfService.instance.gerarExtractoDocumentalCliente(
       cliente: widget.cliente,
-      extracto: _extracto,
+      extractoDocumental: _extractoDocumental,
     );
-
     await ExtratoPdfService.instance.abrirPdf(file);
   } catch (e) {
     if (mounted) {
@@ -188,34 +211,44 @@ Future<void> _gerarPdf() async {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
                     children: [
-                      _ClienteHeaderCard(cliente: widget.cliente),
-                      const SizedBox(height: 12),
-                      _ResumoFinanceiroCard(
-  totalDivida: _totalDivida,
-  totalPago: _totalPago,
-  saldo: _saldo,
-  situacaoLabel: _situacaoLabel,
-  situacaoCor: _situacaoCor,
-  currencyFmt: _currencyFmt,
-  quantidadeRegistos: _quantidadeRegistos,
-  pedidosPagos: _pedidosPagos,
-  pedidosPendentes: _pedidosPendentes,
-  totalDocumentos: _totalDocumentos,
-  mensagemSituacao: _mensagemSituacao,
-),
-                      const SizedBox(height: 12),
-                      _AcoesCard(
-                        gerandoPdf: _gerandoPdf,
-                        onGerarPdf: _gerarPdf,
-                      ),
-                      const SizedBox(height: 12),
-                      _HistoricoCard(
-                        linhas: _linhas,
-                        currencyFmt: _currencyFmt,
-                        dateFmt: _dateFmt,
-                        onAbrirPedido: _abrirDetalhesPedido,
-                      ),
-                    ],
+  _ClienteHeaderCard(cliente: widget.cliente),
+  const SizedBox(height: 12),
+  _AcoesCard(
+    gerandoPdf: _gerandoPdf,
+    onGerarPdf: _gerarPdf,
+  ),
+  const SizedBox(height: 12),
+  // ── SECÇÃO PRINCIPAL: extracto documental ──
+  _ExtractoDocumentalCard(
+    linhas: _linhasDocumentais,
+    totalDocumentos: _totalDocumentosEmitidos,
+    somaTotal: _somaTotalDocumentos,
+    currencyFmt: _currencyFmt,
+    dateFmt: _dateFmt,
+  ),
+  const SizedBox(height: 12),
+  // ── SECÇÃO COMPLEMENTAR: histórico comercial ──
+  _ResumoFinanceiroCard(
+    totalDivida: _totalDivida,
+    totalPago: _totalPago,
+    saldo: _saldo,
+    situacaoLabel: _situacaoLabel,
+    situacaoCor: _situacaoCor,
+    currencyFmt: _currencyFmt,
+    quantidadeRegistos: _quantidadeRegistos,
+    pedidosPagos: _pedidosPagos,
+    pedidosPendentes: _pedidosPendentes,
+    totalDocumentos: _totalDocumentos,
+    mensagemSituacao: _mensagemSituacao,
+  ),
+  const SizedBox(height: 12),
+  _HistoricoCard(
+    linhas: _linhas,
+    currencyFmt: _currencyFmt,
+    dateFmt: _dateFmt,
+    onAbrirPedido: _abrirDetalhesPedido,
+  ),
+],
                   ),
                 ),
     );
@@ -1081,4 +1114,258 @@ String _statusLabel(String status) {
   }
 
 
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Extracto documental do cliente (SECÇÃO PRINCIPAL)
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _ExtractoDocumentalCard extends StatelessWidget {
+  final List<Map<String, dynamic>> linhas;
+  final int totalDocumentos;
+  final double somaTotal;
+  final NumberFormat currencyFmt;
+  final DateFormat dateFmt;
+
+  const _ExtractoDocumentalCard({
+    required this.linhas,
+    required this.totalDocumentos,
+    required this.somaTotal,
+    required this.currencyFmt,
+    required this.dateFmt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardBase(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const _SectionTitle(
+                icon: Icons.description_outlined,
+                title: 'Extracto Documental',
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _kAzul.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$totalDocumentos documento(s)',
+                  style: const TextStyle(
+                    color: _kAzul,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (linhas.isEmpty)
+            const _EmptyBox(
+              icon: Icons.receipt_long_outlined,
+              text:
+                  'Nenhuma factura ou VD emitida para este cliente.',
+            )
+          else ...[
+            // Cabeçalho da tabela
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: _kAzul,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Expanded(
+                      flex: 3,
+                      child: Text('Documento',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
+                  Expanded(
+                      flex: 2,
+                      child: Text('Pedido',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
+                  Expanded(
+                      flex: 2,
+                      child: Text('Data',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
+                  Expanded(
+                      flex: 2,
+                      child: Text('Valor',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Column(
+              children: linhas
+                  .map((l) => _LinhaDocumental(
+                        linha: l,
+                        currencyFmt: currencyFmt,
+                        dateFmt: dateFmt,
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 10),
+            // Totais
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _kAzul.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _kAzul.withOpacity(0.2)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total de documentos: $totalDocumentos',
+                    style: const TextStyle(
+                      color: _kAzul,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    currencyFmt.format(somaTotal),
+                    style: const TextStyle(
+                      color: _kVermelho,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LinhaDocumental extends StatelessWidget {
+  final Map<String, dynamic> linha;
+  final NumberFormat currencyFmt;
+  final DateFormat dateFmt;
+
+  const _LinhaDocumental({
+    required this.linha,
+    required this.currencyFmt,
+    required this.dateFmt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final referencia = (linha['referencia'] ?? '—').toString();
+    final tipo = (linha['tipoDocumento'] ?? '—').toString();
+    final refPedido = (linha['referenciaPedido'] ?? '—').toString();
+    final emitidoEmStr = linha['emitidoEm']?.toString();
+    final emitidoEm = emitidoEmStr != null
+        ? DateTime.tryParse(emitidoEmStr)
+        : null;
+    final valor =
+        (linha['valorTotal'] as num?)?.toDouble() ?? 0.0;
+
+    final corTipo = tipo == 'FAT' ? _kAzul : _kVermelho;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _kCinzaClaro,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  referencia,
+                  style: const TextStyle(
+                    color: _kAzul,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: corTipo.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    tipo,
+                    style: TextStyle(
+                      color: corTipo,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              refPedido,
+              style: const TextStyle(
+                color: _kCinzaTexto,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              emitidoEm != null ? dateFmt.format(emitidoEm) : '—',
+              style: const TextStyle(
+                color: _kCinzaTexto,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              currencyFmt.format(valor),
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: _kAzul,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
