@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import '../widgets/app_sidebar.dart';
+import 'package:http/http.dart' as http;
+import 'package:api_compartilhado/api_config.dart';
 
 // ── Cores STech Engenharia ────────────────────────────────────────────────────
 const _kVermelho = Color(0xFFC8102E);
@@ -32,12 +34,13 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
 
   _FiltroCredito _filtro = _FiltroCredito.todos;
   String _termo = '';
+  String? _erroLocal;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PedidoProvider>().listarEmDivida();
+      _carregar();
     });
   }
 
@@ -47,18 +50,17 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
     super.dispose();
   }
 
-// DEPOIS
-String? _erroLocal;
+  Future<void> _carregar() async {
+    setState(() => _erroLocal = null);
 
-Future<void> _carregar() async {
-  setState(() => _erroLocal = null);
-  await context.read<PedidoProvider>().listarEmDivida();
-  if (mounted) {
-    setState(() {
-      _erroLocal = context.read<PedidoProvider>().errorMessage;
-    });
+    await context.read<PedidoProvider>().listarEmDivida();
+
+    if (mounted) {
+      setState(() {
+        _erroLocal = context.read<PedidoProvider>().errorMessage;
+      });
+    }
   }
-}
 
   void _onPesquisar(String termo) {
     setState(() => _termo = termo.trim().toLowerCase());
@@ -134,12 +136,12 @@ Future<void> _carregar() async {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PedidoProvider>();
-   final pedidos = _filtrar(provider.pedidosEmDivida);
+    final pedidos = _filtrar(provider.pedidosEmDivida);
 
     return Scaffold(
       backgroundColor: _kCinzaClaro,
       appBar: _buildAppBar(),
-       drawer: const AppSidebar(currentRoute: '/pedidos_credito'),
+      drawer: const AppSidebar(currentRoute: '/pedidos_credito'),
       body: Column(
         children: [
           _BarraPesquisa(
@@ -672,7 +674,7 @@ class _ListagemDividas extends StatelessWidget {
 // Linha da dívida
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _LinhaDivida extends StatelessWidget {
+class _LinhaDivida extends StatefulWidget {
   final PedidoModel pedido;
   final bool isAlternate;
   final NumberFormat currencyFmt;
@@ -686,16 +688,56 @@ class _LinhaDivida extends StatelessWidget {
   });
 
   @override
+  State<_LinhaDivida> createState() => _LinhaDividaState();
+}
+
+class _LinhaDividaState extends State<_LinhaDivida> {
+  ClienteModel? _cliente;
+  bool _carregandoCliente = false;
+
+  PedidoModel get p => widget.pedido;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarCliente();
+  }
+
+  Future<void> _carregarCliente() async {
+    if (_cliente != null || p.idCliente == null) return;
+
+    setState(() => _carregandoCliente = true);
+
+    try {
+      final service = ClienteService(
+        baseUrl: ApiConfig.baseUrl,
+        httpClient: http.Client(),
+      );
+
+      final cliente = await service.buscarPorId(p.idCliente!);
+
+      if (mounted) {
+        setState(() => _cliente = cliente);
+      }
+    } catch (_) {
+      // silencioso — mantém fallback para ID
+    } finally {
+      if (mounted) {
+        setState(() => _carregandoCliente = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final saldo = pedido.saldoDevedorCalculado;
-    final vencido = _pedidoVencido(pedido);
-    final progresso = pedido.total <= 0
-        ? 0.0
-        : (pedido.valorPago / pedido.total).clamp(0.0, 1.0);
+    final saldo = p.saldoDevedorCalculado;
+    final vencido = _pedidoVencido(p);
+    final progresso =
+        p.total <= 0 ? 0.0 : (p.valorPago / p.total).clamp(0.0, 1.0);
 
     return Container(
       decoration: BoxDecoration(
-        color: isAlternate ? const Color(0xFFF0F2FA) : Colors.white,
+        color: widget.isAlternate ? const Color(0xFFF0F2FA) : Colors.white,
         border: const Border(
           bottom: BorderSide(color: Color(0xFFE8EAF0)),
         ),
@@ -721,7 +763,7 @@ class _LinhaDivida extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    pedido.referencia,
+                    p.referencia,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -731,22 +773,30 @@ class _LinhaDivida extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    pedido.idCliente != null
-                        ? 'Cliente #${pedido.idCliente}'
-                        : 'Cliente não informado',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: _kCinzaTexto,
+                  if (_carregandoCliente)
+                    const SizedBox(
+                      height: 12,
+                      width: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Text(
+                      _cliente?.nomeCompleto ??
+                          (p.idCliente != null
+                              ? 'ID: ${p.idCliente}'
+                              : 'Cliente não informado'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: _kCinzaTexto,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 4),
                   _MiniInfo(
                     icon: Icons.calendar_today_outlined,
                     label: _formatarData(
-                      pedido.dataAberturaCredito ?? pedido.dataPedido,
+                      p.dataAberturaCredito ?? p.dataPedido,
                     ),
                   ),
                 ],
@@ -756,14 +806,14 @@ class _LinhaDivida extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Text(
-                pedido.idDocumentoFacturaCredito != null
-                    ? 'Doc. #${pedido.idDocumentoFacturaCredito}'
+                p.idDocumentoFacturaCredito != null
+                    ? 'Doc. #${p.idDocumentoFacturaCredito}'
                     : 'Pendente',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
-                  color: pedido.idDocumentoFacturaCredito != null
+                  color: p.idDocumentoFacturaCredito != null
                       ? _kAzul
                       : Colors.orange,
                   fontWeight: FontWeight.w600,
@@ -777,7 +827,7 @@ class _LinhaDivida extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    currencyFmt.format(pedido.total),
+                    widget.currencyFmt.format(p.total),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -788,7 +838,7 @@ class _LinhaDivida extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Pago: ${currencyFmt.format(pedido.valorPago)}',
+                    'Pago: ${widget.currencyFmt.format(p.valorPago)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -813,7 +863,7 @@ class _LinhaDivida extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Text(
-                currencyFmt.format(saldo),
+                widget.currencyFmt.format(saldo),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -831,8 +881,8 @@ class _LinhaDivida extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   _BadgeStatus(
-                    label: _statusLabel(pedido),
-                    color: _statusColor(pedido),
+                    label: _statusLabel(p),
+                    color: _statusColor(p),
                   ),
                   if (vencido)
                     const _BadgeStatus(
@@ -850,7 +900,7 @@ class _LinhaDivida extends StatelessWidget {
                 child: Tooltip(
                   message: 'Ver detalhes da dívida',
                   child: InkWell(
-                    onTap: () => onDetalhes(pedido),
+                    onTap: () => widget.onDetalhes(p),
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
                       padding: const EdgeInsets.all(7),
@@ -981,6 +1031,5 @@ Color _statusColor(PedidoModel pedido) {
 
 String _formatarData(DateTime? data) {
   if (data == null) return '—';
-
   return DateFormat('dd/MM/yyyy').format(data);
 }

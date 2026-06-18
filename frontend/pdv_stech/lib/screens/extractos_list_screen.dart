@@ -79,7 +79,7 @@ Future<void> _novoExtrato() async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kCinzaClaro,
-      drawer: const AppSidebar(currentRoute: '/extractos'),
+      drawer: const AppSidebar(currentRoute: '/gerenciar_extractos'),
       appBar: _buildAppBar(),
       body: _historico.isEmpty
           ? _estadoVazio()

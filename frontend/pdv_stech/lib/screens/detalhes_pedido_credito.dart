@@ -36,6 +36,8 @@ class _DetalhesPedidoCreditoScreenState
   bool _carregando = true;
   bool _operacaoEmAndamento = false;
   String? _erroLocal;
+  ClienteModel? _cliente;
+bool _carregandoCliente = false;
 
   @override
   void initState() {
@@ -58,11 +60,12 @@ class _DetalhesPedidoCreditoScreenState
     try {
       final provider = context.read<PedidoProvider>();
 
-      await provider.carregarTiposPagamento();
-      await provider.carregarParcelas(_pedido.idPedido);
-      await provider.carregarPagamentosCredito(_pedido.idPedido);
+await provider.carregarTiposPagamento();
+await provider.carregarParcelas(_pedido.idPedido);
+await provider.carregarPagamentosCredito(_pedido.idPedido);
 
-      _sincronizarPedidoDoProvider();
+_sincronizarPedidoDoProvider();
+await _carregarCliente();
     } catch (e) {
       _erroLocal = e.toString();
     } finally {
@@ -92,6 +95,35 @@ class _DetalhesPedidoCreditoScreenState
       _pedido = actualizado;
     }
   }
+
+Future<void> _carregarCliente() async {
+  if (_cliente != null || _pedido.idCliente == null) return;
+
+  if (mounted) {
+    setState(() => _carregandoCliente = true);
+  }
+
+  try {
+    final service = ClienteService(
+      baseUrl: ApiConfig.baseUrl,
+      httpClient: http.Client(),
+    );
+
+    final cliente = await service.buscarPorId(_pedido.idCliente!);
+
+    if (mounted) {
+      setState(() => _cliente = cliente);
+    }
+  } catch (_) {
+    // silencioso — mantém fallback para ID
+  } finally {
+    if (mounted) {
+      setState(() => _carregandoCliente = false);
+    }
+  }
+}
+
+
 
   double _totalPagoEfetivo(List<PagamentoCreditoModel> pagamentos) {
     final somaPagamentos = pagamentos.fold<double>(
@@ -407,6 +439,8 @@ class _DetalhesPedidoCreditoScreenState
 }
 
 Future<ClienteModel> _buscarClienteDoPedido() async {
+  if (_cliente != null) return _cliente!;
+
   final idCliente = _pedido.idCliente;
 
   if (idCliente == null) {
@@ -894,15 +928,20 @@ Future<void> _abrirReciboCredito(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
                     children: [
-                      _ResumoCreditoCard(
-                        pedido: _pedido,
-                        totalPago: totalPago,
-                        saldo: saldo,
-                        progresso: progresso,
-                        vencido: _pedidoVencido(),
-                        currencyFmt: _currencyFmt,
-                        dateFmt: _dateFmt,
-                      ),
+                _ResumoCreditoCard(
+  pedido: _pedido,
+  totalPago: totalPago,
+  saldo: saldo,
+  progresso: progresso,
+  vencido: _pedidoVencido(),
+  currencyFmt: _currencyFmt,
+  dateFmt: _dateFmt,
+  carregandoCliente: _carregandoCliente,
+  clienteLabel: _cliente?.nomeCompleto ??
+      (_pedido.idCliente != null
+          ? 'ID: ${_pedido.idCliente}'
+          : 'Cliente não informado'),
+),
                       const SizedBox(height: 12),
                       _FacturaPrincipalCard(
   pedido: _pedido,
@@ -1005,6 +1044,8 @@ class _ResumoCreditoCard extends StatelessWidget {
   final bool vencido;
   final NumberFormat currencyFmt;
   final DateFormat dateFmt;
+  final String clienteLabel;
+  final bool carregandoCliente;
 
   const _ResumoCreditoCard({
     required this.pedido,
@@ -1014,6 +1055,8 @@ class _ResumoCreditoCard extends StatelessWidget {
     required this.vencido,
     required this.currencyFmt,
     required this.dateFmt,
+    required this.clienteLabel,
+    required this.carregandoCliente,
   });
 
   @override
@@ -1088,12 +1131,30 @@ class _ResumoCreditoCard extends StatelessWidget {
             spacing: 14,
             runSpacing: 8,
             children: [
-              _MiniInfo(
-                icon: Icons.business_outlined,
-                label: pedido.idCliente != null
-                    ? 'Cliente #${pedido.idCliente}'
-                    : 'Cliente não informado',
-              ),
+             if (carregandoCliente)
+  const Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      SizedBox(
+        width: 12,
+        height: 12,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+      SizedBox(width: 6),
+      Text(
+        'A carregar cliente...',
+        style: TextStyle(
+          color: _kCinzaTexto,
+          fontSize: 12,
+        ),
+      ),
+    ],
+  )
+else
+  _MiniInfo(
+    icon: Icons.business_outlined,
+    label: clienteLabel,
+  ),
               _MiniInfo(
                 icon: Icons.calendar_today_outlined,
                 label:

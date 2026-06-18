@@ -119,11 +119,23 @@ Periodicidade _periodicidade = Periodicidade.hoje;
     }
 
     final agora = DateTime.now();
-    final filtrados = provider.pedidos.where((p) {
-      return p.idCliente != null &&
-          p.idCliente == _clienteSelecionado!.id &&
-          _periodicidade.pedidoDentroDoPeriodo(p.dataPedido, agora);
-    }).toList();
+final filtrados = provider.pedidos.where((p) {
+  final baseFiltro =
+      p.idCliente != null &&
+      p.idCliente == _clienteSelecionado!.id &&
+      _periodicidade.pedidoDentroDoPeriodo(p.dataPedido, agora);
+
+  if (!baseFiltro) return false;
+
+  // 🔥 NOVA REGRA
+  final isRecibo = _tipoSelecionado?.codigo == 'REC';
+
+  if (isRecibo) {
+    return p.tipoVenda == 'IMEDIATA';
+  }
+
+  return true;
+}).toList();
 
     if (mounted) setState(() => _pedidosFiltrados = filtrados);
   } catch (e) {
@@ -378,7 +390,12 @@ Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
             children: tipos.map((tipo) {
               final seleccionado = _tipoSelecionado?.id == tipo.id;
               return GestureDetector(
-                onTap: () => setState(() => _tipoSelecionado = tipo),
+
+                
+onTap: () {
+  setState(() => _tipoSelecionado = tipo);
+  _carregarPedidosFiltrados(); // 🔥 importante
+},
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding:
@@ -570,8 +587,31 @@ Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
                           'Nenhum pedido finalizado encontrado no período.',
                     )
                   : Column(
+
+                    
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+
+                        if (_tipoSelecionado?.codigo == 'REC')
+  Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.orange.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      children: const [
+        Icon(Icons.info_outline, size: 16, color: Colors.orange),
+        SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Apenas pedidos imediatos podem gerar recibos.',
+            style: TextStyle(fontSize: 12, color: Colors.orange),
+          ),
+        ),
+      ],
+    ),
+  ),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),

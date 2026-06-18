@@ -46,6 +46,18 @@ class _DocumentosListScreenState extends State<DocumentosListScreen> {
 
   List<DocumentoFiscalModel> _aplicarFiltros(List<DocumentoFiscalModel> todos) {
     var lista = todos;
+
+// 🔥 NOVO FILTRO INTELIGENTE
+lista = lista.where((d) {
+  final isRecibo = d.tipoDocumento.codigo == 'REC';
+
+  // esconder recibos de crédito
+  if (isRecibo && d.tipoVenda == 'CREDITO') {
+    return false;
+  }
+
+  return true;
+}).toList();
     if (_filtroTipo != null) {
       lista = lista.where((d) => d.tipoDocumento.codigo == _filtroTipo).toList();
     }
@@ -233,7 +245,7 @@ Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
     return Scaffold(
       backgroundColor: _kCinzaClaro,
       appBar: _buildAppBar(),
-      drawer: const AppSidebar(currentRoute: '/documentos'),
+      drawer: const AppSidebar(currentRoute: '/gerenciar_documentos'),
       body: Column(
         children: [
           _BarraFiltros(
