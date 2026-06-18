@@ -25,7 +25,8 @@ public class DocumentoFiscalResponse {
             String nomeUsuario,
             OffsetDateTime emitidoEm,
             Boolean anulado,
-            String motivoAnulacao
+            String motivoAnulacao,
+             String tipoVenda
     ) {
         /** Método de fábrica — converte a entidade para o DTO de resposta. */
         public static DocumentoResponse from(DocumentoFiscal doc) {
@@ -47,7 +48,8 @@ public class DocumentoFiscalResponse {
                     doc.getUsuario().getNome() + " " + (doc.getUsuario().getApelido() != null ? doc.getUsuario().getApelido() : ""),
                     doc.getEmitidoEm(),
                     doc.getAnulado(),
-                    doc.getMotivoAnulacao()
+                    doc.getMotivoAnulacao(),
+                    null                
             );
         }
     }

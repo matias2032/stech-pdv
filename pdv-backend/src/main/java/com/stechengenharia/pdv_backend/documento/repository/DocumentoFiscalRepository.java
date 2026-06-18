@@ -2,7 +2,9 @@ package com.stechengenharia.pdv_backend.documento.repository;
 
 import com.stechengenharia.pdv_backend.documento.entity.DocumentoFiscal;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import com.stechengenharia.pdv_backend.pedido.entity.Pedido;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,4 +22,10 @@ public interface DocumentoFiscalRepository extends JpaRepository<DocumentoFiscal
     // Documentos fiscais não têm soft delete operacional (deleted=false sempre)
     // mas precisam de PUSH para a nuvem após emissão ou anulação
     List<DocumentoFiscal> findBySyncStatusIn(List<String> statuses);
+    @Query("""
+    SELECT d, p.tipoVenda
+    FROM DocumentoFiscal d
+    JOIN Pedido p ON p.idPedido = d.idPedido
+""")
+List<Object[]> findAllWithTipoVenda();
 }

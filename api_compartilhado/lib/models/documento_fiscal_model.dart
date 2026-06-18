@@ -62,6 +62,7 @@ class DocumentoFiscalModel {
   final DateTime emitidoEm;
   final bool anulado;
   final String? motivoAnulacao;
+  final String? tipoVenda;
 
   const DocumentoFiscalModel({
     required this.id,
@@ -76,6 +77,7 @@ class DocumentoFiscalModel {
     required this.emitidoEm,
     required this.anulado,
     this.motivoAnulacao,
+    this.tipoVenda,
   });
 
   factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
@@ -93,6 +95,7 @@ class DocumentoFiscalModel {
       emitidoEm: DateTime.parse(json['emitidoEm'] as String),
       anulado: json['anulado'] as bool? ?? false,
       motivoAnulacao: json['motivoAnulacao'] as String?,
+      tipoVenda: json['tipoVenda'],
     );
   }
 
@@ -130,6 +133,7 @@ class DocumentoFiscalModel {
         'emitidoEm': emitidoEm.toIso8601String(),
         'anulado': anulado,
         'motivoAnulacao': motivoAnulacao,
+        'tipoVenda': tipoVenda,
       };
 
         Map<String, dynamic> toLocalDb() => {
@@ -165,6 +169,7 @@ class DocumentoFiscalModel {
     DateTime? emitidoEm,
     bool? anulado,
     String? motivoAnulacao,
+    String? tipoVenda,
   }) {
     return DocumentoFiscalModel(
       id: id ?? this.id,
@@ -179,6 +184,8 @@ class DocumentoFiscalModel {
       emitidoEm: emitidoEm ?? this.emitidoEm,
       anulado: anulado ?? this.anulado,
       motivoAnulacao: motivoAnulacao ?? this.motivoAnulacao,
+      tipoVenda: tipoVenda ?? this.tipoVenda,
+      
     );
   }
 

@@ -34,13 +34,36 @@ public class DocumentoFiscalService {
 
     // ─── LISTAR TODOS ────────────────────────────────────────────────────────
 
-    @Transactional(readOnly = true)
-    public List<DocumentoResponse> listarTodos() {
-        return documentoRepository.findAll()
-                .stream()
-                .map(DocumentoResponse::from)
-                .toList();
-    }
+@Transactional(readOnly = true)
+public List<DocumentoResponse> listarTodos() {
+    return documentoRepository.findAllWithTipoVenda()
+            .stream()
+            .map(obj -> {
+                DocumentoFiscal doc = (DocumentoFiscal) obj[0];
+                String tipoVenda = (String) obj[1];
+
+                var dto = DocumentoResponse.from(doc);
+
+                return new DocumentoResponse(
+                        dto.id(),
+                        dto.tipoDocumento(),
+                        dto.idPedido(),
+                        dto.referencia(),
+                        dto.numeroSeq(),
+                        dto.ano(),
+                        dto.codigoAt(),
+                        dto.idUsuario(),
+                        dto.nomeUsuario(),
+                        dto.emitidoEm(),
+                        dto.anulado(),
+                        dto.motivoAnulacao(),
+
+                        // 🔥 aqui injectamos
+                        tipoVenda
+                );
+            })
+            .toList();
+}
 
     // ─── BUSCAR POR ID ───────────────────────────────────────────────────────
 

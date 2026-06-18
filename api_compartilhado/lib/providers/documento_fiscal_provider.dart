@@ -58,7 +58,11 @@ class DocumentoFiscalProvider extends ChangeNotifier {
     _setCarregando(true);
     _erro = null;
     try {
-      _documentos = await _repository.listarTodos();
+final lista = await _repository.listarTodos();
+
+_documentos = lista
+    .where((d) => d.tipoVenda == 'IMEDIATA')
+    .toList();
       notifyListeners();
     } catch (e) {
       _erro = e.toString();
