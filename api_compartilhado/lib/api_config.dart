@@ -6,7 +6,7 @@ class ApiConfig {
 
 static const String _prodBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-defaultValue: 'https://erp.stecheng.co.mz', // ← muda o default
+defaultValue: 'http://127.0.0.1:8080',
 );
 
   static const int _porta = int.fromEnvironment(
@@ -131,3 +131,4 @@ defaultValue: 'https://erp.stecheng.co.mz', // ← muda o default
     debugPrint('🔗 Base URL: $baseUrl');
   }
 }
+
