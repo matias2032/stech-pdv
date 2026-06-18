@@ -45,6 +45,7 @@ import 'screens/cotacao_catalogo_screen.dart';
 import 'screens/historico_cotacoes.dart';
 import 'screens/pedidos_credito.dart';
 import 'screens/detalhes_pedido_credito.dart';
+import 'screens/detalhes_cliente.dart';
 
 
 void main() async {
@@ -312,6 +313,17 @@ SyncScheduler.instance.init(
       settings: settings,
     );
   }
+
+  if (settings.name == '/detalhes_cliente') {
+  final cliente = settings.arguments as ClienteModel;
+
+  return MaterialPageRoute(
+    builder: (_) => DetalhesClienteScreen(
+      cliente: cliente,
+    ),
+    settings: settings,
+  );
+}
   
           if (settings.name == '/clientes/empresa/form') {
             final cliente = settings.arguments as ClienteModel?;

@@ -163,9 +163,13 @@ class _ClienteListScreenState extends State<ClienteListScreen> {
           const Divider(height: 1),
           Expanded(
             child: _Listagem(
-              onEditar: (c) => _abrirFormulario(cliente: c),
-              onExcluir: (c) => _confirmarExclusao(context, c),
-            ),
+  onEditar: (c) => _abrirFormulario(cliente: c),
+  onDetalhes: (c) => Navigator.of(context).pushNamed(
+    '/detalhes_cliente',
+    arguments: c,
+  ),
+  onExcluir: (c) => _confirmarExclusao(context, c),
+),
           ),
         ],
       ),
@@ -300,9 +304,14 @@ class _BarraPesquisa extends StatelessWidget {
 
 class _Listagem extends StatelessWidget {
   final void Function(ClienteModel) onEditar;
+  final void Function(ClienteModel) onDetalhes;
   final Future<void> Function(ClienteModel) onExcluir;
 
-  const _Listagem({required this.onEditar, required this.onExcluir});
+  const _Listagem({
+    required this.onEditar,
+    required this.onDetalhes,
+    required this.onExcluir,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +390,7 @@ class _Listagem extends StatelessWidget {
                   child: Text('Email / Morada',
                       style: TextStyle(color: Colors.white, fontSize: 12,
                           fontWeight: FontWeight.w700))),
-              SizedBox(width: 88),
+              SizedBox(width: 126),
             ],
           ),
         ),
@@ -390,11 +399,12 @@ class _Listagem extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
             itemCount: lista.length,
             itemBuilder: (_, i) => _LinhaCliente(
-              cliente: lista[i],
-              isAlternate: i.isOdd,
-              onEditar: onEditar,
-              onExcluir: onExcluir,
-            ),
+  cliente: lista[i],
+  isAlternate: i.isOdd,
+  onEditar: onEditar,
+  onDetalhes: onDetalhes,
+  onExcluir: onExcluir,
+),
           ),
         ),
       ],
@@ -526,12 +536,14 @@ class _LinhaCliente extends StatelessWidget {
     required this.cliente,
     required this.isAlternate,
     required this.onEditar,
+    required this.onDetalhes,
     required this.onExcluir,
   });
 
   final ClienteModel cliente;
   final bool isAlternate;
   final void Function(ClienteModel) onEditar;
+  final void Function(ClienteModel) onDetalhes;
   final Future<void> Function(ClienteModel) onExcluir;
 
   @override
@@ -680,48 +692,72 @@ class _LinhaCliente extends StatelessWidget {
 
             // Ações
             SizedBox(
-              width: 88,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Tooltip(
-                    message: 'Editar',
-                    child: InkWell(
-                      onTap: () => onEditar(cliente),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: _kAzul.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Icons.edit_rounded,
-                            size: 16, color: _kAzul),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'Remover',
-                    child: InkWell(
-                      onTap: () => onExcluir(cliente),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: _kVermelho.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(
-                            Icons.delete_outline_rounded,
-                            size: 16,
-                            color: _kVermelho),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+  width: 126,
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      Tooltip(
+        message: 'Detalhes',
+        child: InkWell(
+          onTap: () => onDetalhes(cliente),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
             ),
+            child: const Icon(
+              Icons.visibility_outlined,
+              size: 16,
+              color: Colors.green,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Tooltip(
+        message: 'Editar',
+        child: InkWell(
+          onTap: () => onEditar(cliente),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _kAzul.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(
+              Icons.edit_rounded,
+              size: 16,
+              color: _kAzul,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Tooltip(
+        message: 'Remover',
+        child: InkWell(
+          onTap: () => onExcluir(cliente),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _kVermelho.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(
+              Icons.delete_outline_rounded,
+              size: 16,
+              color: _kVermelho,
+            ),
+          ),
+        ),
+      ),
+    ],
+  ),
+),
           ],
         ),
       ),
