@@ -72,8 +72,7 @@ public class CotacaoService {
                 .referencia(gerarReferencia())
                 .usuario(usuario)
                 .cliente(cliente)
-                    .nomeClienteSingular(dto.nomeClienteSingular())       // ← novo
-        .apelidoClienteSingular(dto.apelidoClienteSingular()) // ← novo
+      
                 .statusCotacao("ABERTA")
                 .total(BigDecimal.ZERO)
                 .validadeAte(dto.validadeAte())
@@ -148,32 +147,54 @@ public List<CotacaoResponseDTO.Detalhe> listarProntas() {
 public CotacaoResponseDTO.Detalhe atualizarCotacao(Long idCotacao, CotacaoRequestDTO.Atualizar dto) {
     Cotacao cotacao = encontrarCotacaoCompletaOuLancar(idCotacao);
 
-    // Transição de status — permitida independentemente de editabilidade
-    if (dto.statusCotacao() != null) {
+    boolean vaiAlterarStatus = dto.statusCotacao() != null;
+
+    if (vaiAlterarStatus) {
         validarTransicaoManual(cotacao.getStatusCotacao(), dto.statusCotacao());
-        cotacao.setStatusCotacao(dto.statusCotacao());
-        cotacao.setSyncStatus("PENDING_UPDATE");
-        cotacaoRepository.save(cotacao);
-        log.info("Status da cotação {} alterado para {}", cotacao.getReferencia(), dto.statusCotacao());
-        return toDetalhe(cotacao);
+    } else {
+        validarEditavel(cotacao, "actualização");
     }
 
-    // Restantes campos — exigem estado editável (ABERTA)
-    validarEditavel(cotacao, "actualização");
-
+    // ── Cliente cadastrado vs cliente singular ───────────────────────
     if (dto.idCliente() != null) {
         cotacao.setCliente(encontrarClienteOuLancar(dto.idCliente()));
+
+        // Se escolheu cliente cadastrado, limpa os campos soltos
+        cotacao.setNomeClienteSingular(null);
+        cotacao.setApelidoClienteSingular(null);
+
     } else {
+        // Cliente singular avulso
         cotacao.setCliente(null);
-    }
+
         if (dto.nomeClienteSingular() != null) {
-        cotacao.setNomeClienteSingular(dto.nomeClienteSingular());        // ← novo
+            cotacao.setNomeClienteSingular(
+                    !dto.nomeClienteSingular().isBlank()
+                            ? dto.nomeClienteSingular().trim()
+                            : null
+            );
+        }
+
+        if (dto.apelidoClienteSingular() != null) {
+            cotacao.setApelidoClienteSingular(
+                    !dto.apelidoClienteSingular().isBlank()
+                            ? dto.apelidoClienteSingular().trim()
+                            : null
+            );
+        }
     }
-    if (dto.apelidoClienteSingular() != null) {
-        cotacao.setApelidoClienteSingular(dto.apelidoClienteSingular());  // ← novo
+
+    if (dto.validadeAte() != null) {
+        cotacao.setValidadeAte(dto.validadeAte());
     }
-    if (dto.validadeAte() != null) cotacao.setValidadeAte(dto.validadeAte());
-    if (dto.observacoes() != null) cotacao.setObservacoes(dto.observacoes());
+
+    if (dto.observacoes() != null) {
+        cotacao.setObservacoes(dto.observacoes());
+    }
+
+    if (vaiAlterarStatus) {
+        cotacao.setStatusCotacao(dto.statusCotacao());
+    }
 
     cotacao.setSyncStatus("PENDING_UPDATE");
     cotacaoRepository.save(cotacao);

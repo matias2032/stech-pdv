@@ -271,7 +271,7 @@ public void eliminar(Integer idPedido) {
     // h) FINALIZAR PEDIDO
     // ════════════════════════════════════════════════════════════════════════
 
-   @Transactional
+@Transactional
 public PedidoResponseDTO finalizarPedido(Integer idPedido, FinalizarPedidoRequestDTO dto) {
     Pedido pedido = buscarPedidoComItens(idPedido);
 
@@ -280,58 +280,68 @@ public PedidoResponseDTO finalizarPedido(Integer idPedido, FinalizarPedidoReques
         throw new StatusPedidoInvalidoException(pedido.getStatusPedido(), "finalização");
     }
 
+    if (dto.idTipoPagamento == null) {
+        throw new IllegalArgumentException("idTipoPagamento é obrigatório");
+    }
+
     pedido.setIdTipoPagamento(dto.idTipoPagamento);
 
     if (dto.valorPago == null || dto.valorPago.compareTo(BigDecimal.ZERO) < 0) {
         throw new IllegalArgumentException("valorPago é obrigatório e não pode ser negativo");
     }
+
     pedido.setValorPago(dto.valorPago);
 
     if (dto.observacoes != null && !dto.observacoes.isBlank()) {
-        pedido.setObservacoes(dto.observacoes);
+        pedido.setObservacoes(dto.observacoes.trim());
     }
 
-// ── Associar cliente ─────────────────────────────────────────────────
-if (dto.idCliente != null) {
-    clienteRepository.findById(dto.idCliente)
-        .orElseThrow(() -> new RuntimeException("Cliente não encontrado: " + dto.idCliente));
+    // ── Cliente cadastrado OU cliente avulso ───────────────────────────────
+    if (dto.idCliente != null) {
+        clienteRepository.findById(dto.idCliente)
+                .orElseThrow(() -> new RuntimeException(
+                        "Cliente não encontrado: " + dto.idCliente));
 
-    // Cliente cadastrado
-    pedido.setIdCliente(dto.idCliente);
-    pedido.setNomeClienteSingular(null);
-    pedido.setApelidoClienteSingular(null);
+        // Cliente cadastrado: associa pelo id_cliente
+        pedido.setIdCliente(dto.idCliente);
 
-} else {
-    // Cliente singular avulso
-    pedido.setIdCliente(null);
+        // Limpa os campos soltos para evitar mistura de dados
+        pedido.setNomeClienteSingular(null);
+        pedido.setApelidoClienteSingular(null);
 
-    pedido.setNomeClienteSingular(
-        dto.nomeClienteSingular != null && !dto.nomeClienteSingular.isBlank()
-            ? dto.nomeClienteSingular.trim()
-            : null
-    );
+    } else {
+        // Cliente não cadastrado: grava diretamente na tabela pedido
+        pedido.setIdCliente(null);
 
-    pedido.setApelidoClienteSingular(
-        dto.apelidoClienteSingular != null && !dto.apelidoClienteSingular.isBlank()
-            ? dto.apelidoClienteSingular.trim()
-            : null
-    );
-}
+        pedido.setNomeClienteSingular(
+                dto.nomeClienteSingular != null && !dto.nomeClienteSingular.isBlank()
+                        ? dto.nomeClienteSingular.trim()
+                        : null
+        );
+
+        pedido.setApelidoClienteSingular(
+                dto.apelidoClienteSingular != null && !dto.apelidoClienteSingular.isBlank()
+                        ? dto.apelidoClienteSingular.trim()
+                        : null
+        );
+    }
 
     pedido.setStatusPedido("finalizado");
     pedido.setDataFinalizacao(LocalDateTime.now());
-    pedido.setSyncStatus("PENDING_UPDATE"); // finalização deve chegar à nuvem
-pedidoRepository.save(pedido);
+    pedido.setSyncStatus("PENDING_UPDATE");
 
-    log.info("Pedido {} finalizado | cliente: {} | total: {} | pago: {}",
-            pedido.getReferencia(), pedido.getIdCliente(),
-            pedido.getTotal(), dto.valorPago);
+    pedido = pedidoRepository.save(pedido);
 
-            log.info("Finalizar pedido {} | idCliente={} | nomeSingular='{}' | apelidoSingular='{}'",
-        idPedido,
-        dto.idCliente,
-        dto.nomeClienteSingular,
-        dto.apelidoClienteSingular);
+    log.info(
+            "Pedido {} finalizado | idPedido={} | idCliente={} | nomeSingular='{}' | apelidoSingular='{}' | total={} | pago={}",
+            pedido.getReferencia(),
+            pedido.getIdPedido(),
+            pedido.getIdCliente(),
+            pedido.getNomeClienteSingular(),
+            pedido.getApelidoClienteSingular(),
+            pedido.getTotal(),
+            pedido.getValorPago()
+    );
 
     return toResponseDTO(pedido);
 }
