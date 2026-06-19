@@ -9,6 +9,8 @@ public record CotacaoSyncDTO(
         Long idCotacao,
         String referencia,
         Long idCliente,
+         String nomeClienteSingular,      // ← novo
+        String apelidoClienteSingular,   // ← novo
         Long idUsuario,
         String statusCotacao,
         BigDecimal total,

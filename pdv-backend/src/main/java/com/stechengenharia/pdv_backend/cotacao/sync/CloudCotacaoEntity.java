@@ -41,6 +41,12 @@ public class CloudCotacaoEntity {
     @Column(name = "observacoes", columnDefinition = "text")
     private String observacoes;
 
+    @Column(name = "nome_cliente_singular", length = 150)
+    private String nomeClienteSingular;
+
+    @Column(name = "apelido_cliente_singular", length = 150)
+    private String apelidoClienteSingular;
+
     @Column(name = "id_pedido_convertido")
     private Integer idPedidoConvertido;
 

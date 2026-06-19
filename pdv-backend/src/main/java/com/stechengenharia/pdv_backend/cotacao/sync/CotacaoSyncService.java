@@ -90,6 +90,8 @@ public class CotacaoSyncService {
 
                     // só aplica mudanças de estado — nunca sobrescreve itens locais
                     local.setStatusCotacao(dto.statusCotacao());
+                            local.setNomeClienteSingular(dto.nomeClienteSingular());        // ← novo
+        local.setApelidoClienteSingular(dto.apelidoClienteSingular());  // ← novo
                     local.setDeleted(dto.deleted());
                     local.setVersion(dto.version());
                     local.setSyncStatus("SYNCED");
@@ -140,6 +142,8 @@ List<CotacaoSyncDTO.ItemServicoSyncDTO> itensServico =
                 c.getId(),
                 c.getReferencia(),
                 c.getCliente() != null ? c.getCliente().getId() : null,
+                 c.getNomeClienteSingular(),       // ← novo
+        c.getApelidoClienteSingular(),    // ← novo
                 c.getUsuario().getId(),
                 c.getStatusCotacao(),
                 c.getTotal(),

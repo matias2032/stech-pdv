@@ -29,6 +29,8 @@ public class CotacaoSyncCloudService {
             cloud.setIdCotacao(dto.idCotacao());
             cloud.setReferencia(dto.referencia());
             cloud.setIdCliente(dto.idCliente());
+            cloud.setNomeClienteSingular(dto.nomeClienteSingular());        // ← novo
+cloud.setApelidoClienteSingular(dto.apelidoClienteSingular());  // ← novo
             cloud.setIdUsuario(dto.idUsuario());
             cloud.setStatusCotacao(dto.statusCotacao());
             cloud.setTotal(dto.total());
@@ -52,6 +54,8 @@ public class CotacaoSyncCloudService {
                         c.getIdCotacao(),
                         c.getReferencia(),
                         c.getIdCliente(),
+                          c.getNomeClienteSingular(),       // ← novo
+                c.getApelidoClienteSingular(),    // ← novo
                         c.getIdUsuario(),
                         c.getStatusCotacao(),
                         c.getTotal(),

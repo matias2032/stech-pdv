@@ -52,6 +52,12 @@ public class Cotacao extends AuditableEntity {
     @Column(name = "observacoes", columnDefinition = "text")
     private String observacoes;
 
+    @Column(name = "nome_cliente_singular", length = 150)
+private String nomeClienteSingular;
+
+@Column(name = "apelido_cliente_singular", length = 150)
+private String apelidoClienteSingular;
+
     // Preenchido apenas após conversão
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido_convertido")

@@ -17,6 +17,9 @@ public final class CotacaoRequestDTO {
 
             Long idCliente,
 
+                  String nomeClienteSingular,      // ← novo
+        String apelidoClienteSingular,   // ← novo
+
             @NotNull(message = "O utilizador é obrigatório.")
             Long idUsuario,
 
@@ -30,6 +33,9 @@ public final class CotacaoRequestDTO {
     public record Atualizar(
 
             Long idCliente,
+
+              String nomeClienteSingular,      // ← novo
+        String apelidoClienteSingular,   // ← novo
 
             @Future(message = "A validade deve ser uma data futura.")
             LocalDate validadeAte,

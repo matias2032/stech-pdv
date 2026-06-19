@@ -69,6 +69,8 @@ public record ItemServico(
             String referencia,
             Long idCliente,
             String nomeCliente,
+                 String nomeClienteSingular,      // ← novo
+        String apelidoClienteSingular,   // ← novo
             Long idUsuario,
             String nomeUsuario,
             String statusCotacao,
@@ -92,7 +94,8 @@ public record ItemServico(
                                (c.getCliente().getApelido() != null
                                        ? c.getCliente().getApelido() : "")).trim()
                             : null,
-
+     c.getNomeClienteSingular(),       // ← novo
+                c.getApelidoClienteSingular(),    // ← novo
                     c.getUsuario().getId(),
                     (c.getUsuario().getNome() + " " +
                      (c.getUsuario().getApelido() != null

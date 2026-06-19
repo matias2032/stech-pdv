@@ -72,6 +72,8 @@ public class CotacaoService {
                 .referencia(gerarReferencia())
                 .usuario(usuario)
                 .cliente(cliente)
+                    .nomeClienteSingular(dto.nomeClienteSingular())       // ← novo
+        .apelidoClienteSingular(dto.apelidoClienteSingular()) // ← novo
                 .statusCotacao("ABERTA")
                 .total(BigDecimal.ZERO)
                 .validadeAte(dto.validadeAte())
@@ -163,6 +165,12 @@ public CotacaoResponseDTO.Detalhe atualizarCotacao(Long idCotacao, CotacaoReques
         cotacao.setCliente(encontrarClienteOuLancar(dto.idCliente()));
     } else {
         cotacao.setCliente(null);
+    }
+        if (dto.nomeClienteSingular() != null) {
+        cotacao.setNomeClienteSingular(dto.nomeClienteSingular());        // ← novo
+    }
+    if (dto.apelidoClienteSingular() != null) {
+        cotacao.setApelidoClienteSingular(dto.apelidoClienteSingular());  // ← novo
     }
     if (dto.validadeAte() != null) cotacao.setValidadeAte(dto.validadeAte());
     if (dto.observacoes() != null) cotacao.setObservacoes(dto.observacoes());
