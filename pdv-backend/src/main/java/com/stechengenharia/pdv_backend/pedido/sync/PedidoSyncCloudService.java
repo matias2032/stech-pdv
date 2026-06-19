@@ -18,43 +18,49 @@ private final CloudParcelaRepository parcelaRepository;
 private final CloudPagamentoCreditoRepository pagamentoCreditoRepository;
 
     @Transactional
-    public void aplicarLote(List<PedidoSyncDTO> dtos) {
-        for (PedidoSyncDTO dto : dtos) {
-            CloudPedidoEntity cloud = pedidoRepository.findById(dto.idPedido())
-                    .orElse(new CloudPedidoEntity());
+public void aplicarLote(List<PedidoSyncDTO> dtos) {
+    for (PedidoSyncDTO dto : dtos) {
+        CloudPedidoEntity cloud = pedidoRepository.findById(dto.idPedido())
+                .orElse(new CloudPedidoEntity());
 
-            if (cloud.getVersion() != null && dto.version() < cloud.getVersion()) {
-                log.warn("[Cloud Pedido] Conflito versão id={} — ignorado", dto.idPedido());
-                continue;
-            }
-
-            cloud.setIdPedido(dto.idPedido());
-            cloud.setReferencia(dto.referencia());
-            cloud.setIdUsuario(dto.idUsuario());
-            cloud.setIdCliente(dto.idCliente());
-            cloud.setIdTipoPagamento(dto.idTipoPagamento());
-            cloud.setStatusPedido(dto.statusPedido());
-            cloud.setTotal(dto.total());
-            cloud.setValorPago(dto.valorPago());
-            cloud.setPontoReferencia(dto.pontoReferencia());
-            cloud.setObservacoes(dto.observacoes());
-            cloud.setDataPedido(dto.dataPedido());
-            cloud.setDataFinalizacao(dto.dataFinalizacao());
-            cloud.setTipoVenda(dto.tipoVenda());
-cloud.setModalidadeCredito(dto.modalidadeCredito());
-cloud.setStatusPagamento(dto.statusPagamento());
-cloud.setIdDocumentoFacturaCredito(dto.idDocumentoFacturaCredito());
-cloud.setDataAberturaCredito(dto.dataAberturaCredito());
-cloud.setDataVencimentoCredito(dto.dataVencimentoCredito());
-cloud.setDataLiquidacaoCredito(dto.dataLiquidacaoCredito());
-cloud.setObservacoesCredito(dto.observacoesCredito());
-            cloud.setDeleted(dto.deleted());
-            cloud.setVersion(dto.version());
-            cloud.setSyncStatus("SYNCED");
-            cloud.setUpdatedAt(dto.updatedAt());
-            pedidoRepository.save(cloud);
+        if (cloud.getVersion() != null && dto.version() < cloud.getVersion()) {
+            log.warn("[Cloud Pedido] Conflito versão id={} — ignorado", dto.idPedido());
+            continue;
         }
+
+        cloud.setIdPedido(dto.idPedido());
+        cloud.setReferencia(dto.referencia());
+        cloud.setIdUsuario(dto.idUsuario());
+        cloud.setIdCliente(dto.idCliente());
+        cloud.setIdTipoPagamento(dto.idTipoPagamento());
+        cloud.setStatusPedido(dto.statusPedido());
+        cloud.setTotal(dto.total());
+        cloud.setValorPago(dto.valorPago());
+        cloud.setPontoReferencia(dto.pontoReferencia());
+        cloud.setObservacoes(dto.observacoes());
+        cloud.setDataPedido(dto.dataPedido());
+        cloud.setDataFinalizacao(dto.dataFinalizacao());
+
+        // ✅ CAMPOS SOLTOS DO CLIENTE SINGULAR
+        cloud.setNomeClienteSingular(dto.nomeClienteSingular());
+        cloud.setApelidoClienteSingular(dto.apelidoClienteSingular());
+
+        cloud.setTipoVenda(dto.tipoVenda());
+        cloud.setModalidadeCredito(dto.modalidadeCredito());
+        cloud.setStatusPagamento(dto.statusPagamento());
+        cloud.setIdDocumentoFacturaCredito(dto.idDocumentoFacturaCredito());
+        cloud.setDataAberturaCredito(dto.dataAberturaCredito());
+        cloud.setDataVencimentoCredito(dto.dataVencimentoCredito());
+        cloud.setDataLiquidacaoCredito(dto.dataLiquidacaoCredito());
+        cloud.setObservacoesCredito(dto.observacoesCredito());
+        cloud.setDeleted(dto.deleted());
+        cloud.setVersion(dto.version());
+        cloud.setSyncStatus("SYNCED");
+        cloud.setUpdatedAt(dto.updatedAt());
+
+        pedidoRepository.save(cloud);
     }
+}
 
     @Transactional(readOnly = true)
     public List<PedidoSyncDTO> listarDesde(Instant since) {
@@ -199,3 +205,4 @@ public List<PagamentoCreditoSyncDTO> listarPagamentosCreditoDesde(Instant since)
             .toList();
 }
 }
+
