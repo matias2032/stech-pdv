@@ -534,12 +534,15 @@ Future<PedidoModel> finalizarPedido(
 
   // ── Offline ───────────────────────────────────────────────────────
   // Actualiza o estado local imediatamente (optimistic)
-  await _db.update(
+await _db.update(
     'pedido',
     {
       'status_pedido': 'finalizado',
       'id_tipo_pagamento': dto.idTipoPagamento,
       'valor_pago': dto.valorPago,
+      'id_cliente': dto.idCliente,                              // ← novo
+      'nome_cliente_singular': dto.nomeClienteSingular,          // ← novo
+      'apelido_cliente_singular': dto.apelidoClienteSingular,    // ← novo
       'sync_status': 'pending',
       'updated_at': DateTime.now().toIso8601String(),
     },

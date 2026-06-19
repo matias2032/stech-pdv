@@ -12,6 +12,6 @@ public class FinalizarPedidoRequestDTO {
 
     // Cliente — apenas um dos grupos deve vir preenchido
     public Long   idCliente;               // empresa cadastrada
-    public String nomeClienteSingular;     // singular opcional
-    public String apelidoClienteSingular;  // singular opcional
+public String nomeClienteSingular;
+public String apelidoClienteSingular;
 }

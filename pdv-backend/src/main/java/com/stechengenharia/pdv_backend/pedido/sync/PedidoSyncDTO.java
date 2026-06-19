@@ -21,6 +21,10 @@ public record PedidoSyncDTO(
     LocalDateTime dataPedido,
     LocalDateTime dataFinalizacao,
 
+    String nomeClienteSingular,      // ← novo
+    String apelidoClienteSingular,   // ← novo
+
+
     // ── Crédito ─────────────────────────────────────────────
     String tipoVenda,
     String modalidadeCredito,

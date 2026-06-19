@@ -66,6 +66,10 @@ cloud.setObservacoesCredito(dto.observacoesCredito());
         p.getPontoReferencia(), p.getObservacoes(), p.getDataPedido(),
         p.getDataFinalizacao(),
 
+        p.getNomeClienteSingular(),      // ← novo
+    p.getApelidoClienteSingular(),   // ← novo
+
+
         p.getTipoVenda(),
         p.getModalidadeCredito(),
         p.getStatusPagamento(),

@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 7,       
+  version: 8,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -235,6 +235,15 @@ if (oldVersion < 7) {
   );
 }
 
+if (oldVersion < 8) {
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN nome_cliente_singular TEXT',
+  );
+  await db.execute(
+    'ALTER TABLE pedido ADD COLUMN apelido_cliente_singular TEXT',
+  );
+}
+
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -310,6 +319,8 @@ await txn.execute('''
     troco                           REAL,
     observacoes                     TEXT,
     id_cliente                      INTEGER,
+    nome_cliente_singular           TEXT,
+    apelido_cliente_singular        TEXT,
     id_tipo_pagamento               INTEGER,
     id_usuario                      INTEGER NOT NULL,
     data_pedido                     TEXT NOT NULL,
@@ -330,7 +341,6 @@ await txn.execute('''
     updated_at                      TEXT
   )
 ''');
-
       // ── item_pedido ───────────────────────────────────────────────
       await txn.execute('''
         CREATE TABLE item_pedido (

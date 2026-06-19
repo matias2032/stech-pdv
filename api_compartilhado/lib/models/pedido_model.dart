@@ -137,18 +137,20 @@ class PedidoModel {
   final List<ItemPedidoModel>        itensProduto;
   final List<ItemPedidoServicoModel> itensServico;
   final int? idCliente;
+  final String? nomeClienteSingular;     // ← adicionar
+  final String? apelidoClienteSingular;  // ← adicionar
   // ── Crédito ─────────────────────────────────────────────
-final String tipoVenda; // IMEDIATA | CREDITO
-final String? modalidadeCredito; // SEM_PARCELAS | PARCELADO
-final String statusPagamento; // PENDENTE | PARCIAL | PAGO
-final int? idDocumentoFacturaCredito;
-final DateTime? dataAberturaCredito;
-final DateTime? dataVencimentoCredito;
-final DateTime? dataLiquidacaoCredito;
-final String? observacoesCredito;
-final double? saldoDevedorCredito;
+  final String tipoVenda; // IMEDIATA | CREDITO
+  final String? modalidadeCredito; // SEM_PARCELAS | PARCELADO
+  final String statusPagamento; // PENDENTE | PARCIAL | PAGO
+  final int? idDocumentoFacturaCredito;
+  final DateTime? dataAberturaCredito;
+  final DateTime? dataVencimentoCredito;
+  final DateTime? dataLiquidacaoCredito;
+  final String? observacoesCredito;
+  final double? saldoDevedorCredito;
 
-  const PedidoModel({
+const PedidoModel({
     required this.idPedido,
     required this.referencia,
     required this.idUsuario,
@@ -164,15 +166,17 @@ final double? saldoDevedorCredito;
     this.itensProduto = const [],
     this.itensServico = const [],
     this.idCliente,
+    this.nomeClienteSingular,     // ← adicionar
+    this.apelidoClienteSingular,  // ← adicionar
     this.tipoVenda = 'IMEDIATA',
-this.modalidadeCredito,
-this.statusPagamento = 'PENDENTE',
-this.idDocumentoFacturaCredito,
-this.dataAberturaCredito,
-this.dataVencimentoCredito,
-this.dataLiquidacaoCredito,
-this.observacoesCredito,
-this.saldoDevedorCredito,
+    this.modalidadeCredito,
+    this.statusPagamento = 'PENDENTE',
+    this.idDocumentoFacturaCredito,
+    this.dataAberturaCredito,
+    this.dataVencimentoCredito,
+    this.dataLiquidacaoCredito,
+    this.observacoesCredito,
+    this.saldoDevedorCredito,
   });
 
   bool get estaAberto     => statusPedido == 'aberto';
@@ -224,6 +228,10 @@ double get saldoDevedorCalculado {
                 .toList() ??
             [],
       idCliente: _parseIntOpt(json['idCliente']),
+       nomeClienteSingular:    json['nomeClienteSingular']    as String?,  // ← novo
+      apelidoClienteSingular: json['apelidoClienteSingular'] as String?,  // ← novo
+
+      
 
             tipoVenda: (json['tipoVenda'] as String?) ?? 'IMEDIATA',
 modalidadeCredito: json['modalidadeCredito'] as String?,
@@ -260,6 +268,8 @@ saldoDevedorCredito: json['saldoDevedorCredito'] != null
         troco:           (row['troco']             as num?)?.toDouble(),
         observacoes:     row['observacoes']        as String?,
         idCliente:       row['id_cliente']         as int?,
+        nomeClienteSingular:    row['nome_cliente_singular']    as String?,  // ← novo
+        apelidoClienteSingular: row['apelido_cliente_singular'] as String?,  // ← novo
         dataPedido:      DateTime.parse(row['data_pedido'] as String),
         dataFinalizacao: row['data_finalizacao'] != null
             ? DateTime.tryParse(row['data_finalizacao'] as String)
@@ -301,6 +311,8 @@ saldoDevedorCredito: (row['saldo_devedor_credito'] as num?)?.toDouble(),
         'itensProduto':    itensProduto.map((e) => e.toJson()).toList(),
         'itensServico':    itensServico.map((e) => e.toJson()).toList(),
         'idCliente':       idCliente,
+              'nomeClienteSingular':    nomeClienteSingular,     // ← novo
+        'apelidoClienteSingular': apelidoClienteSingular,  // ← novo
         'tipoVenda': tipoVenda,
 'modalidadeCredito': modalidadeCredito,
 'statusPagamento': statusPagamento,
@@ -324,6 +336,8 @@ saldoDevedorCredito: (row['saldo_devedor_credito'] as num?)?.toDouble(),
         'troco':             troco,
         'observacoes':       observacoes,
         'id_cliente':        idCliente,
+        'nome_cliente_singular':    nomeClienteSingular,     // ← novo
+        'apelido_cliente_singular': apelidoClienteSingular,  // ← novo
         'id_tipo_pagamento': idTipoPagamento,
         'id_usuario':        idUsuario,
         'data_pedido':       dataPedido.toIso8601String(),
@@ -359,6 +373,9 @@ saldoDevedorCredito: (row['saldo_devedor_credito'] as num?)?.toDouble(),
     List<ItemPedidoModel>?        itensProduto,
     List<ItemPedidoServicoModel>? itensServico,
     int?    idCliente,
+        String? nomeClienteSingular,     // ← novo
+    String? apelidoClienteSingular,  // ← novo
+
     String? tipoVenda,
 String? modalidadeCredito,
 String? statusPagamento,
@@ -384,6 +401,9 @@ double? saldoDevedorCredito,
         itensProduto:    itensProduto    ?? this.itensProduto,
         itensServico:    itensServico    ?? this.itensServico,
         idCliente:       idCliente       ?? this.idCliente,
+         nomeClienteSingular:    nomeClienteSingular    ?? this.nomeClienteSingular,    // ← novo
+        apelidoClienteSingular: apelidoClienteSingular ?? this.apelidoClienteSingular, // ← novo
+
         tipoVenda: tipoVenda ?? this.tipoVenda,
 modalidadeCredito: modalidadeCredito ?? this.modalidadeCredito,
 statusPagamento: statusPagamento ?? this.statusPagamento,
@@ -646,6 +666,8 @@ class DeclararCreditoRequestModel {
   final String modalidadeCredito;
   final int idUsuario;
   final int? idCliente;           // ← NOVO
+  final String? nomeClienteSingular;     // ← novo
+  final String? apelidoClienteSingular;  // ← novo
   final String? codigoAt;
   final DateTime? dataVencimento;
   final String? observacoesCredito;
@@ -654,6 +676,8 @@ class DeclararCreditoRequestModel {
     required this.modalidadeCredito,
     required this.idUsuario,
     this.idCliente,               // ← NOVO
+        this.nomeClienteSingular,     // ← novo
+    this.apelidoClienteSingular,  // ← novo
     this.codigoAt,
     this.dataVencimento,
     this.observacoesCredito,

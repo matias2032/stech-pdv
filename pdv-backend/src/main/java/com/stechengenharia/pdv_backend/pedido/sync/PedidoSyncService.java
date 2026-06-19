@@ -170,6 +170,8 @@ private void pullPedidos(Instant since) {
                 local.setDataVencimentoCredito(dto.dataVencimentoCredito());
                 local.setDataLiquidacaoCredito(dto.dataLiquidacaoCredito());
                 local.setObservacoesCredito(dto.observacoesCredito());
+                local.setNomeClienteSingular(dto.nomeClienteSingular());       // ← novo
+                local.setApelidoClienteSingular(dto.apelidoClienteSingular());
                 local.setDeleted(dto.deleted());
                 local.setVersion(dto.version());
                 local.setSyncStatus("SYNCED");
@@ -304,6 +306,8 @@ return new PedidoSyncDTO(
     p.getPontoReferencia(), p.getObservacoes(), p.getDataPedido(), p.getDataFinalizacao(),
 
     
+p.getNomeClienteSingular(),      // ← novo
+    p.getApelidoClienteSingular(),   // ← novo
 
     p.getTipoVenda(),
     p.getModalidadeCredito(),

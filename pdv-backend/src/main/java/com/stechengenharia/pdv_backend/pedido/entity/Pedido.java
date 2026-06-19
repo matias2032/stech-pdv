@@ -94,10 +94,11 @@ private BigDecimal saldoDevedorCredito;
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ItemPedidoServico> itensServico = new HashSet<>();
 
-    @Transient
-    private String nomeClienteSingular;
-    @Transient
-    private String apelidoClienteSingular;
+ @Column(name = "nome_cliente_singular", length = 150)
+private String nomeClienteSingular;
+
+@Column(name = "apelido_cliente_singular", length = 150)
+private String apelidoClienteSingular;
 
     // ─── Builder estático mantido — não usa @Builder do Lombok para evitar
     //     conflito com AuditableEntity (mesmo padrão dos outros módulos) ────
@@ -124,6 +125,8 @@ public Builder dataVencimentoCredito(LocalDate v)   { p.dataVencimentoCredito = 
 public Builder observacoesCredito(String v)         { p.observacoesCredito = v;           return this; }
 public Builder dataAberturaCredito(OffsetDateTime v) { p.dataAberturaCredito = v; return this; }
 public Builder dataLiquidacaoCredito(OffsetDateTime v) { p.dataLiquidacaoCredito = v; return this; }
+public Builder nomeClienteSingular(String v)    { p.nomeClienteSingular = v;    return this; }
+public Builder apelidoClienteSingular(String v) { p.apelidoClienteSingular = v; return this; }
 
         public Pedido build()                           { return p; }
     }

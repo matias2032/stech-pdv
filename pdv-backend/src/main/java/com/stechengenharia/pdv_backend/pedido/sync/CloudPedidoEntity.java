@@ -95,4 +95,10 @@ private BigDecimal saldoDevedorCredito;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name = "nome_cliente_singular", length = 150)
+private String nomeClienteSingular;
+
+@Column(name = "apelido_cliente_singular", length = 150)
+private String apelidoClienteSingular;
 }
