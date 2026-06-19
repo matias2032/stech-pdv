@@ -516,12 +516,10 @@ Widget _buildClienteCard() {
           Expanded(child: _toggleBtn('empresa', Icons.business, 'Empresa')),
         ]),
         const SizedBox(height: 12),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          child: _tipoCliente == 'empresa'
-              ? _buildEmpresaSelector()
-              : _buildSingularFields(),
-        ),
+if (_tipoCliente == 'empresa')
+  _buildEmpresaSelector()
+else
+  _buildSingularFields(),
       ],
     ),
   );
@@ -579,26 +577,26 @@ Widget _buildClienteCard() {
     );
   }
 
-  Widget _buildSingularFields() {
-    return Column(
-      key: const ValueKey('singular-fields'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Expanded(child: _textField(_nomeCtrl, 'Nome (opcional)')),
-          const SizedBox(width: 8),
-          Expanded(child: _textField(_apelidoCtrl, 'Apelido (opcional)')),
-        ]),
-        const SizedBox(height: 5),
-        Row(children: [
-          Icon(Icons.info_outline, size: 11, color: Colors.grey[400]),
-          const SizedBox(width: 4),
-          Text('Cliente não será cadastrado na base de dados.',
-              style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-        ]),
-      ],
-    );
-  }
+Widget _buildSingularFields() {
+  return Column(
+    // remover: key: const ValueKey('singular-fields'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        Expanded(child: _textField(_nomeCtrl, 'Nome (opcional)')),
+        const SizedBox(width: 8),
+        Expanded(child: _textField(_apelidoCtrl, 'Apelido (opcional)')),
+      ]),
+      const SizedBox(height: 5),
+      Row(children: [
+        Icon(Icons.info_outline, size: 11, color: Colors.grey[400]),
+        const SizedBox(width: 4),
+        Text('Cliente não será cadastrado na base de dados.',
+            style: TextStyle(fontSize: 10, color: Colors.grey[400])),
+      ]),
+    ],
+  );
+}
 
   // ─── Pagamento ────────────────────────────────────────────────────────────
 
