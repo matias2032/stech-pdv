@@ -295,12 +295,27 @@ public PedidoResponseDTO finalizarPedido(Integer idPedido, FinalizarPedidoReques
 if (dto.idCliente != null) {
     clienteRepository.findById(dto.idCliente)
         .orElseThrow(() -> new RuntimeException("Cliente não encontrado: " + dto.idCliente));
+
+    // Cliente cadastrado
     pedido.setIdCliente(dto.idCliente);
+    pedido.setNomeClienteSingular(null);
+    pedido.setApelidoClienteSingular(null);
+
 } else {
-    // Cliente singular — id_cliente fica NULL; nome/apelido são transitórios
-    pedido.setIdCliente(null);                              // ← era 1L
-    pedido.setNomeClienteSingular(dto.nomeClienteSingular);
-    pedido.setApelidoClienteSingular(dto.apelidoClienteSingular);
+    // Cliente singular avulso
+    pedido.setIdCliente(null);
+
+    pedido.setNomeClienteSingular(
+        dto.nomeClienteSingular != null && !dto.nomeClienteSingular.isBlank()
+            ? dto.nomeClienteSingular.trim()
+            : null
+    );
+
+    pedido.setApelidoClienteSingular(
+        dto.apelidoClienteSingular != null && !dto.apelidoClienteSingular.isBlank()
+            ? dto.apelidoClienteSingular.trim()
+            : null
+    );
 }
 
     pedido.setStatusPedido("finalizado");
@@ -311,6 +326,12 @@ pedidoRepository.save(pedido);
     log.info("Pedido {} finalizado | cliente: {} | total: {} | pago: {}",
             pedido.getReferencia(), pedido.getIdCliente(),
             pedido.getTotal(), dto.valorPago);
+
+            log.info("Finalizar pedido {} | idCliente={} | nomeSingular='{}' | apelidoSingular='{}'",
+        idPedido,
+        dto.idCliente,
+        dto.nomeClienteSingular,
+        dto.apelidoClienteSingular);
 
     return toResponseDTO(pedido);
 }
