@@ -409,6 +409,8 @@ class SyncScheduler {
         final dto = CriarCotacaoRequestModel(
           idUsuario: payload['idUsuario'] as int,
           idCliente: payload['idCliente'] as int?,
+          nomeClienteSingular:    payload['nomeClienteSingular']    as String?,  // ← novo
+    apelidoClienteSingular: payload['apelidoClienteSingular'] as String?,  // ← novo
           validadeAte: payload['validadeAte'] != null
               ? DateTime.tryParse(payload['validadeAte'] as String)
               : null,
@@ -422,6 +424,8 @@ class SyncScheduler {
         final idCotacao = payload['idCotacao'] as int;
         final dto = AtualizarCotacaoRequestModel(
           idCliente: payload['idCliente'] as int?,
+          nomeClienteSingular:    payload['nomeClienteSingular']    as String?,  // ← novo
+    apelidoClienteSingular: payload['apelidoClienteSingular'] as String?,  // ← novo
           validadeAte: payload['validadeAte'] != null
               ? DateTime.tryParse(payload['validadeAte'] as String)
               : null,

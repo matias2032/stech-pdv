@@ -217,6 +217,8 @@ Future<List<CotacaoModel>> listarProntas() async {
       idCotacao:   tempId,
       referencia:  'OFFLINE-${localId.substring(0, 6).toUpperCase()}',
       idCliente:   dto.idCliente,
+      nomeClienteSingular:    dto.nomeClienteSingular,     // ← novo
+      apelidoClienteSingular: dto.apelidoClienteSingular,  // ← novo
       idUsuario:   dto.idUsuario,
       statusCotacao: 'ABERTA',
       total:       0,
@@ -236,6 +238,8 @@ Future<List<CotacaoModel>> listarProntas() async {
       'localId':     localId,
       'idUsuario':   dto.idUsuario,
       'idCliente':   dto.idCliente,
+       'nomeClienteSingular':    dto.nomeClienteSingular,     // ← novo
+       'apelidoClienteSingular': dto.apelidoClienteSingular,  // ← novo
       'validadeAte': dto.validadeAte?.toIso8601String().split('T').first,
       'observacoes': dto.observacoes,
     });
@@ -267,6 +271,13 @@ Future<List<CotacaoModel>> listarProntas() async {
     if (dto.validadeAte != null) {
       values['validade_ate'] = dto.validadeAte!.toIso8601String().split('T').first;
     }
+
+    if (dto.nomeClienteSingular != null) {
+  values['nome_cliente_singular'] = dto.nomeClienteSingular;       // ← novo
+}
+if (dto.apelidoClienteSingular != null) {
+  values['apelido_cliente_singular'] = dto.apelidoClienteSingular; // ← novo
+}
     if (dto.observacoes != null) {
       values['observacoes'] = dto.observacoes;
     }
@@ -279,6 +290,8 @@ Future<List<CotacaoModel>> listarProntas() async {
     await _syncQueueDao.enqueue('cotacao', 'UPDATE', {
       'idCotacao':     idCotacao,
       'idCliente':     dto.idCliente,
+      'nomeClienteSingular':    dto.nomeClienteSingular,     // ← novo
+      'apelidoClienteSingular': dto.apelidoClienteSingular, 
       'validadeAte':   dto.validadeAte?.toIso8601String().split('T').first,
       'observacoes':   dto.observacoes,
       'statusCotacao': dto.statusCotacao,

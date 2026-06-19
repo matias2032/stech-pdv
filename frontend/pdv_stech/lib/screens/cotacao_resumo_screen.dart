@@ -75,15 +75,16 @@ Future<void> _gerarCotacao() async {
   setState(() => _gerando = true);
   try {
     final provider = context.read<CotacaoProvider>();
-    final idCliente = _tipoCliente == 'empresa'
-        ? _empresaSelecionada!.id
-        : null;
 
-    if (idCliente != null) {
-      await provider.atualizarCotacao(
-        widget.cotacao.idCotacao,
-        AtualizarCotacaoRequestModel(idCliente: idCliente),
-      );
+    if (!_clienteBloqueado) {
+      final dtoCliente = _tipoCliente == 'empresa'
+          ? AtualizarCotacaoRequestModel(idCliente: _empresaSelecionada!.id)
+          : AtualizarCotacaoRequestModel(
+              nomeClienteSingular:    _nomeCtrl.text.trim().nullIfEmpty,     // ← novo
+              apelidoClienteSingular: _apelidoCtrl.text.trim().nullIfEmpty, // ← novo
+            );
+
+      await provider.atualizarCotacao(widget.cotacao.idCotacao, dtoCliente);
       if (!mounted) return;
       if (provider.status != CotacaoStatus.success) {
         _snack('Erro ao associar cliente: ${provider.errorMessage}', _kAccent);
@@ -98,7 +99,6 @@ Future<void> _gerarCotacao() async {
     if (!mounted) return;
 
     if (provider.status == CotacaoStatus.success && actualizada != null) {
-      // ← LINHA ADICIONADA: cotação já não é ABERTA, limpar o controller
       CotacaoAtivaController.instance.limpar();
       _snack('Cotação fechada e pronta para converter!', Colors.green);
       Navigator.pop(context, true);
@@ -512,4 +512,7 @@ Widget _buildClienteCard() {
                   style: TextStyle(fontSize: 11, color: cor))),
         ]),
       );
+}
+extension _Str on String {
+  String? get nullIfEmpty => isEmpty ? null : this;
 }

@@ -158,6 +158,8 @@ class CotacaoModel {
   final String referencia;
   final int? idCliente;
   final String? nomeCliente;
+    final String? nomeClienteSingular;     // ← novo
+  final String? apelidoClienteSingular;  // ← novo
   final int idUsuario;
   final String? nomeUsuario;
   final String statusCotacao;
@@ -176,6 +178,8 @@ class CotacaoModel {
     required this.referencia,
     this.idCliente,
     this.nomeCliente,
+       this.nomeClienteSingular,     // ← novo
+    this.apelidoClienteSingular, 
     required this.idUsuario,
     this.nomeUsuario,
     required this.statusCotacao,
@@ -213,6 +217,9 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
             ? int.tryParse(json['idCliente'].toString())
             : null,
         nomeCliente: json['nomeCliente'] as String?,
+        nomeClienteSingular:    json['nomeClienteSingular']    as String?,  // ← novo
+        apelidoClienteSingular: json['apelidoClienteSingular'] as String?,  // ← novo
+
         idUsuario:   json['idUsuario']   as int,
         nomeUsuario: json['nomeUsuario'] as String?,
         statusCotacao: json['statusCotacao'] as String,
@@ -252,6 +259,8 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
         referencia:  (row['referencia']  as String?) ?? '',
         idCliente:   row['id_cliente']   as int?,
         nomeCliente: row['nome_cliente'] as String?,
+        nomeClienteSingular:    row['nome_cliente_singular']    as String?,  // ← novo
+        apelidoClienteSingular: row['apelido_cliente_singular'] as String?,  // ← novo
         idUsuario:   row['id_usuario']   as int,
         nomeUsuario: row['nome_usuario'] as String?,
         statusCotacao: row['status_cotacao'] as String,
@@ -280,6 +289,8 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
         'referencia':  referencia,
         'idCliente':   idCliente,
         'nomeCliente': nomeCliente,
+        'nomeClienteSingular':    nomeClienteSingular,     // ← novo
+        'apelidoClienteSingular': apelidoClienteSingular,  // ← novo
         'idUsuario':   idUsuario,
         'nomeUsuario': nomeUsuario,
         'statusCotacao': statusCotacao,
@@ -302,6 +313,8 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
         'referencia':   referencia,
         'id_cliente':   idCliente,
         'nome_cliente': nomeCliente,
+           'nome_cliente_singular':    nomeClienteSingular,     // ← novo
+        'apelido_cliente_singular': apelidoClienteSingular,  // ← novo
         'id_usuario':   idUsuario,
         'nome_usuario': nomeUsuario,
         'status_cotacao': statusCotacao,
@@ -323,6 +336,8 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
     int? idCliente,
     bool removerCliente = false,
     String? nomeCliente,
+    String? nomeClienteSingular,     // ← novo
+    String? apelidoClienteSingular,  // ← novo
     int? idUsuario,
     String? nomeUsuario,
     String? statusCotacao,
@@ -340,6 +355,8 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
         referencia:  referencia  ?? this.referencia,
         idCliente:   removerCliente ? null : (idCliente ?? this.idCliente),
         nomeCliente: removerCliente ? null : (nomeCliente ?? this.nomeCliente),
+          nomeClienteSingular:    nomeClienteSingular    ?? this.nomeClienteSingular,    // ← novo
+        apelidoClienteSingular: apelidoClienteSingular ?? this.apelidoClienteSingular, // ← novo
         idUsuario:   idUsuario   ?? this.idUsuario,
         nomeUsuario: nomeUsuario ?? this.nomeUsuario,
         statusCotacao: statusCotacao ?? this.statusCotacao,
@@ -377,12 +394,16 @@ bool get estaExpirada   => statusCotacao == 'EXPIRADA';
 class CriarCotacaoRequestModel {
   final int idUsuario;
   final int? idCliente;
+    final String? nomeClienteSingular;     // ← novo
+  final String? apelidoClienteSingular;  // ← novo
   final DateTime? validadeAte;
   final String? observacoes;
 
   const CriarCotacaoRequestModel({
     required this.idUsuario,
     this.idCliente,
+        this.nomeClienteSingular,     // ← novo
+    this.apelidoClienteSingular,  // ← novo
     this.validadeAte,
     this.observacoes,
   });
@@ -390,6 +411,8 @@ class CriarCotacaoRequestModel {
   Map<String, dynamic> toJson() => {
         'idUsuario':   idUsuario,
         'idCliente':   idCliente,
+         'nomeClienteSingular':    nomeClienteSingular,     // ← novo
+        'apelidoClienteSingular': apelidoClienteSingular,  // ← novo
         'validadeAte': validadeAte?.toIso8601String().split('T').first,
         'observacoes': observacoes,
       };
@@ -404,12 +427,16 @@ class CriarCotacaoRequestModel {
 
 class AtualizarCotacaoRequestModel {
   final int? idCliente;
+  final String? nomeClienteSingular;     // ← novo
+  final String? apelidoClienteSingular;  // ← novo
   final DateTime? validadeAte;
   final String? observacoes;
   final String? statusCotacao;
 
   const AtualizarCotacaoRequestModel({
     this.idCliente,
+        this.nomeClienteSingular,     // ← novo
+    this.apelidoClienteSingular,  // ← novo
     this.validadeAte,
     this.observacoes,
     this.statusCotacao,
@@ -417,6 +444,8 @@ class AtualizarCotacaoRequestModel {
 
   Map<String, dynamic> toJson() => {
         'idCliente':     idCliente,
+          'nomeClienteSingular':    nomeClienteSingular,     // ← novo
+        'apelidoClienteSingular': apelidoClienteSingular,  // ← novo
         'validadeAte':   validadeAte?.toIso8601String().split('T').first,
         'observacoes':   observacoes,
         'statusCotacao': statusCotacao,

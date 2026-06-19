@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 8,       
+  version: 9,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -241,6 +241,14 @@ if (oldVersion < 8) {
   );
   await db.execute(
     'ALTER TABLE pedido ADD COLUMN apelido_cliente_singular TEXT',
+  );
+}
+if (oldVersion < 9) {
+  await db.execute(
+    'ALTER TABLE cotacao ADD COLUMN nome_cliente_singular TEXT',
+  );
+  await db.execute(
+    'ALTER TABLE cotacao ADD COLUMN apelido_cliente_singular TEXT',
   );
 }
 
@@ -479,6 +487,8 @@ await txn.execute('''
     referencia                    TEXT,
     id_cliente                    INTEGER,
     nome_cliente                  TEXT,
+    nome_cliente_singular         TEXT,
+    apelido_cliente_singular      TEXT,
     id_usuario                    INTEGER NOT NULL,
     nome_usuario                  TEXT,
     status_cotacao                TEXT    NOT NULL DEFAULT 'ABERTA',
