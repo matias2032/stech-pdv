@@ -252,26 +252,130 @@ Future<void> _abrirResumo(CotacaoModel cotacao) async {
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kCotacao,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('Converter'),
-              ),
-            ],
+        actions: [
+  TextButton(
+    onPressed: () => Navigator.pop(ctx, false),
+    child: const Text('Cancelar'),
+  ),
+  ElevatedButton(
+    onPressed: () => Navigator.pop(ctx, true),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: _kCotacao,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    ),
+    child: const Text('Converter'),
+  ),
+],
           ),
         ) ??
         false;
   }
+
+Future<void> _eliminarItemProduto(
+  CotacaoModel cotacao,
+  CotacaoItemProdutoModel item,
+) async{
+  if (_operacaoEmAndamento) return;
+
+
+
+  final ok = await _confirmarEliminarItem(
+    titulo: 'Remover produto',
+    mensagem:
+        'Deseja remover "${item.nomeProduto ?? 'Produto #${item.idProduto}'}" desta cotação?',
+  );
+
+  if (!ok) return;
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    await context.read<CotacaoProvider>().removerItemProduto(
+          cotacao.idCotacao,
+          item.idItemCotacaoProduto,
+        );
+
+    _snack('Produto removido da cotação', Colors.green);
+    await _carregar();
+  } catch (e) {
+    _snack('Erro ao remover produto: $e', _kAccent);
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
+  }
+}
+
+Future<void> _eliminarItemServico(
+  CotacaoModel cotacao,
+  CotacaoItemServicoModel item,
+) async{
+  if (_operacaoEmAndamento) return;
+
+ 
+
+  final ok = await _confirmarEliminarItem(
+    titulo: 'Remover serviço',
+    mensagem:
+        'Deseja remover "${item.nomeServico ?? 'Serviço #${item.idServico}'}" desta cotação?',
+  );
+
+  if (!ok) return;
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    await context.read<CotacaoProvider>().removerItemServico(
+          cotacao.idCotacao,
+          item.idItemCotacaoServico,
+        );
+
+    _snack('Serviço removido da cotação', Colors.green);
+    await _carregar();
+  } catch (e) {
+    _snack('Erro ao remover serviço: $e', _kAccent);
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
+  }
+}
+
+Future<bool> _confirmarEliminarItem({
+  required String titulo,
+  required String mensagem,
+}) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            titulo,
+            style: const TextStyle(
+              color: _kPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(mensagem),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Remover'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // BUILD
@@ -543,13 +647,17 @@ Widget _buildCard(CotacaoModel cotacao) {
               if (cotacao.itensProduto.isNotEmpty) ...[
                 _sectionLabel(Icons.inventory_2_outlined, 'Produtos'),
                 const SizedBox(height: 8),
-                ...cotacao.itensProduto.map(_buildLinhaItemProduto),
+...cotacao.itensProduto.map(
+  (item) => _buildLinhaItemProduto(cotacao, item),
+),
               ],
               if (cotacao.itensServico.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 _sectionLabel(Icons.miscellaneous_services_outlined, 'Serviços'),
                 const SizedBox(height: 8),
-                ...cotacao.itensServico.map(_buildLinhaItemServico),
+...cotacao.itensServico.map(
+  (item) => _buildLinhaItemServico(cotacao, item),
+),
               ],
               if (!cotacao.temItens) ...[
                 Center(
@@ -624,7 +732,10 @@ Widget _buildCard(CotacaoModel cotacao) {
 
   // ── Linhas de itens ───────────────────────────────────────────────────────
 
-  Widget _buildLinhaItemProduto(CotacaoItemProdutoModel item) {
+Widget _buildLinhaItemProduto(
+  CotacaoModel cotacao,
+  CotacaoItemProdutoModel item,
+){
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(children: [
@@ -647,18 +758,28 @@ Widget _buildCard(CotacaoModel cotacao) {
               style: const TextStyle(fontSize: 13),
               overflow: TextOverflow.ellipsis),
         ),
-        Text(
-          _currencyFmt.format(item.subtotal),
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: _kPrimary),
-        ),
+     Text(
+  _currencyFmt.format(item.subtotal),
+  style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: _kPrimary),
+),
+const SizedBox(width: 6),
+IconButton(
+  visualDensity: VisualDensity.compact,
+  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+  onPressed: () =>
+    _eliminarItemProduto(cotacao, item),
+),
       ]),
     );
   }
 
-  Widget _buildLinhaItemServico(CotacaoItemServicoModel item) {
+Widget _buildLinhaItemServico(
+  CotacaoModel cotacao,
+  CotacaoItemServicoModel item,
+) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(children: [
@@ -692,13 +813,20 @@ Widget _buildCard(CotacaoModel cotacao) {
             ],
           ),
         ),
-        Text(
-          _currencyFmt.format(item.subtotal),
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: _kPrimary),
-        ),
+   Text(
+  _currencyFmt.format(item.subtotal),
+  style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: _kPrimary),
+),
+const SizedBox(width: 6),
+IconButton(
+  visualDensity: VisualDensity.compact,
+  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+  onPressed: () =>
+    _eliminarItemServico(cotacao, item),
+),
       ]),
     );
   }

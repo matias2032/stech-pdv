@@ -479,11 +479,17 @@ Widget _buildCard(PedidoModel pedido) {
               style: const TextStyle(fontSize: 13),
               overflow: TextOverflow.ellipsis),
         ),
-        Text(
-          _currencyFmt.format(item.subtotal),
-          style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w500, color: _kPrimary),
-        ),
+      Text(
+  _currencyFmt.format(item.subtotal),
+  style: const TextStyle(
+      fontSize: 13, fontWeight: FontWeight.w500, color: _kPrimary),
+),
+const SizedBox(width: 6),
+IconButton(
+  visualDensity: VisualDensity.compact,
+  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+  onPressed: () => _eliminarItemProduto(item),
+),
       ]),
     );
   }
@@ -521,11 +527,17 @@ Widget _buildCard(PedidoModel pedido) {
             ],
           ),
         ),
-        Text(
-          _currencyFmt.format(item.subtotal),
-          style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w500, color: _kPrimary),
-        ),
+    Text(
+  _currencyFmt.format(item.subtotal),
+  style: const TextStyle(
+      fontSize: 13, fontWeight: FontWeight.w500, color: _kPrimary),
+),
+const SizedBox(width: 6),
+IconButton(
+  visualDensity: VisualDensity.compact,
+  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+  onPressed: () => _eliminarItemServico(item),
+),
       ]),
     );
   }
@@ -535,84 +547,218 @@ Widget _buildCard(PedidoModel pedido) {
   Widget _buildRodape(PedidoModel pedido, int totalItens) {
     return Row(
       children: [
-        // Cancelar
-        OutlinedButton.icon(
-          onPressed:
-              _operacaoEmAndamento ? null : () => _cancelarPedido(pedido),
-          icon: const Icon(Icons.close, size: 16),
-          label: const Text('Cancelar'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: _kAccent,
-            side: BorderSide(color: _kAccent),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  OutlinedButton.icon(
+    onPressed: _operacaoEmAndamento
+        ? null
+        : () => _editarPedido(pedido),
+    icon: const Icon(Icons.add, size: 16),
+    label: const Text('Itens'),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: _kPrimary,
+      side: const BorderSide(color: _kPrimary),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    ),
+  ),
+
+  const SizedBox(width: 6),
+
+  OutlinedButton.icon(
+    onPressed: _operacaoEmAndamento
+        ? null
+        : () => _cancelarPedido(pedido),
+    icon: const Icon(Icons.close, size: 16),
+    label: const Text('Cancelar'),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: _kAccent,
+      side: BorderSide(color: _kAccent),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    ),
+  ),
+
+  const Spacer(),
+
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Text(
+        '$totalItens item(s)',
+        style: TextStyle(color: Colors.grey[500], fontSize: 11),
+      ),
+      Text(
+        _currencyFmt.format(pedido.total),
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: _kPrimary,
+        ),
+      ),
+    ],
+  ),
+
+  const SizedBox(width: 12),
+
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      ElevatedButton.icon(
+        onPressed: _operacaoEmAndamento
+            ? null
+            : () => _abrirFinalizar(pedido),
+        icon: const Icon(Icons.check, size: 18),
+        label: const Text(
+          'Finalizar',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _kPrimary,
+          foregroundColor: Colors.white,
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
-        const Spacer(),
-        // Total
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text('$totalItens item(s)',
-                style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-            Text(
-              _currencyFmt.format(pedido.total),
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _kPrimary),
-            ),
-          ],
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: _operacaoEmAndamento
+            ? null
+            : () => _abrirCredito(pedido),
+        icon: const Icon(Icons.credit_score_outlined, size: 17),
+        label: const Text(
+          'Vender a crédito',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(width: 12),
-        // Finalizar
-Column(
-  crossAxisAlignment: CrossAxisAlignment.end,
-  children: [
-    ElevatedButton.icon(
-      onPressed: _operacaoEmAndamento
-          ? null
-          : () => _abrirFinalizar(pedido),
-      icon: const Icon(Icons.check, size: 18),
-      label: const Text(
-        'Finalizar',
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _kPrimary,
-        foregroundColor: Colors.white,
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _kPrimary,
+          side: const BorderSide(color: _kPrimary),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       ),
-    ),
-    const SizedBox(height: 8),
-    OutlinedButton.icon(
-      onPressed: _operacaoEmAndamento
-          ? null
-          : () => _abrirCredito(pedido),
-      icon: const Icon(Icons.credit_score_outlined, size: 17),
-      label: const Text(
-        'Vender a crédito',
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: _kPrimary,
-        side: const BorderSide(color: _kPrimary),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      ),
-    ),
-  ],
-),
-      ],
+    ],
+  ),
+],
     );
   }
 
+Future<void> _editarPedido(PedidoModel pedido) async {
+  PedidoAtivoController.instance.definir(pedido);
+
+  await Navigator.pushNamed(context, '/catalogo');
+
+  if (!mounted) return;
+
+PedidoAtivoController.instance.limpar();
+  await _carregar();
+}
+Future<void> _eliminarItemProduto(ItemPedidoModel item) async {
+  if (_operacaoEmAndamento) return;
+
+  final ok = await _confirmarEliminarItem(
+    titulo: 'Remover produto',
+    mensagem: 'Deseja remover "${item.nomeProduto}" deste pedido?',
+  );
+  if (!ok) return;
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    final pedido = context.read<PedidoProvider>().pedidos.firstWhere(
+          (p) => p.itensProduto.any(
+            (i) => i.idItemPedido == item.idItemPedido,
+          ),
+        );
+
+    await context.read<PedidoProvider>().eliminarItemProduto(
+          pedido.idPedido,
+          item.idItemPedido,
+        );
+
+    _snack('Produto removido do pedido', Colors.green);
+    await _carregar();
+  } catch (e) {
+    _snack('Erro ao remover produto: $e', _kAccent);
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
+  }
+}
+
+Future<void> _eliminarItemServico(ItemPedidoServicoModel item) async {
+  if (_operacaoEmAndamento) return;
+
+  final ok = await _confirmarEliminarItem(
+    titulo: 'Remover serviço',
+    mensagem: 'Deseja remover "${item.nomeServico ?? 'Serviço #${item.idServico}'}" deste pedido?',
+  );
+  if (!ok) return;
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    final pedido = context.read<PedidoProvider>().pedidos.firstWhere(
+          (p) => p.itensServico.any(
+            (i) => i.idItemServico == item.idItemServico,
+          ),
+        );
+
+    await context.read<PedidoProvider>().eliminarItemServico(
+          pedido.idPedido,
+          item.idItemServico,
+        );
+
+    _snack('Serviço removido do pedido', Colors.green);
+    await _carregar();
+  } catch (e) {
+    _snack('Erro ao remover serviço: $e', _kAccent);
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
+  }
+}
+Future<bool> _confirmarEliminarItem({
+  required String titulo,
+  required String mensagem,
+}) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            titulo,
+            style: const TextStyle(
+              color: _kPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(mensagem),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Remover'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
   // ──────────────────────────────────────────────────────────────────────────
   // HELPERS DE DIÁLOGO (padrão detalhes_produto)
   // ──────────────────────────────────────────────────────────────────────────
@@ -655,3 +801,4 @@ Column(
         '${data.hour.toString().padLeft(2, '0')}:${data.minute.toString().padLeft(2, '0')}';
   }
 }
+
