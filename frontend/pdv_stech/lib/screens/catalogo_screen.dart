@@ -1739,50 +1739,58 @@ class _BadgePedidosAbertos extends StatefulWidget {
 }
 
 class _BadgePedidosAbertosState extends State<_BadgePedidosAbertos> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PedidoProvider>().listarPorStatus('aberto');
+    });
+  }
 
-@override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    context.read<PedidoProvider>().listarPorStatus('ABERTO');
-  });
+  @override
+  Widget build(BuildContext context) {
+    final pedidos = context.watch<PedidoProvider>().pedidos;
+
+    return ValueListenableBuilder<PedidoModel?>(
+      valueListenable: PedidoAtivoController.instance.pedidoAtivo,
+      builder: (_, pedidoAtivo, __) {
+        var count = pedidos.length;
+
+        final ativoJaEstaNaLista = pedidoAtivo == null
+            ? true
+            : pedidos.any((p) => p.idPedido == pedidoAtivo.idPedido);
+
+        if (pedidoAtivo != null &&
+            pedidoAtivo.statusPedido.toLowerCase() == 'aberto' &&
+            !ativoJaEstaNaLista) {
+          count++;
+        }
+
+        return IconButton(
+          tooltip: 'Pedidos Abertos',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const PedidosAbertosScreen(),
+              ),
+            );
+
+            if (mounted) {
+              context.read<PedidoProvider>().listarPorStatus('aberto');
+            }
+          },
+          icon: Badge(
+            isLabelVisible: count > 0,
+            label: Text(
+              count > 99 ? '99+' : '$count',
+              style: const TextStyle(fontSize: 10, color: Colors.white),
+            ),
+            backgroundColor: _kAccent,
+            child: const Icon(Icons.pending_actions_outlined),
+          ),
+        );
+      },
+    );
+  }
 }
-
-// dispose() fica vazio (ou só chama super) — não há listeners manuais para remover:
-@override
-void dispose() {
-  super.dispose();
-}
-
-
-
-@override
-Widget build(BuildContext context) {
-  // watch → redesenha o badge sempre que a lista de pedidos mudar
-  final count = context.watch<PedidoProvider>().pedidos.length;
-
-  return IconButton(
-    tooltip: 'Pedidos Abertos',
-    onPressed: () async {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const PedidosAbertosScreen()),
-      );
-      // Ao voltar, recarrega para reflectir eventuais alterações feitas no ecrã anterior
-      if (mounted) {
-        context.read<PedidoProvider>().listarPorStatus('ABERTO');
-      }
-    },
-    icon: Badge(
-      isLabelVisible: count > 0,
-      label: Text(
-        count > 99 ? '99+' : '$count',
-        style: const TextStyle(fontSize: 10, color: Colors.white),
-      ),
-      backgroundColor: _kAccent,
-      child: const Icon(Icons.pending_actions_outlined),
-    ),
-  );
-}
-}
-

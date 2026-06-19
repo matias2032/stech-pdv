@@ -119,14 +119,19 @@ Future<void> _adicionarAoPedido() async {
     if (provider.status == PedidoStatus.success) {
         context.read<ProdutoProvider>().listarAtivos(); 
         
-      final resultado = provider.pedidoActual!;
-      _snack(
-        _temPedidoAtivo
-            ? '✅ Item adicionado ao pedido ${resultado.referencia}'
-            : '✅ Pedido ${resultado.referencia} criado!',
-        Colors.green,
-      );
-      Navigator.pop(context, resultado);
+ final resultado = provider.pedidoActual!;
+
+// ADICIONADO: atualiza imediatamente o badge de pedidos abertos
+PedidoAtivoController.instance.definir(resultado);
+
+_snack(
+  _temPedidoAtivo
+      ? '✅ Item adicionado ao pedido ${resultado.referencia}'
+      : '✅ Pedido ${resultado.referencia} criado!',
+  Colors.green,
+);
+
+Navigator.pop(context, resultado);
     } else {
       _snack('Erro: ${provider.errorMessage}', _kAccent);
     }

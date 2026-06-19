@@ -451,28 +451,48 @@ class _BadgeCotacoesAbertasState extends State<_BadgeCotacoesAbertas> {
 
   @override
   Widget build(BuildContext context) {
-    final count = context.watch<CotacaoProvider>().cotacoes.length;
+    final cotacoes = context.watch<CotacaoProvider>().cotacoes;
 
-    return IconButton(
-      tooltip: 'Cotações Abertas',
-      onPressed: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const CotacoesAbertasScreen()),
-        );
-        if (mounted) {
-          context.read<CotacaoProvider>().listarPorStatus('ABERTA');
+    return ValueListenableBuilder<CotacaoModel?>(
+      valueListenable: CotacaoAtivaController.instance.cotacaoAtiva,
+      builder: (_, cotacaoAtiva, __) {
+        var count = cotacoes.length;
+
+        final ativaJaEstaNaLista = cotacaoAtiva == null
+            ? true
+            : cotacoes.any((c) => c.idCotacao == cotacaoAtiva.idCotacao);
+
+        if (cotacaoAtiva != null &&
+            cotacaoAtiva.estaAberta &&
+            !ativaJaEstaNaLista) {
+          count++;
         }
+
+        return IconButton(
+          tooltip: 'Cotações Abertas',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CotacoesAbertasScreen(),
+              ),
+            );
+
+            if (mounted) {
+              context.read<CotacaoProvider>().listarPorStatus('ABERTA');
+            }
+          },
+          icon: Badge(
+            isLabelVisible: count > 0,
+            label: Text(
+              count > 99 ? '99+' : '$count',
+              style: const TextStyle(fontSize: 10, color: Colors.white),
+            ),
+            backgroundColor: _kAccent,
+            child: const Icon(Icons.request_quote_outlined),
+          ),
+        );
       },
-      icon: Badge(
-        isLabelVisible: count > 0,
-        label: Text(
-          count > 99 ? '99+' : '$count',
-          style: const TextStyle(fontSize: 10, color: Colors.white),
-        ),
-        backgroundColor: _kAccent,
-        child: const Icon(Icons.request_quote_outlined),
-      ),
     );
   }
 }
