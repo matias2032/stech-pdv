@@ -33,6 +33,8 @@ import 'screens/dashboard.dart';
 import 'screens/splash_screen.dart';
 import 'screens/cliente_list_screen.dart';
 import 'screens/cliente_form_screen.dart';
+import 'screens/fornecedor_list_screen.dart';
+import 'screens/fornecedor_form_screen.dart';
 import 'screens/documentos_list_screen.dart';
 import 'screens/documentos_form_screen.dart';
 import 'screens/extractos_list_screen.dart';
@@ -172,6 +174,8 @@ SyncScheduler.instance.init(
   syncQueueDao:           SyncQueueDao(),
   clienteDao:             ClienteDao(),
   clienteService:         clienteService,
+   fornecedorDao: FornecedorDao(),
+  fornecedorService: FornecedorService(),
   marcaDao:               MarcaDao(),
   marcaService:           marcaService,
   categoriaDao:           CategoriaDao(),
@@ -208,6 +212,9 @@ SyncScheduler.instance.init(
       ChangeNotifierProvider(
         create: (_) => ClienteExclusaoProvider(repository: clienteRepository),
       ),
+      ChangeNotifierProvider(
+  create: (_) => FornecedorProvider(),
+),
 
       // ── Marca ─────────────────────────────────────────────────────
       ChangeNotifierProvider(
@@ -284,6 +291,8 @@ SyncScheduler.instance.init(
           '/dashboard'                : (_) => const DashboardScreen(),
           '/splash'                   : (_) => const SplashScreen(),
           '/gerenciar_clientes'       : (_) => const ClienteListScreen(),
+           '/gerenciar_fornecedores'       : (_) => const FornecedorListScreen(),
+            '/cadastrar_fornecedores'     : (_) => const FornecedorFormScreen(),
           '/gerenciar_documentos'     : (_) => const DocumentosListScreen(),
           '/cadastrar_documentos'     : (_) => const DocumentosFormScreen(),
           '/gerenciar_extractos'      : (_) => const ExtratosListScreen(),

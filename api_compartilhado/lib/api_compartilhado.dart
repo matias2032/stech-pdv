@@ -22,6 +22,7 @@ export 'models/cliente_model.dart';
 export 'models/documento_fiscal_model.dart'; // ← TipoDocumentoModel + DocumentoFiscalModel (API)
 export 'models/extrato_model.dart';
 export 'models/cotacao_model.dart';
+export 'models/fornecedor_model.dart';
 
 // 3. Services
 export 'services/sessao_service.dart';
@@ -45,6 +46,8 @@ export 'services/documento_fiscal_service.dart'; // ← DocumentoFiscalService
 export 'services/extrato_service.dart'; 
 export 'services/extrato_pdf_service.dart'; 
 export 'services/cotacao_pdf_service.dart'; 
+export 'services/fornecedor_service.dart';
+
 
 
 
@@ -57,6 +60,7 @@ export 'providers/cliente_provider.dart';
 export 'providers/usuario_provider.dart' hide UsuarioService;
 export 'providers/documento_fiscal_provider.dart'; // ← DocumentoFiscalProvider
 export 'providers/cotacao_provider.dart';
+export 'providers/fornecedor_provider.dart';
 export 'core/constants/constantes_fiscais.dart';
 
 // 5. Controllers
@@ -70,6 +74,8 @@ export 'core/database/daos/sync_queue_dao.dart';
 export 'repository/cliente_repository.dart';
 export 'repository/usuario_repository.dart';
 export 'repository/marca_repository.dart';
+export 'repository/cotacao_repository.dart';
+export 'repository/fornecedor_repository.dart';
 export 'core/connectivity/connectivity_service.dart';
 export 'core/sync/sync_scheduler.dart';
 
@@ -78,6 +84,7 @@ export 'core/database/daos/categoria_dao.dart';
 export 'repository/categoria_repository.dart';
 export 'providers/marca_provider.dart';         // novo
 export 'providers/categoria_provider.dart';     // novo
+export 'providers/fornecedor_provider.dart';     // novo
 export 'core/database/daos/produto_dao.dart';
 export 'repository/produto_repository.dart';
 export 'core/database/daos/pedido_dao.dart';
@@ -90,4 +97,9 @@ export 'core/database/daos/servico_dao.dart';
 export 'core/database/daos/usuario_dao.dart';
 export 'controllers/pedido_ativo_controller.dart';
 export 'core/database/daos/cotacao_dao.dart';
-export 'repository/cotacao_repository.dart';
+export 'core/database/daos/fornecedor_dao.dart';
+
+
+
+
+

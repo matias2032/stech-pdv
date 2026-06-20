@@ -190,6 +190,18 @@ _MenuGroup(
         ),
       ],
     ),
+
+      _MenuGroup(
+  icon: Icons.inventory_2_rounded,
+  title: 'Fornecedores',
+  items: [
+    _MenuItem(
+      icon: Icons.local_shipping_rounded,
+      title: 'Fornecedores',
+      route: '/gerenciar_fornecedores',
+    ),
+  ],
+),
     _MenuGroup(
       icon: Icons.inventory_2_rounded,
       title: 'Inventário',

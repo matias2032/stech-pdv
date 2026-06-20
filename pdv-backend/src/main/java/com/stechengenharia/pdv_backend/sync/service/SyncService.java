@@ -27,6 +27,8 @@ import com.stechengenharia.pdv_backend.sync.dto.SyncResultadoDTO;
 import com.stechengenharia.pdv_backend.pedido.dto.DeclararCreditoRequestDTO;
 import com.stechengenharia.pdv_backend.pedido.dto.CriarParcelasRequestDTO;
 import com.stechengenharia.pdv_backend.pedido.dto.RegistarPagamentoCreditoRequestDTO;
+import com.stechengenharia.pdv_backend.fornecedor.dto.FornecedorRequestDTO;
+import com.stechengenharia.pdv_backend.fornecedor.service.FornecedorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,7 @@ public class SyncService {
     private final ProdutoService   produtoService;
     private final PedidoService    pedidoService;
 private final CotacaoService   cotacaoService;
+private final FornecedorService fornecedorService;
 private final ObjectMapper     objectMapper;
 
     // ────────────────────────────────────────────────────────────────────────
@@ -78,6 +81,7 @@ private final ObjectMapper     objectMapper;
         try {
             return switch (op.getEntidade().toLowerCase()) {
                 case "cliente"   -> processarCliente(op);
+                 case "fornecedor" -> processarFornecedor(op);
                 case "marca"     -> processarMarca(op);
                 case "categoria" -> processarCategoria(op);
                 case "servico"   -> processarServico(op);
@@ -392,6 +396,34 @@ private SyncResultadoDTO processarCotacao(SyncOperacaoDTO op) {
 
         default -> erroIndividual(op,
                 "Operação não suportada para cotacao via sync: " + op.getOperacao());
+    };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FORNECEDOR
+// ══════════════════════════════════════════════════════════════════════
+
+private SyncResultadoDTO processarFornecedor(SyncOperacaoDTO op) {
+    FornecedorRequestDTO dto = converter(op.getPayload(), FornecedorRequestDTO.class);
+
+    return switch (op.getOperacao().toUpperCase()) {
+        case "CREATE" -> {
+            var response = fornecedorService.criar(dto);
+            yield sucesso(op, response.id());
+        }
+
+        case "UPDATE" -> {
+            fornecedorService.editar(op.getId(), dto);
+            yield sucesso(op, op.getId());
+        }
+
+        case "DELETE" -> {
+            fornecedorService.excluir(op.getId());
+            yield sucesso(op, op.getId());
+        }
+
+        default -> erroIndividual(op,
+                "Operação não suportada para fornecedor via sync: " + op.getOperacao());
     };
 }
 

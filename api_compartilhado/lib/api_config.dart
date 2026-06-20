@@ -87,6 +87,7 @@ defaultValue: 'http://127.0.0.1:8080',
   static const String categorias = '/api/categorias';
   static const String marcas = '/api/marcas';
   static const String clientes = '/api/clientes';
+  static const String fornecedores = '/api/fornecedores';
    static const String _documentosFiscais = '/api/documentos-fiscais';
     static const String cotacoes = '/api/cotacoes';
    static const String _sync = '/api/sync';
@@ -108,6 +109,7 @@ defaultValue: 'http://127.0.0.1:8080',
   static String get categoriasUrl => '$baseUrl$categorias';
   static String get marcasUrl => '$baseUrl$marcas';
     static String get clientesUrl => '$baseUrl$clientes';
+    static String get fornecedoresUrl => '$baseUrl$fornecedores';
      static String get documentosFiscaisUrl => '$baseUrl$_documentosFiscais';
       static String get cotacoesUrl => '$baseUrl$cotacoes';
      static String get syncBatchUrl => '$baseUrl$_sync/batch';

@@ -7,7 +7,7 @@ echo ========================================
 echo.
 echo [INFO] Iniciando Backend Spring Boot...
 cd "C:\pdv-stech engenharia\pdv-backend"
-start "BACKEND - SPRING BOOT" cmd /k "mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081"
+start "BACKEND - SPRING BOOT" cmd /k "mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8082"
 
 echo.
 echo [INFO] Aguardando o servidor Java inicializar...

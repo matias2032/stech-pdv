@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 9,       
+  version: 10,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -252,6 +252,21 @@ if (oldVersion < 9) {
   );
 }
 
+if (oldVersion < 10) {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS fornecedor (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT,
+      email TEXT,
+      nuit TEXT,
+      contacto TEXT NOT NULL UNIQUE,
+      morada TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT
+    )
+  ''');
+}
+
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -298,6 +313,19 @@ if (oldVersion < 9) {
           updated_at    TEXT
         )
       ''');
+
+      await db.execute('''
+  CREATE TABLE IF NOT EXISTS fornecedor (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    email TEXT,
+    nuit TEXT,
+    contacto TEXT NOT NULL UNIQUE,
+    morada TEXT,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT
+  )
+''');
 
       // ── produto ───────────────────────────────────────────────────
       await txn.execute('''

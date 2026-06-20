@@ -14,6 +14,8 @@ import 'package:api_compartilhado/services/cliente_service.dart';
 import 'package:api_compartilhado/models/documento_fiscal_model.dart';
 import 'package:api_compartilhado/services/documento_fiscal_service.dart';
 import 'package:api_compartilhado/models/cotacao_model.dart';
+import 'package:api_compartilhado/models/fornecedor_model.dart';
+import 'package:api_compartilhado/services/fornecedor_service.dart';
 
 import '../connectivity/connectivity_service.dart';
 import '../database/local_database.dart';
@@ -26,6 +28,8 @@ import '../database/daos/servico_dao.dart';
 import '../database/daos/pedido_dao.dart';
 import '../database/daos/documento_fiscal_dao.dart';
 import '../database/daos/cotacao_dao.dart';
+import '../database/daos/fornecedor_dao.dart';
+
 
 class SyncScheduler {
   SyncScheduler._();
@@ -35,6 +39,8 @@ class SyncScheduler {
   SyncQueueDao? _syncQueueDao;
   ClienteDao? _clienteDao;
   ClienteService? _clienteService;
+  FornecedorDao? _fornecedorDao;
+FornecedorService? _fornecedorService;
   MarcaDao? _marcaDao;
   MarcaService? _marcaService;
   CategoriaDao? _categoriaDao;
@@ -49,7 +55,7 @@ class SyncScheduler {
   DocumentoFiscalService? _documentoFiscalService;
   CotacaoDao? _cotacaoDao;
   CotacaoService? _cotacaoService;
-
+  
   Database get _db => LocalDatabase.instance.db;
 
   StreamSubscription<bool>? _subscription;
@@ -65,6 +71,8 @@ class SyncScheduler {
     required SyncQueueDao syncQueueDao,
     required ClienteDao clienteDao,
     required ClienteService clienteService,
+      required FornecedorDao fornecedorDao,
+  required FornecedorService fornecedorService,
     required MarcaDao marcaDao,
     required MarcaService marcaService,
     required CategoriaDao categoriaDao,
@@ -84,6 +92,8 @@ class SyncScheduler {
     _syncQueueDao = syncQueueDao;
     _clienteDao = clienteDao;
     _clienteService = clienteService;
+    _fornecedorDao = fornecedorDao;
+_fornecedorService = fornecedorService;
     _marcaDao = marcaDao;
     _marcaService = marcaService;
     _categoriaDao = categoriaDao;
@@ -366,6 +376,9 @@ class SyncScheduler {
       case 'cliente':
         await _processarCliente(operacao, payload);
 
+        case 'fornecedor':
+    await _processarFornecedor(operacao, payload);
+
       case 'marca':
         await _processarMarca(operacao, payload);
 
@@ -395,6 +408,66 @@ class SyncScheduler {
         throw Exception('Entidade desconhecida: $entidade');
     }
   }
+
+  // ── Processar operações de fornecedor ─────────────────────────────
+
+Future<void> _processarFornecedor(
+  String operacao,
+  Map<String, dynamic> payload,
+) async {
+  final service = _fornecedorService!;
+  final dao = _fornecedorDao!;
+
+  switch (operacao) {
+    case 'CREATE':
+      final localId = payload['localId'] as String?;
+
+      final fornecedor = FornecedorModel(
+        nome: payload['nome'] as String?,
+        email: payload['email'] as String?,
+        nuit: payload['nuit'] as String?,
+        contacto: payload['contacto'] as String,
+        morada: payload['morada'] as String?,
+      );
+
+      final fornecedorCriado = await service.criar(fornecedor);
+
+      if (localId != null) {
+        await dao.deleteByLocalId(localId);
+      }
+
+      await dao.salvarOuAtualizar(fornecedorCriado);
+
+    case 'UPDATE':
+      final id = payload['id'] as int;
+
+      final fornecedor = FornecedorModel(
+        id: id,
+        nome: payload['nome'] as String?,
+        email: payload['email'] as String?,
+        nuit: payload['nuit'] as String?,
+        contacto: payload['contacto'] as String,
+        morada: payload['morada'] as String?,
+      );
+
+      final fornecedorEditado = await service.editar(
+        id: id,
+        fornecedor: fornecedor,
+      );
+
+      await dao.salvarOuAtualizar(fornecedorEditado);
+
+    case 'DELETE':
+      final id = payload['id'] as int;
+      await service.excluir(id);
+      await dao.excluir(id);
+
+    default:
+      throw Exception('Operação desconhecida para fornecedor: $operacao');
+  }
+}
+
+
 
   Future<void> _processarCotacao(
     String operacao,
@@ -953,6 +1026,18 @@ class SyncScheduler {
           final existente = await _clienteDao!.getById(idReal);
           if (existente != null) await _clienteDao!.marcarSynced(idReal);
         }
+
+        case 'fornecedor':
+  if (operacao == 'CREATE' && localId != null && idReal != null) {
+    await _fornecedorDao!.deleteByLocalId(localId);
+
+    try {
+      final fornecedorReal = await _fornecedorService!.buscarPorId(idReal);
+      await _fornecedorDao!.salvarOuAtualizar(fornecedorReal);
+    } catch (e) {
+      debugPrint('⚠️ SyncScheduler — pull fornecedor $idReal falhou: $e');
+    }
+  }
 
       case 'marca':
         if (operacao == 'CREATE' && localId != null && idReal != null) {

@@ -764,3 +764,4 @@ class _LinhaCliente extends StatelessWidget {
     );
   }
 }
+

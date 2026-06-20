@@ -9,6 +9,7 @@ import com.stechengenharia.pdv_backend.produto.sync.ProdutoSyncService;
 import com.stechengenharia.pdv_backend.servico.sync.ServicoSyncService;
 import com.stechengenharia.pdv_backend.usuario.sync.UsuarioSyncService;
 import com.stechengenharia.pdv_backend.cotacao.sync.CotacaoSyncService;
+import com.stechengenharia.pdv_backend.fornecedor.sync.FornecedorSyncService;
 
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ private final ClienteSyncService clienteSyncService;
 private final DocumentoSyncService documentoSyncService;
 private final PedidoSyncService pedidoSyncService;
 private final CotacaoSyncService cotacaoSyncService;
+private final FornecedorSyncService fornecedorSyncService;
 
     // private final ClienteSyncService clienteSyncService;
    
@@ -53,6 +55,7 @@ private final CotacaoSyncService cotacaoSyncService;
         produtoSyncService.push();   // PUSH  
         servicoSyncService.push();  // PUSH
         clienteSyncService.push();   // PUSH
+        fornecedorSyncService.push();
         documentoSyncService.push(); // PUSH
         pedidoSyncService.push();
         cotacaoSyncService.push();
@@ -67,6 +70,7 @@ private final CotacaoSyncService cotacaoSyncService;
         produtoSyncService.pull();   // PULL 
         servicoSyncService.pull();   // PULL
         clienteSyncService.pull();
+        fornecedorSyncService.pull();
         documentoSyncService.pull(); // PULL
         pedidoSyncService.pull();
         cotacaoSyncService.pull();
