@@ -74,6 +74,17 @@ Future<void> _gerarCotacao() async {
 
   setState(() => _gerando = true);
   try {
+
+  debugPrint('════════════════════════════════════════════════════');
+  debugPrint('🧾 CotacaoResumoScreen._gerarCotacao — cliente escolhido');
+  debugPrint('👤 tipoCliente: $_tipoCliente');
+  debugPrint('🔒 clienteBloqueado: $_clienteBloqueado');
+  debugPrint('🏢 empresaSelecionada.id: ${_empresaSelecionada?.id}');
+  debugPrint('🏢 empresaSelecionada.nome: ${_empresaSelecionada?.nomeCompleto}');
+  debugPrint('👤 nome digitado: "${_nomeCtrl.text}"');
+  debugPrint('👤 apelido digitado: "${_apelidoCtrl.text}"');
+  debugPrint('════════════════════════════════════════════════════');
+
     final provider = context.read<CotacaoProvider>();
 
     if (!_clienteBloqueado) {
@@ -83,7 +94,11 @@ Future<void> _gerarCotacao() async {
               nomeClienteSingular:    _nomeCtrl.text.trim().nullIfEmpty,     // ← novo
               apelidoClienteSingular: _apelidoCtrl.text.trim().nullIfEmpty, // ← novo
             );
-
+   debugPrint('📦 CotacaoResumoScreen._gerarCotacao — dtoCliente');
+    debugPrint('👤 dto.idCliente: ${dtoCliente.idCliente}');
+    debugPrint('👤 dto.nomeClienteSingular: "${dtoCliente.nomeClienteSingular}"');
+    debugPrint('👤 dto.apelidoClienteSingular: "${dtoCliente.apelidoClienteSingular}"');
+    
       await provider.atualizarCotacao(widget.cotacao.idCotacao, dtoCliente);
       if (!mounted) return;
       if (provider.status != CotacaoStatus.success) {

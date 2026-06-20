@@ -526,45 +526,87 @@ Future<PedidoModel> finalizarPedido(
   int idPedido,
   FinalizarPedidoRequestDTO dto,
 ) async {
+  debugPrint('════════════════════════════════════════════════════');
+  debugPrint('🧾 PedidoRepository.finalizarPedido — entrada');
+  debugPrint('🆔 idPedido: $idPedido');
+  debugPrint('📡 Online: ${_connectivity.isOnline}');
+  debugPrint('💳 idTipoPagamento: ${dto.idTipoPagamento}');
+  debugPrint('💰 valorPago: ${dto.valorPago}');
+  debugPrint('👤 idCliente: ${dto.idCliente}');
+  debugPrint('👤 nomeClienteSingular: "${dto.nomeClienteSingular}"');
+  debugPrint('👤 apelidoClienteSingular: "${dto.apelidoClienteSingular}"');
+  debugPrint('📝 observacoes: "${dto.observacoes}"');
+  debugPrint('════════════════════════════════════════════════════');
+
   if (_connectivity.isOnline) {
-    final m = await _service.finalizarPedido(idPedido, dto);
-    await _upsertPedidoComItens(m);
-    return m;
+    try {
+      debugPrint('🌐 PedidoRepository.finalizarPedido — enviando para API...');
+
+      final m = await _service.finalizarPedido(idPedido, dto);
+
+      debugPrint('✅ PedidoRepository.finalizarPedido — API respondeu');
+      debugPrint('🧾 retorno.idPedido: ${m.idPedido}');
+      debugPrint('👤 retorno.idCliente: ${m.idCliente}');
+      debugPrint('👤 retorno.nomeClienteSingular: "${m.nomeClienteSingular}"');
+      debugPrint('👤 retorno.apelidoClienteSingular: "${m.apelidoClienteSingular}"');
+   
+
+      await _upsertPedidoComItens(m);
+
+      debugPrint('💾 PedidoRepository.finalizarPedido — pedido salvo no SQLite');
+
+      return m;
+    } catch (e, s) {
+      debugPrint('❌ PedidoRepository.finalizarPedido HTTP falhou: $e');
+      debugPrint('$s');
+      rethrow;
+    }
   }
 
   // ── Offline ───────────────────────────────────────────────────────
-  // Actualiza o estado local imediatamente (optimistic)
-await _db.update(
+  debugPrint('📴 PedidoRepository.finalizarPedido — finalizando offline');
+  debugPrint('👤 offline.nomeClienteSingular: "${dto.nomeClienteSingular}"');
+  debugPrint('👤 offline.apelidoClienteSingular: "${dto.apelidoClienteSingular}"');
+
+  final values = {
+    'status_pedido': 'finalizado',
+    'id_tipo_pagamento': dto.idTipoPagamento,
+    'valor_pago': dto.valorPago,
+    'id_cliente': dto.idCliente,
+    'nome_cliente_singular': dto.nomeClienteSingular,
+    'apelido_cliente_singular': dto.apelidoClienteSingular,
+    'sync_status': 'pending',
+    'updated_at': DateTime.now().toIso8601String(),
+  };
+
+  debugPrint('💾 PedidoRepository.finalizarPedido — values SQLite: $values');
+
+  await _db.update(
     'pedido',
-    {
-      'status_pedido': 'finalizado',
-      'id_tipo_pagamento': dto.idTipoPagamento,
-      'valor_pago': dto.valorPago,
-      'id_cliente': dto.idCliente,                              // ← novo
-      'nome_cliente_singular': dto.nomeClienteSingular,          // ← novo
-      'apelido_cliente_singular': dto.apelidoClienteSingular,    // ← novo
-      'sync_status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    },
+    values,
     where: 'id = ?',
     whereArgs: [idPedido],
   );
 
-  // Enfileira para sync posterior
-  await _syncQueueDao.enqueue('pedido', 'FINALIZAR', {
-    // Se idPedido < 0 ainda não foi sincronizado — usa local ref
-    'idPedido':      idPedido.isNegative ? null        : idPedido,
+  final payload = {
+    'idPedido': idPedido.isNegative ? null : idPedido,
     'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
-    'idTipoPagamento':        dto.idTipoPagamento,
-    'valorPago':              dto.valorPago,
-    'observacoes':            dto.observacoes,
-    'idCliente':              dto.idCliente,
-    'nomeClienteSingular':    dto.nomeClienteSingular,
+    'idTipoPagamento': dto.idTipoPagamento,
+    'valorPago': dto.valorPago,
+    'observacoes': dto.observacoes,
+    'idCliente': dto.idCliente,
+    'nomeClienteSingular': dto.nomeClienteSingular,
     'apelidoClienteSingular': dto.apelidoClienteSingular,
-  });
+  };
 
-  // Retorna o modelo local actualizado
+  debugPrint('📦 PedidoRepository.finalizarPedido — payload sync_queue: $payload');
+
+  await _syncQueueDao.enqueue('pedido', 'FINALIZAR', payload);
+
   final row = await _dao.getById(idPedido);
+
+  debugPrint('🔎 PedidoRepository.finalizarPedido — row após update: $row');
+
   return row != null
       ? await _pedidoComItensDoCache(row)
       : _pedidoVazio(idPedido);

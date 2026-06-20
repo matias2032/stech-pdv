@@ -198,108 +198,201 @@ Future<List<CotacaoModel>> listarProntas() async {
   // ══════════════════════════════════════════════════════════════════
 
   Future<CotacaoModel> criarCotacao(CriarCotacaoRequestModel dto) async {
-    if (_connectivity.isOnline) {
-      try {
-        final m = await _service.criarCotacao(dto);
-        await _upsertCotacaoComItens(m);
-        return m;
-      } catch (e) {
-        debugPrint('⚠️ CotacaoRepository.criarCotacao HTTP falhou: $e');
-        rethrow;
-      }
+  debugPrint('════════════════════════════════════════════════════');
+  debugPrint('🧾 CotacaoRepository.criarCotacao — entrada');
+  debugPrint('📡 Online: ${_connectivity.isOnline}');
+  debugPrint('👤 idCliente: ${dto.idCliente}');
+  debugPrint('👤 nomeClienteSingular: "${dto.nomeClienteSingular}"');
+  debugPrint('👤 apelidoClienteSingular: "${dto.apelidoClienteSingular}"');
+  debugPrint('📝 observacoes: "${dto.observacoes}"');
+  debugPrint('════════════════════════════════════════════════════');
+
+  if (_connectivity.isOnline) {
+    try {
+      debugPrint('🌐 CotacaoRepository.criarCotacao — enviando para API...');
+
+      final m = await _service.criarCotacao(dto);
+
+      debugPrint('✅ CotacaoRepository.criarCotacao — API respondeu');
+      debugPrint('🧾 idCotacao: ${m.idCotacao}');
+      debugPrint('👤 retorno.nomeClienteSingular: "${m.nomeClienteSingular}"');
+      debugPrint('👤 retorno.apelidoClienteSingular: "${m.apelidoClienteSingular}"');
+      debugPrint('👤 retorno.nomeCliente: "${m.nomeCliente}"');
+
+      await _upsertCotacaoComItens(m);
+
+      debugPrint('💾 CotacaoRepository.criarCotacao — cotação salva no SQLite');
+
+      return m;
+    } catch (e, s) {
+      debugPrint('❌ CotacaoRepository.criarCotacao HTTP falhou: $e');
+      debugPrint('$s');
+      rethrow;
     }
-
-    // ── Offline ───────────────────────────────────────────────────
-    final localId = _uuid.v4();
-    final tempId  = -(DateTime.now().millisecondsSinceEpoch);
-
-    final local = CotacaoModel(
-      idCotacao:   tempId,
-      referencia:  'OFFLINE-${localId.substring(0, 6).toUpperCase()}',
-      idCliente:   dto.idCliente,
-      nomeClienteSingular:    dto.nomeClienteSingular,     // ← novo
-      apelidoClienteSingular: dto.apelidoClienteSingular,  // ← novo
-      idUsuario:   dto.idUsuario,
-      statusCotacao: 'ABERTA',
-      total:       0,
-      validadeAte: dto.validadeAte,
-      observacoes: dto.observacoes,
-      createdAt:   DateTime.now(),
-      itensProduto: const [],
-      itensServico: const [],
-    );
-
-    await _dao.upsert({
-      ...local.toLocalDb(syncStatus: 'pending'),
-      'local_id': localId,
-    });
-
-    await _syncQueueDao.enqueue('cotacao', 'CREATE', {
-      'localId':     localId,
-      'idUsuario':   dto.idUsuario,
-      'idCliente':   dto.idCliente,
-       'nomeClienteSingular':    dto.nomeClienteSingular,     // ← novo
-       'apelidoClienteSingular': dto.apelidoClienteSingular,  // ← novo
-      'validadeAte': dto.validadeAte?.toIso8601String().split('T').first,
-      'observacoes': dto.observacoes,
-    });
-
-    return local;
   }
+
+  // ── Offline ───────────────────────────────────────────────────
+  final localId = _uuid.v4();
+  final tempId  = -(DateTime.now().millisecondsSinceEpoch);
+
+  debugPrint('📴 CotacaoRepository.criarCotacao — criando offline');
+  debugPrint('🆔 localId: $localId');
+  debugPrint('🆔 tempId: $tempId');
+  debugPrint('👤 offline.nomeClienteSingular: "${dto.nomeClienteSingular}"');
+  debugPrint('👤 offline.apelidoClienteSingular: "${dto.apelidoClienteSingular}"');
+
+  final local = CotacaoModel(
+    idCotacao:   tempId,
+    referencia:  'OFFLINE-${localId.substring(0, 6).toUpperCase()}',
+    idCliente:   dto.idCliente,
+    nomeClienteSingular: dto.nomeClienteSingular,
+    apelidoClienteSingular: dto.apelidoClienteSingular,
+    idUsuario:   dto.idUsuario,
+    statusCotacao: 'ABERTA',
+    total:       0,
+    validadeAte: dto.validadeAte,
+    observacoes: dto.observacoes,
+    createdAt:   DateTime.now(),
+    itensProduto: const [],
+    itensServico: const [],
+  );
+
+  final localDb = {
+    ...local.toLocalDb(syncStatus: 'pending'),
+    'local_id': localId,
+  };
+
+  debugPrint('💾 CotacaoRepository.criarCotacao — localDb: $localDb');
+
+  await _dao.upsert(localDb);
+
+  final payload = {
+    'localId': localId,
+    'idUsuario': dto.idUsuario,
+    'idCliente': dto.idCliente,
+    'nomeClienteSingular': dto.nomeClienteSingular,
+    'apelidoClienteSingular': dto.apelidoClienteSingular,
+    'validadeAte': dto.validadeAte?.toIso8601String().split('T').first,
+    'observacoes': dto.observacoes,
+  };
+
+  debugPrint('📦 CotacaoRepository.criarCotacao — payload sync_queue: $payload');
+
+  await _syncQueueDao.enqueue('cotacao', 'CREATE', payload);
+
+  debugPrint('✅ CotacaoRepository.criarCotacao — cotação offline enfileirada');
+
+  return local;
+}
+
+
 
   // ══════════════════════════════════════════════════════════════════
   // ACTUALIZAR COTAÇÃO
   // ══════════════════════════════════════════════════════════════════
 
-  Future<CotacaoModel> atualizarCotacao(
-    int idCotacao,
-    AtualizarCotacaoRequestModel dto,
-  ) async {
-    if (_connectivity.isOnline) {
+Future<CotacaoModel> atualizarCotacao(
+  int idCotacao,
+  AtualizarCotacaoRequestModel dto,
+) async {
+  debugPrint('════════════════════════════════════════════════════');
+  debugPrint('🧾 CotacaoRepository.atualizarCotacao — entrada');
+  debugPrint('🆔 idCotacao: $idCotacao');
+  debugPrint('📡 Online: ${_connectivity.isOnline}');
+  debugPrint('👤 idCliente: ${dto.idCliente}');
+  debugPrint('👤 nomeClienteSingular: "${dto.nomeClienteSingular}"');
+  debugPrint('👤 apelidoClienteSingular: "${dto.apelidoClienteSingular}"');
+  debugPrint('📌 statusCotacao: "${dto.statusCotacao}"');
+  debugPrint('📝 observacoes: "${dto.observacoes}"');
+  debugPrint('════════════════════════════════════════════════════');
+
+  if (_connectivity.isOnline) {
+    try {
+      debugPrint('🌐 CotacaoRepository.atualizarCotacao — enviando para API...');
+
       final m = await _service.atualizarCotacao(idCotacao, dto);
+
+      debugPrint('✅ CotacaoRepository.atualizarCotacao — API respondeu');
+      debugPrint('🧾 retorno.idCotacao: ${m.idCotacao}');
+      debugPrint('👤 retorno.idCliente: ${m.idCliente}');
+      debugPrint('👤 retorno.nomeClienteSingular: "${m.nomeClienteSingular}"');
+      debugPrint('👤 retorno.apelidoClienteSingular: "${m.apelidoClienteSingular}"');
+      debugPrint('👤 retorno.nomeCliente: "${m.nomeCliente}"');
+
       await _upsertCotacaoComItens(m);
+
+      debugPrint('💾 CotacaoRepository.atualizarCotacao — cotação salva no SQLite');
+
       return m;
+    } catch (e, s) {
+      debugPrint('❌ CotacaoRepository.atualizarCotacao HTTP falhou: $e');
+      debugPrint('$s');
+      rethrow;
     }
-
-    // ── Offline ───────────────────────────────────────────────────
-    final values = <String, dynamic>{
-      'sync_status': 'pending',
-      'updated_at':  DateTime.now().toIso8601String(),
-    };
-    // idCliente == null → remove associação (espelha o backend)
-    values['id_cliente'] = dto.idCliente;
-    if (dto.validadeAte != null) {
-      values['validade_ate'] = dto.validadeAte!.toIso8601String().split('T').first;
-    }
-
-    if (dto.nomeClienteSingular != null) {
-  values['nome_cliente_singular'] = dto.nomeClienteSingular;       // ← novo
-}
-if (dto.apelidoClienteSingular != null) {
-  values['apelido_cliente_singular'] = dto.apelidoClienteSingular; // ← novo
-}
-    if (dto.observacoes != null) {
-      values['observacoes'] = dto.observacoes;
-    }
-    if (dto.statusCotacao != null) {
-      values['status_cotacao'] = dto.statusCotacao;
-    }
-
-    await _db.update('cotacao', values, where: 'id = ?', whereArgs: [idCotacao]);
-
-    await _syncQueueDao.enqueue('cotacao', 'UPDATE', {
-      'idCotacao':     idCotacao,
-      'idCliente':     dto.idCliente,
-      'nomeClienteSingular':    dto.nomeClienteSingular,     // ← novo
-      'apelidoClienteSingular': dto.apelidoClienteSingular, 
-      'validadeAte':   dto.validadeAte?.toIso8601String().split('T').first,
-      'observacoes':   dto.observacoes,
-      'statusCotacao': dto.statusCotacao,
-    });
-
-    final row = await _dao.getById(idCotacao);
-    return row != null ? await _cotacaoComItensDoCache(row) : _cotacaoVazia(idCotacao);
   }
+
+  // ── Offline ───────────────────────────────────────────────────
+  debugPrint('📴 CotacaoRepository.atualizarCotacao — atualizando offline');
+
+  final values = <String, dynamic>{
+    'sync_status': 'pending',
+    'updated_at': DateTime.now().toIso8601String(),
+  };
+
+  values['id_cliente'] = dto.idCliente;
+
+  if (dto.validadeAte != null) {
+    values['validade_ate'] =
+        dto.validadeAte!.toIso8601String().split('T').first;
+  }
+
+  if (dto.nomeClienteSingular != null) {
+    values['nome_cliente_singular'] = dto.nomeClienteSingular;
+  }
+
+  if (dto.apelidoClienteSingular != null) {
+    values['apelido_cliente_singular'] = dto.apelidoClienteSingular;
+  }
+
+  if (dto.observacoes != null) {
+    values['observacoes'] = dto.observacoes;
+  }
+
+  if (dto.statusCotacao != null) {
+    values['status_cotacao'] = dto.statusCotacao;
+  }
+
+  debugPrint('💾 CotacaoRepository.atualizarCotacao — values SQLite: $values');
+
+  await _db.update(
+    'cotacao',
+    values,
+    where: 'id = ?',
+    whereArgs: [idCotacao],
+  );
+
+  final payload = {
+    'idCotacao': idCotacao,
+    'idCliente': dto.idCliente,
+    'nomeClienteSingular': dto.nomeClienteSingular,
+    'apelidoClienteSingular': dto.apelidoClienteSingular,
+    'validadeAte': dto.validadeAte?.toIso8601String().split('T').first,
+    'observacoes': dto.observacoes,
+    'statusCotacao': dto.statusCotacao,
+  };
+
+  debugPrint('📦 CotacaoRepository.atualizarCotacao — payload sync_queue: $payload');
+
+  await _syncQueueDao.enqueue('cotacao', 'UPDATE', payload);
+
+  final row = await _dao.getById(idCotacao);
+
+  debugPrint('🔎 CotacaoRepository.atualizarCotacao — row após update: $row');
+
+  return row != null
+      ? await _cotacaoComItensDoCache(row)
+      : _cotacaoVazia(idCotacao);
+}
 
   // ══════════════════════════════════════════════════════════════════
   // EXCLUIR (soft delete)

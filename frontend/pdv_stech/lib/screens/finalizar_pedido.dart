@@ -164,23 +164,52 @@ if (_modoCredito) {
   // ── Finalizar via Provider ────────────────────────────────────────────────
 
 Future<void> _finalizar() async {
-  if (_finalizando) return;
+  if (_finalizando) {
+    debugPrint('⏭️ FinalizacaoScreen._finalizar — já está finalizando, ignorado');
+    return;
+  }
+
+  debugPrint('════════════════════════════════════════════════════');
+  debugPrint('🧾 FinalizacaoScreen._finalizar — início');
+  debugPrint('🆔 idPedido: ${widget.pedido.idPedido}');
+  debugPrint('📌 referencia: ${widget.pedido.referencia}');
+  debugPrint('💰 totalPedido: ${widget.pedido.total}');
+  debugPrint('💳 idTipoPagamento: $_idTipoPagamento');
+  debugPrint('💵 ehDinheiro: $_ehDinheiro');
+  debugPrint('💵 valorPagoDigitado: $_valorPago');
+  debugPrint('💳 modoCredito: $_modoCredito');
+  debugPrint('🔒 clienteBloqueado: $_clienteBloqueado');
+  debugPrint('👤 tipoCliente: $_tipoCliente');
+  debugPrint('🏢 empresaSelecionada.id: ${_empresaSelecionada?.id}');
+  debugPrint('🏢 empresaSelecionada.nome: ${_empresaSelecionada?.nomeCompleto}');
+  debugPrint('👤 nomeCtrl.text: "${_nomeCtrl.text}"');
+  debugPrint('👤 apelidoCtrl.text: "${_apelidoCtrl.text}"');
+  debugPrint('👤 widget.pedido.idCliente: ${widget.pedido.idCliente}');
+  debugPrint('👤 widget.pedido.nomeClienteSingular: "${widget.pedido.nomeClienteSingular}"');
+  debugPrint('👤 widget.pedido.apelidoClienteSingular: "${widget.pedido.apelidoClienteSingular}"');
+  debugPrint('════════════════════════════════════════════════════');
 
   if (_modoCredito) {
+    debugPrint('➡️ FinalizacaoScreen._finalizar — redirecionando para _finalizarCredito()');
     return _finalizarCredito();
   }
 
   if (_idTipoPagamento == null) {
+    debugPrint('⚠️ FinalizacaoScreen._finalizar — tipo de pagamento não seleccionado');
     return _snack('Seleccione o tipo de pagamento', Colors.orange);
   }
 
   if (_ehDinheiro && _valorPago < widget.pedido.total) {
+    debugPrint(
+      '⚠️ FinalizacaoScreen._finalizar — valor insuficiente: recebido=$_valorPago total=${widget.pedido.total}',
+    );
     return _snack('O valor recebido é insuficiente', Colors.orange);
   }
 
   if (!_clienteBloqueado &&
       _tipoCliente == 'empresa' &&
       _empresaSelecionada == null) {
+    debugPrint('⚠️ FinalizacaoScreen._finalizar — empresa não seleccionada');
     return _snack('Seleccione a empresa', Colors.orange);
   }
 
@@ -190,35 +219,90 @@ Future<void> _finalizar() async {
       ? widget.pedido.idCliente
       : (_tipoCliente == 'empresa' ? _empresaSelecionada?.id : null);
 
+  final nomeSingularFinal =
+      (!_clienteBloqueado && _tipoCliente == 'singular')
+          ? _nomeCtrl.text.trim().nullIfEmpty
+          : null;
+
+  final apelidoSingularFinal =
+      (!_clienteBloqueado && _tipoCliente == 'singular')
+          ? _apelidoCtrl.text.trim().nullIfEmpty
+          : null;
+
+  final valorPagoFinal = _ehDinheiro ? _valorPago : widget.pedido.total;
+
+  debugPrint('════════════════════════════════════════════════════');
+  debugPrint('📦 FinalizacaoScreen._finalizar — DTO calculado');
+  debugPrint('🆔 idPedido: ${widget.pedido.idPedido}');
+  debugPrint('💳 idTipoPagamento: $_idTipoPagamento');
+  debugPrint('💰 valorPagoFinal: $valorPagoFinal');
+  debugPrint('👤 idClienteFinal: $idClienteFinal');
+  debugPrint('👤 nomeSingularFinal: "$nomeSingularFinal"');
+  debugPrint('👤 apelidoSingularFinal: "$apelidoSingularFinal"');
+  debugPrint('🔒 clienteBloqueado: $_clienteBloqueado');
+  debugPrint('👤 tipoCliente: $_tipoCliente');
+  debugPrint('════════════════════════════════════════════════════');
+
   try {
-    await context.read<PedidoProvider>().finalizarPedido(
-      widget.pedido.idPedido,
-      FinalizarPedidoRequestModel(
-        idTipoPagamento: _idTipoPagamento!,
-        valorPago: _ehDinheiro ? _valorPago : widget.pedido.total,
-        idCliente: idClienteFinal,
-        nomeClienteSingular:
-            (!_clienteBloqueado && _tipoCliente == 'singular')
-                ? _nomeCtrl.text.trim().nullIfEmpty
-                : null,
-        apelidoClienteSingular:
-            (!_clienteBloqueado && _tipoCliente == 'singular')
-                ? _apelidoCtrl.text.trim().nullIfEmpty
-                : null,
-      ),
+    final dto = FinalizarPedidoRequestModel(
+      idTipoPagamento: _idTipoPagamento!,
+      valorPago: valorPagoFinal,
+      idCliente: idClienteFinal,
+      nomeClienteSingular: nomeSingularFinal,
+      apelidoClienteSingular: apelidoSingularFinal,
     );
 
-    if (!mounted) return;
+    debugPrint('🚀 FinalizacaoScreen._finalizar — chamando PedidoProvider.finalizarPedido');
+    debugPrint('📦 dto.idTipoPagamento: ${dto.idTipoPagamento}');
+    debugPrint('📦 dto.valorPago: ${dto.valorPago}');
+    debugPrint('📦 dto.idCliente: ${dto.idCliente}');
+    debugPrint('📦 dto.nomeClienteSingular: "${dto.nomeClienteSingular}"');
+    debugPrint('📦 dto.apelidoClienteSingular: "${dto.apelidoClienteSingular}"');
+
+    await context.read<PedidoProvider>().finalizarPedido(
+          widget.pedido.idPedido,
+          dto,
+        );
+
+    if (!mounted) {
+      debugPrint('⏭️ FinalizacaoScreen._finalizar — widget desmontado após finalizar');
+      return;
+    }
 
     final provider = context.read<PedidoProvider>();
+
+    debugPrint('════════════════════════════════════════════════════');
+    debugPrint('📥 FinalizacaoScreen._finalizar — retorno do PedidoProvider');
+    debugPrint('📌 provider.status: ${provider.status}');
+    debugPrint('❌ provider.errorMessage: ${provider.errorMessage}');
+    debugPrint('════════════════════════════════════════════════════');
+
     if (provider.errorMessage == null) {
+      debugPrint('✅ FinalizacaoScreen._finalizar — pedido finalizado com sucesso');
+      debugPrint('🧹 FinalizacaoScreen._finalizar — limpando PedidoAtivoController');
+
       PedidoAtivoController.instance.limpar();
+
+      debugPrint('↩️ FinalizacaoScreen._finalizar — fechando tela com resultado true');
       Navigator.pop(context, true);
     } else {
+      debugPrint(
+        '❌ FinalizacaoScreen._finalizar — erro vindo do provider: ${provider.errorMessage}',
+      );
       _snack('Erro: ${provider.errorMessage}', _kAccent);
     }
+  } catch (e, s) {
+    debugPrint('❌ FinalizacaoScreen._finalizar — exception inesperada: $e');
+    debugPrint('$s');
+
+    if (mounted) {
+      _snack('Erro ao finalizar pedido: $e', _kAccent);
+    }
   } finally {
-    if (mounted) setState(() => _finalizando = false);
+    if (mounted) {
+      debugPrint('🏁 FinalizacaoScreen._finalizar — fim, _finalizando=false');
+      setState(() => _finalizando = false);
+    }
   }
 }
 
