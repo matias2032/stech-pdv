@@ -78,7 +78,7 @@ class DocumentoPdfModel {
   final String? salesperson;
   final String prazoPagamento;
   final PedidoModel pedido;
-  final ClienteModel cliente;
+final ClienteModel? cliente;
   final String tipoPagamento;
 
   const DocumentoPdfModel({
@@ -87,7 +87,7 @@ class DocumentoPdfModel {
     required this.codigoAT,
     required this.dataEmissao,
     required this.pedido,
-    required this.cliente,
+     this.cliente,
     required this.tipoPagamento,
 
     this.salesperson,
@@ -99,7 +99,7 @@ class DocumentoPdfModel {
   factory DocumentoPdfModel.deApiModel({
     required DocumentoFiscalModel apiModel,
     required PedidoModel pedido,
-    required ClienteModel cliente,
+ClienteModel? cliente,
     required String tipoPagamento,
     String? salesperson,
     String prazoPagamento = 'Pronto Pagamento',
@@ -122,7 +122,7 @@ class DocumentoPdfModel {
 factory DocumentoPdfModel.deApiModelMultiplos({
   required DocumentoFiscalModel apiModel,
   required List<PedidoModel> pedidos,
-  required ClienteModel cliente,
+ClienteModel? cliente,
   required String tipoPagamento,
 }) {
   // Agrega todos os itens numa lista única
@@ -702,9 +702,27 @@ pw.Widget _docFiscalCabecalho(DocumentoPdfModel doc, pw.MemoryImage icon) {
 
   // ─── 2. Emissor | Cliente ──────────────────────────────────────
 
-  pw.Widget _docFiscalEmissorCliente(DocumentoPdfModel doc) {
-    final c = doc.cliente;
-    final nomeCliente = '${c.nome ?? ''} ${c.apelido ?? ''}'.trim();
+pw.Widget _docFiscalEmissorCliente(DocumentoPdfModel doc) {
+  final c = doc.cliente;
+
+  final nomeSingular = [
+    doc.pedido.nomeClienteSingular,
+    doc.pedido.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .trim();
+
+  final nomeClienteModel = c != null
+      ? '${c.nome ?? ''} ${c.apelido ?? ''}'.trim()
+      : '';
+
+  final ehClienteSingular =
+      doc.pedido.idCliente == null && nomeSingular.isNotEmpty;
+
+  final nomeCliente = ehClienteSingular
+      ? nomeSingular
+      : nomeClienteModel;
 
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -732,12 +750,14 @@ pw.Widget _docFiscalCabecalho(DocumentoPdfModel doc, pw.MemoryImage icon) {
               pw.SizedBox(height: 2),
               if (nomeCliente.isNotEmpty)
                 _t('Nome:  $nomeCliente', bold: true, size: 8.5),
-              if (c.nuit != null && c.nuit!.isNotEmpty)
-                _t('NUIT:  ${c.nuit}', size: 8),
-              if (c.morada != null && c.morada!.isNotEmpty)
-                _t('Endereço:  ${c.morada}', size: 8),
-              if (c.contacto != null && c.contacto!.isNotEmpty)
-                _t('Tel:  ${c.contacto}', size: 8),
+            if (c != null && c.nuit != null && c.nuit!.isNotEmpty)
+  _t('NUIT:  ${c.nuit}', size: 8),
+if (c != null && c.morada != null && c.morada!.isNotEmpty)
+  _t('Endereço:  ${c.morada}', size: 8),
+if (c != null && c.contacto != null && c.contacto!.isNotEmpty)
+  _t('Tel:  ${c.contacto}', size: 8),
+if (ehClienteSingular)
+  _t('Tipo:  Cliente singular', size: 8, color: PdfColors.grey700),
             ],
           ),
         ),
@@ -1282,7 +1302,21 @@ pw.Widget _docFiscalCodigoAT(String codigoAT) {
     final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
 
     final bool isSmall = paperFormat != PaperFormat.a4;
-    final bool temCliente = nomeCliente != null || telefoneCliente != null;
+final nomeSingular = [
+  pedido.nomeClienteSingular,
+  pedido.apelidoClienteSingular,
+]
+    .where((v) => v != null && v.trim().isNotEmpty)
+    .join(' ')
+    .trim();
+
+final nomeClienteFinal =
+    (nomeCliente != null && nomeCliente.trim().isNotEmpty)
+        ? nomeCliente.trim()
+        : nomeSingular;
+
+final bool temCliente =
+    nomeClienteFinal.isNotEmpty || telefoneCliente != null;
     final double alturaDinamica =
         _estimarAlturaComprovativo(pedido, isSmall, temCliente);
     final pageFormat = _pageFormatFor(paperFormat, alturaDinamica);
@@ -1322,12 +1356,12 @@ pw.Widget _docFiscalCodigoAT(String codigoAT) {
             _divider(isSmall),
             pw.SizedBox(height: isSmall ? 4 : 12),
             if (temCliente) ...[
-              _comprovativoCliente(
-                nome: nomeCliente,
-                telefone: telefoneCliente,
-                isSmall: isSmall,
-                baseFontSize: baseFontSize,
-              ),
+           _comprovativoCliente(
+  nome: nomeClienteFinal,
+  telefone: telefoneCliente,
+  isSmall: isSmall,
+  baseFontSize: baseFontSize,
+),
               pw.SizedBox(height: isSmall ? 4 : 12),
               _divider(isSmall),
               pw.SizedBox(height: isSmall ? 4 : 12),

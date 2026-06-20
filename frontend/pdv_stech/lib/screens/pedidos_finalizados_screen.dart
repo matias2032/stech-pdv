@@ -9,7 +9,7 @@ import '../widgets/app_sidebar.dart';
 import 'package:http/http.dart' as http;
 import 'package:api_compartilhado/api_config.dart';
 import 'package:provider/provider.dart';
-
+import 'package:http/http.dart' as http;
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 const _kPrimary    = Color(0xFF1B2A6B);
 const _kAccent     = Color(0xFFC8102E);
@@ -392,25 +392,255 @@ bool get _temClienteSingular => _nomeClienteSingular.isNotEmpty;
     }
   }
 
+Future<TipoDocumentoModel?> _selecionarTipoDocumento(BuildContext context) async {
+  final provider = context.read<DocumentoFiscalProvider>();
 
-      Future<void> _imprimir(BuildContext context) async {
-  if (_imprimindo) return;
-  setState(() => _imprimindo = true);
-  try {
-    final file = await widget.pdfService.gerarComprovativo(
-      pedido: p,
-      tipoPagamento: widget.tipoPagamento,
-      paperFormat: PaperFormat.a4,
-    );
-    await widget.pdfService.abrirPdf(file);
-  } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Erro ao gerar factura: $e'),
+  if (provider.tipos.isEmpty) {
+    await provider.carregarTipos();
+  }
+
+  if (!context.mounted) return null;
+
+  final tipos = provider.tipos;
+
+  if (tipos.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Nenhum tipo de documento fiscal disponível.'),
         backgroundColor: _kAccent,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      ),
+    );
+    return null;
+  }
+
+  return showModalBottomSheet<TipoDocumentoModel>(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
+    builder: (ctx) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Escolha o documento fiscal',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _kPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...tipos.map((tipo) => _opcaoDocumento(ctx, tipo)).toList(),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+
+
+Widget _opcaoDocumento(BuildContext context, TipoDocumentoModel tipo) {
+  return InkWell(
+    onTap: () => Navigator.pop(context, tipo),
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: _kPrimary.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kPrimary.withOpacity(0.10)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _kPrimary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _iconeDocumento(tipo.codigo),
+              color: _kPrimary,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tipo.nome,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _kPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tipo.prefixo,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+        ],
+      ),
+    ),
+  );
+}
+
+IconData _iconeDocumento(String codigo) {
+  return switch (codigo) {
+    'FAT' => Icons.receipt_long_rounded,
+    'REC' => Icons.payments_rounded,
+    'NCO' => Icons.note_alt_rounded,
+    'VD' => Icons.point_of_sale_rounded,
+    _ => Icons.description_rounded,
+  };
+}
+
+ClienteModel _clientePdfFallback() {
+  if (_temClienteSingular) {
+    return ClienteModel(
+      id: 0,
+      nome: p.nomeClienteSingular?.trim().isNotEmpty == true
+          ? p.nomeClienteSingular!.trim()
+          : 'Cliente',
+      apelido: p.apelidoClienteSingular?.trim().isNotEmpty == true
+          ? p.apelidoClienteSingular!.trim()
+          : '',
+      idPerfil: 1,
+      nomePerfil: 'Cliente singular',
+    );
+  }
+
+  return ClienteModel(
+    id: p.idCliente ?? 0,
+    nome: p.idCliente != null ? 'Cliente #${p.idCliente}' : 'Cliente',
+    apelido: p.idCliente != null ? '' : 'Avulso',
+    idPerfil: 1,
+    nomePerfil: 'Sem perfil',
+  );
+}
+
+
+
+Future<void> _imprimir(BuildContext context) async {
+  if (_imprimindo) return;
+
+  final tipoDoc = await _selecionarTipoDocumento(context);
+  if (tipoDoc == null) return;
+
+  setState(() => _imprimindo = true);
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Row(
+        children: const [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(width: 12),
+          Text('A emitir documento fiscal…'),
+        ],
+      ),
+      backgroundColor: _kPrimary,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      duration: const Duration(seconds: 30),
+    ),
+  );
+
+  try {
+    final docProvider = context.read<DocumentoFiscalProvider>();
+
+    final idUsuario = SessaoService.instance.idUsuario;
+    if (idUsuario == 0) {
+      throw Exception('Sessão inválida. Faça login novamente.');
+    }
+
+    final apiDoc = await docProvider.emitirMultiplos(
+      idsPedido: [p.idPedido],
+      codigoTipo: tipoDoc.codigo,
+      idUsuario: idUsuario,
+      codigoAt: FiscalConstants.codigoAT,
+    );
+
+    if (apiDoc == null) {
+      throw Exception(docProvider.erro ?? 'Não foi possível emitir o documento.');
+    }
+
+    ClienteModel? cliente;
+
+    if (p.idCliente != null) {
+      if (_cliente == null) {
+        await _carregarCliente();
+      }
+      cliente = _cliente;
+    }
+
+    cliente ??= _clientePdfFallback();
+
+    final pdfDoc = DocumentoPdfModel.deApiModelMultiplos(
+      apiModel: apiDoc,
+      pedidos: [p],
+      cliente: cliente,
+      tipoPagamento: widget.tipoPagamento,
+    );
+
+    final file = await widget.pdfService.gerarDocumentoFiscal(pdfDoc);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+
+    await widget.pdfService.abrirPdf(file);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao gerar documento fiscal: $e'),
+          backgroundColor: _kAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
   } finally {
     if (mounted) setState(() => _imprimindo = false);
@@ -519,7 +749,7 @@ InkWell(
                       : IconButton(
                           icon: const Icon(Icons.print_outlined,
                               color: _kPrimary, size: 20),
-                          tooltip: 'Imprimir factura',
+                     tooltip: 'Gerar documento fiscal',
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: () => _imprimir(context),
