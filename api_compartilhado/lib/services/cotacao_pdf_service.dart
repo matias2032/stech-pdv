@@ -217,43 +217,62 @@ class CotacaoPdfService {
 
   // ─── 2. Emissor | Cliente ──────────────────────────────────────
 
-  pw.Widget _emissorCliente(CotacaoModel cotacao) {
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Expanded(
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _t(_Empresa.nomeCompleto, bold: true, size: 8.5),
-              pw.SizedBox(height: 2),
-              _t(_Empresa.bairro, size: 8),
-              _t(_Empresa.telefone, size: 8),
-              _t(_Empresa.email, size: 8),
-              _t(_Empresa.website, size: 8),
-              _t(_Empresa.nuit, size: 8),
-            ],
-          ),
+pw.Widget _emissorCliente(CotacaoModel cotacao) {
+  final nomeCliente = _nomeClienteCotacao(cotacao);
+  final ehSingular = _cotacaoEhSingular(cotacao);
+  final temCliente = nomeCliente != 'Sem cliente associado';
+
+  return pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _t(_Empresa.nomeCompleto, bold: true, size: 8.5),
+            pw.SizedBox(height: 2),
+            _t(_Empresa.bairro, size: 8),
+            _t(_Empresa.telefone, size: 8),
+            _t(_Empresa.email, size: 8),
+            _t(_Empresa.website, size: 8),
+            _t(_Empresa.nuit, size: 8),
+          ],
         ),
-        pw.SizedBox(width: 20),
-        pw.Expanded(
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _t('Exmo. (s) Sr(s)', size: 8, color: PdfColors.grey700),
-              pw.SizedBox(height: 2),
-              if (cotacao.nomeCliente != null &&
-                  cotacao.nomeCliente!.isNotEmpty)
-                _t('Nome:  ${cotacao.nomeCliente}', bold: true, size: 8.5),
-              if (cotacao.nomeUsuario != null &&
-                  cotacao.nomeUsuario!.isNotEmpty)
-                _t('Atendido por:  ${cotacao.nomeUsuario}', size: 8),
-            ],
-          ),
+      ),
+      pw.SizedBox(width: 20),
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _t('Exmo. (s) Sr(s)', size: 8, color: PdfColors.grey700),
+            pw.SizedBox(height: 2),
+
+            if (temCliente)
+              _t(
+                'Nome:  $nomeCliente',
+                bold: true,
+                size: 8.5,
+              ),
+
+            if (ehSingular)
+              _t(
+                'Tipo:  Cliente singular',
+                size: 8,
+                color: PdfColors.grey700,
+              ),
+
+            if (cotacao.nomeUsuario != null &&
+                cotacao.nomeUsuario!.trim().isNotEmpty)
+              _t(
+                'Atendido por:  ${cotacao.nomeUsuario!.trim()}',
+                size: 8,
+              ),
+          ],
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   // ─── 3. Metadados ─────────────────────────────────────────────
 
@@ -545,6 +564,35 @@ class CotacaoPdfService {
       ],
     );
   }
+
+
+  String _nomeClienteCotacao(CotacaoModel c) {
+  if (c.nomeCliente != null && c.nomeCliente!.trim().isNotEmpty) {
+    return c.nomeCliente!.trim();
+  }
+
+  final nomeSingular = [
+    c.nomeClienteSingular,
+    c.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .trim();
+
+  if (nomeSingular.isNotEmpty) {
+    return nomeSingular;
+  }
+
+  return 'Sem cliente associado';
+}
+
+bool _cotacaoEhSingular(CotacaoModel c) {
+  return (c.nomeCliente == null || c.nomeCliente!.trim().isEmpty) &&
+      ((c.nomeClienteSingular != null &&
+              c.nomeClienteSingular!.trim().isNotEmpty) ||
+          (c.apelidoClienteSingular != null &&
+              c.apelidoClienteSingular!.trim().isNotEmpty));
+}
 
   // ─── 8. Rodapé do documento ───────────────────────────────────
 

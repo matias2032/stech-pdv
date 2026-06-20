@@ -605,6 +605,14 @@ class _DialogoConfirmacao extends StatelessWidget {
   }
 }
 
+  bool _cotacaoEhSingular(CotacaoModel c) {
+  return (c.nomeCliente == null || c.nomeCliente!.trim().isEmpty) &&
+      ((c.nomeClienteSingular != null &&
+              c.nomeClienteSingular!.trim().isNotEmpty) ||
+          (c.apelidoClienteSingular != null &&
+              c.apelidoClienteSingular!.trim().isNotEmpty));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Linha de Cotação
 // ─────────────────────────────────────────────────────────────────────────────
@@ -665,15 +673,39 @@ final nomeCliente = _nomeClienteCotacao(cotacao);
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      nomeCliente,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: _kCinzaTexto,
-                      ),
-                    ),
+               Row(
+  children: [
+    Expanded(
+      child: Text(
+        nomeCliente,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 11,
+          color: _kCinzaTexto,
+        ),
+      ),
+    ),
+    if (_cotacaoEhSingular(cotacao)) ...[
+      const SizedBox(width: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: _kCinzaTexto.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'Singular',
+          style: TextStyle(
+            fontSize: 9,
+            color: _kCinzaTexto,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  ],
+),
                   ],
                 ),
               ),
@@ -813,6 +845,8 @@ class _BotaoPdfCotacaoState extends State<_BotaoPdfCotacao> {
       if (mounted) setState(() => _gerando = false);
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
