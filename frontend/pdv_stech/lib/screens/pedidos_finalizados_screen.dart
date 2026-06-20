@@ -105,10 +105,19 @@ Widget build(BuildContext context) {
   final provider = context.watch<PedidoProvider>();
 
   // Filtragem calculada na hora a partir do Provider
-  final filtrados = provider.pedidos.where((p) {
-    return p.referencia.toLowerCase().contains(_pesquisa) ||
-        _currencyFmt.format(p.total).toLowerCase().contains(_pesquisa);
-  }).toList();
+final filtrados = provider.pedidos.where((p) {
+  final nomeSingular = [
+    p.nomeClienteSingular,
+    p.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .toLowerCase();
+
+  return p.referencia.toLowerCase().contains(_pesquisa) ||
+      nomeSingular.contains(_pesquisa) ||
+      _currencyFmt.format(p.total).toLowerCase().contains(_pesquisa);
+}).toList();
 
   final totalGeral = filtrados.fold(0.0, (acc, p) => acc + p.total);
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -353,6 +362,18 @@ class _PedidoCardState extends State<_PedidoCard> {
 
   PedidoModel get p => widget.pedido;
 
+  String get _nomeClienteSingular {
+  return [
+    p.nomeClienteSingular,
+    p.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .trim();
+}
+
+bool get _temClienteSingular => _nomeClienteSingular.isNotEmpty;
+
    // ← aqui — usa p que é getter local
   Future<void> _carregarCliente() async {
     if (_cliente != null || p.idCliente == null) return;
@@ -543,61 +564,126 @@ InkWell(
         children: [
 
           // ── Cliente ──────────────────────────────────────────────────
-if (p.idCliente != null) ...[
-  _labelSeccao('Cliente', Icons.business_outlined),
+// ── Cliente ──────────────────────────────────────────────────
+if (p.idCliente != null || _temClienteSingular) ...[
+  _labelSeccao(
+    'Cliente',
+    p.idCliente != null ? Icons.business_outlined : Icons.person_outline,
+  ),
   const SizedBox(height: 6),
-  _carregandoCliente
-      ? const Padding(
-          padding: EdgeInsets.symmetric(vertical: 4),
-          child: SizedBox(
-            height: 16, width: 16,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: _kPrimary),
-          ),
-        )
-      : _cliente == null
-          ? Text('ID: ${p.idCliente}',
-              style: const TextStyle(fontSize: 13, color: Colors.grey))
-          : Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: _kPrimary.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: _kPrimary.withOpacity(0.12)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.business_rounded,
-                      size: 15, color: _kPrimary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _cliente!.nomeCompleto,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _kPrimary,
-                          ),
-                        ),
-                        if (_cliente!.contacto != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            _cliente!.contacto!,
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.grey),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+
+  if (p.idCliente != null) ...[
+    _carregandoCliente
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: _kPrimary,
               ),
             ),
+          )
+        : _cliente == null
+            ? Text(
+                'ID: ${p.idCliente}',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              )
+            : Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: _kPrimary.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _kPrimary.withOpacity(0.12),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.business_rounded,
+                      size: 15,
+                      color: _kPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _cliente!.nomeCompleto,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _kPrimary,
+                            ),
+                          ),
+                          if (_cliente!.contacto != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              _cliente!.contacto!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+  ] else ...[
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _kPrimary.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _kPrimary.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.person_rounded,
+            size: 15,
+            color: _kPrimary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _nomeClienteSingular,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _kPrimary,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'Singular',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ],
+
   const SizedBox(height: 10),
 ],
           // Itens de produto

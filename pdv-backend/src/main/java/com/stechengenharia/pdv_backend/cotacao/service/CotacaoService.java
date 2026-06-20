@@ -155,34 +155,31 @@ public CotacaoResponseDTO.Detalhe atualizarCotacao(Long idCotacao, CotacaoReques
         validarEditavel(cotacao, "actualização");
     }
 
-    // ── Cliente cadastrado vs cliente singular ───────────────────────
-    if (dto.idCliente() != null) {
-        cotacao.setCliente(encontrarClienteOuLancar(dto.idCliente()));
+// ── Cliente cadastrado vs cliente singular ───────────────────────
+// Só altera cliente se o request realmente trouxe dados de cliente.
+// Assim, uma actualização apenas de status não apaga o cliente existente.
+boolean veioClienteCadastrado = dto.idCliente() != null;
+boolean veioNomeSingular =
+        dto.nomeClienteSingular() != null && !dto.nomeClienteSingular().isBlank();
+boolean veioApelidoSingular =
+        dto.apelidoClienteSingular() != null && !dto.apelidoClienteSingular().isBlank();
 
-        // Se escolheu cliente cadastrado, limpa os campos soltos
-        cotacao.setNomeClienteSingular(null);
-        cotacao.setApelidoClienteSingular(null);
+if (veioClienteCadastrado) {
+    cotacao.setCliente(encontrarClienteOuLancar(dto.idCliente()));
+    cotacao.setNomeClienteSingular(null);
+    cotacao.setApelidoClienteSingular(null);
 
-    } else {
-        // Cliente singular avulso
-        cotacao.setCliente(null);
+} else if (dto.nomeClienteSingular() != null || dto.apelidoClienteSingular() != null) {
+    cotacao.setCliente(null);
 
-        if (dto.nomeClienteSingular() != null) {
-            cotacao.setNomeClienteSingular(
-                    !dto.nomeClienteSingular().isBlank()
-                            ? dto.nomeClienteSingular().trim()
-                            : null
-            );
-        }
+    cotacao.setNomeClienteSingular(
+            veioNomeSingular ? dto.nomeClienteSingular().trim() : null
+    );
 
-        if (dto.apelidoClienteSingular() != null) {
-            cotacao.setApelidoClienteSingular(
-                    !dto.apelidoClienteSingular().isBlank()
-                            ? dto.apelidoClienteSingular().trim()
-                            : null
-            );
-        }
-    }
+    cotacao.setApelidoClienteSingular(
+            veioApelidoSingular ? dto.apelidoClienteSingular().trim() : null
+    );
+}
 
     if (dto.validadeAte() != null) {
         cotacao.setValidadeAte(dto.validadeAte());
@@ -463,6 +460,17 @@ if (!cotacao.temItens()) {
         pedidoRequest.observacoes     = dto.observacoes() != null
                 ? dto.observacoes()
                 : cotacao.getObservacoes();
+
+                // ── Cliente cadastrado ou cliente singular vindo da cotação ─────────────
+if (cotacao.getCliente() != null) {
+    pedidoRequest.idCliente = cotacao.getCliente().getId();
+    pedidoRequest.nomeClienteSingular = null;
+    pedidoRequest.apelidoClienteSingular = null;
+} else {
+    pedidoRequest.idCliente = null;
+    pedidoRequest.nomeClienteSingular = cotacao.getNomeClienteSingular();
+    pedidoRequest.apelidoClienteSingular = cotacao.getApelidoClienteSingular();
+}
 
         pedidoRequest.itensProduto = cotacao.getItensProduto().stream()
                 .map(item -> {

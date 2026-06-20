@@ -40,10 +40,15 @@ Future<void> _converter() async {
 
   setState(() => _processando = true);
   try {
-    final pedido = await context.read<CotacaoProvider>().converterEmPedido(
-      widget.cotacao.idCotacao,
-      const ConverterCotacaoEmPedidoRequestModel(idTipoPagamento: 1),
-    );
+final pedido = await context.read<CotacaoProvider>().converterEmPedido(
+  widget.cotacao.idCotacao,
+  ConverterCotacaoEmPedidoRequestModel(
+    idTipoPagamento: 1,
+    idCliente: widget.cotacao.idCliente,
+    nomeClienteSingular: widget.cotacao.nomeClienteSingular,
+    apelidoClienteSingular: widget.cotacao.apelidoClienteSingular,
+  ),
+);
     if (!mounted) return;
 
     final provider = context.read<CotacaoProvider>();
@@ -307,36 +312,101 @@ Future<void> _cancelar() async {
     );
   }
 
-  Widget _buildCardCliente(CotacaoModel cotacao) {
-    return _card(
-      child: Row(children: [
+  String _nomeClienteCotacao(CotacaoModel c) {
+  if (c.nomeCliente != null && c.nomeCliente!.trim().isNotEmpty) {
+    return c.nomeCliente!.trim();
+  }
+
+  final nomeSingular = [
+    c.nomeClienteSingular,
+    c.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .trim();
+
+  if (nomeSingular.isNotEmpty) {
+    return nomeSingular;
+  }
+
+  return 'Sem cliente associado';
+}
+
+bool _cotacaoTemCliente(CotacaoModel c) {
+  return _nomeClienteCotacao(c) != 'Sem cliente associado';
+}
+
+bool _cotacaoEhSingular(CotacaoModel c) {
+  return (c.nomeCliente == null || c.nomeCliente!.trim().isEmpty) &&
+      ((c.nomeClienteSingular != null && c.nomeClienteSingular!.trim().isNotEmpty) ||
+          (c.apelidoClienteSingular != null && c.apelidoClienteSingular!.trim().isNotEmpty));
+}
+
+Widget _buildCardCliente(CotacaoModel cotacao) {
+  final nomeCliente = _nomeClienteCotacao(cotacao);
+  final temCliente = _cotacaoTemCliente(cotacao);
+  final ehSingular = _cotacaoEhSingular(cotacao);
+
+  return _card(
+    child: Row(
+      children: [
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: _kPrimary.withOpacity(0.08),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.person_outline, color: _kPrimary, size: 20),
+          child: Icon(
+            ehSingular ? Icons.person_outline : Icons.business_outlined,
+            color: _kPrimary,
+            size: 20,
+          ),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Cliente',
-                style: TextStyle(fontSize: 11, color: Colors.grey)),
-            Text(
-              cotacao.nomeCliente ?? 'Sem cliente associado',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: cotacao.nomeCliente != null ? _kPrimary : Colors.grey,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Cliente',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                nomeCliente,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: temCliente ? _kPrimary : Colors.grey,
+                ),
+              ),
+              if (temCliente && ehSingular) ...[
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Cliente singular',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
-      ]),
-    );
-  }
+      ],
+    ),
+  );
+}
 
   Widget _buildCardValidade(CotacaoModel cotacao) {
     final validade = cotacao.validadeAte!;

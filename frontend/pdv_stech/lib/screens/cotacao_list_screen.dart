@@ -65,6 +65,26 @@ String _formatarTotal(double total) {
   return 'MZN ${total.toStringAsFixed(2)}';
 }
 
+String _nomeClienteCotacao(CotacaoModel c) {
+  if (c.nomeCliente != null && c.nomeCliente!.trim().isNotEmpty) {
+    return c.nomeCliente!.trim();
+  }
+
+  final nomeSingular = [
+    c.nomeClienteSingular,
+    c.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .trim();
+
+  if (nomeSingular.isNotEmpty) {
+    return nomeSingular;
+  }
+
+  return 'Sem cliente associado';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 class CotacaoListScreen extends StatefulWidget {
@@ -123,9 +143,10 @@ Future<void> _recarregar() async {
     if (_termoPesquisa.isEmpty) return lista;
     return lista.where((c) {
       final referencia  = c.referencia.toLowerCase();
-      final nomeCliente = (c.nomeCliente ?? '').toLowerCase();
-      return referencia.contains(_termoPesquisa) ||
-          nomeCliente.contains(_termoPesquisa);
+ final nomeCliente = _nomeClienteCotacao(c).toLowerCase();
+
+return referencia.contains(_termoPesquisa) ||
+    nomeCliente.contains(_termoPesquisa);
     }).toList();
   }
 
@@ -603,9 +624,7 @@ class _LinhaCotacao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nomeCliente = cotacao.nomeCliente?.isNotEmpty == true
-        ? cotacao.nomeCliente!
-        : 'Sem cliente associado';
+final nomeCliente = _nomeClienteCotacao(cotacao);
 
     return InkWell(
       onTap: () => onAbrirDetalhe(cotacao),

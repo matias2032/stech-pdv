@@ -322,6 +322,8 @@ saldoDevedorCredito: (row['saldo_devedor_credito'] as num?)?.toDouble(),
 'dataLiquidacaoCredito': dataLiquidacaoCredito?.toIso8601String(),
 'observacoesCredito': observacoesCredito,
 'saldoDevedorCredito': saldoDevedorCredito,
+if (nomeClienteSingular != null) 'nomeClienteSingular': nomeClienteSingular,
+if (apelidoClienteSingular != null) 'apelidoClienteSingular': apelidoClienteSingular,
       };
 
   // ── Model → SQLite ────────────────────────────────────────────────

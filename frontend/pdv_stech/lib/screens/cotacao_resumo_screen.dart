@@ -39,7 +39,25 @@ bool _clienteBloqueado = false; // true quando cotação já tem cliente
 @override
 void initState() {
   super.initState();
-  _clienteBloqueado = widget.cotacao.idCliente != null;
+
+  final temEmpresa = widget.cotacao.idCliente != null;
+
+  final temSingular =
+      (widget.cotacao.nomeClienteSingular != null &&
+          widget.cotacao.nomeClienteSingular!.trim().isNotEmpty) ||
+      (widget.cotacao.apelidoClienteSingular != null &&
+          widget.cotacao.apelidoClienteSingular!.trim().isNotEmpty);
+
+  _clienteBloqueado = temEmpresa || temSingular;
+
+  if (temEmpresa) {
+    _tipoCliente = 'empresa';
+  } else if (temSingular) {
+    _tipoCliente = 'singular';
+    _nomeCtrl.text = widget.cotacao.nomeClienteSingular?.trim() ?? '';
+    _apelidoCtrl.text = widget.cotacao.apelidoClienteSingular?.trim() ?? '';
+  }
+
   WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
 }
 
@@ -52,18 +70,32 @@ void initState() {
 
   // ── Carregamento ──────────────────────────────────────────────────────────
 
-  Future<void> _carregar() async {
-    try {
-      await context.read<ClienteListaProvider>().filtrarPorPerfil(1);
-    } catch (_) {}
+Future<void> _carregar() async {
+  try {
+    await context.read<ClienteListaProvider>().filtrarPorPerfil(1);
+  } catch (_) {}
 
-    if (!mounted) return;
-    setState(() {
-      _empresas   = context.read<ClienteListaProvider>().clientes;
-      _carregando = false;
-    });
+  if (!mounted) return;
+
+  final empresas = context.read<ClienteListaProvider>().clientes;
+
+  ClienteModel? empresaSelecionada;
+  if (widget.cotacao.idCliente != null) {
+    try {
+      empresaSelecionada = empresas.firstWhere(
+        (e) => e.id == widget.cotacao.idCliente,
+      );
+    } catch (_) {
+      empresaSelecionada = null;
+    }
   }
 
+  setState(() {
+    _empresas = empresas;
+    _empresaSelecionada = empresaSelecionada;
+    _carregando = false;
+  });
+}
   // ── Gerar cotação ─────────────────────────────────────────────────────────
 
 Future<void> _gerarCotacao() async {
@@ -278,11 +310,26 @@ Future<void> _gerarCotacao() async {
     );
   }
 
+String get _nomeClienteSingularAtual {
+  return [
+    widget.cotacao.nomeClienteSingular,
+    widget.cotacao.apelidoClienteSingular,
+  ]
+      .where((v) => v != null && v.trim().isNotEmpty)
+      .join(' ')
+      .trim();
+
+
+}
+
+
+bool get _temClienteSingularAtual => _nomeClienteSingularAtual.isNotEmpty;
   // ── Selector de cliente ───────────────────────────────────────────────────
 
 Widget _buildClienteCard() {
   // Se já tem cliente e está bloqueado, mostrar modo leitura
-  if (_clienteBloqueado && widget.cotacao.idCliente != null) {
+if (_clienteBloqueado &&
+    (widget.cotacao.idCliente != null || _temClienteSingularAtual)) {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,16 +345,33 @@ Widget _buildClienteCard() {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _kPrimary.withOpacity(0.15)),
                 ),
-                child: Text(
-                  widget.cotacao.nomeCliente ?? 'Cliente #${widget.cotacao.idCliente}',
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: _kPrimary),
-                ),
+         child: Text(
+  widget.cotacao.idCliente != null
+      ? (_empresaSelecionada?.nomeCompleto ??
+          widget.cotacao.nomeCliente ??
+          'Cliente #${widget.cotacao.idCliente}')
+      : _nomeClienteSingularAtual,
+  style: const TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    color: _kPrimary,
+  ),
+),
               ),
             ),
             const SizedBox(width: 8),
             TextButton.icon(
-              onPressed: () => setState(() => _clienteBloqueado = false),
+onPressed: () => setState(() {
+  _clienteBloqueado = false;
+
+  if (widget.cotacao.idCliente != null) {
+    _tipoCliente = 'empresa';
+  } else {
+    _tipoCliente = 'singular';
+    _nomeCtrl.text = widget.cotacao.nomeClienteSingular?.trim() ?? '';
+    _apelidoCtrl.text = widget.cotacao.apelidoClienteSingular?.trim() ?? '';
+  }
+}),
               icon: const Icon(Icons.edit_outlined, size: 15),
               label: const Text('Alterar', style: TextStyle(fontSize: 12)),
               style: TextButton.styleFrom(foregroundColor: _kCotacao),

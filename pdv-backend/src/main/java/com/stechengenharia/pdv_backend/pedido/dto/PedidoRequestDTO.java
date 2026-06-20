@@ -20,7 +20,11 @@ public class PedidoRequestDTO {
     public List<ItemPedidoRequestDTO> itensProduto;
  
     @Valid
-    public List<ItemServicoRequestDTO> itensServico;
+public List<ItemServicoRequestDTO> itensServico;
 
-    public Long idCliente;
+public Long idCliente;
+
+public String nomeClienteSingular;
+
+public String apelidoClienteSingular;
 }

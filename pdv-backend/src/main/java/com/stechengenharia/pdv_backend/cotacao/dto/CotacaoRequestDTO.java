@@ -92,13 +92,19 @@ public final class CotacaoRequestDTO {
     ) {}
 
     // ── POST /api/cotacoes/{id}/converter-em-pedido ───────────────────
-    public record ConverterEmPedido(
+public record ConverterEmPedido(
 
-            @NotNull(message = "O tipo de pagamento é obrigatório.")
-            Integer idTipoPagamento,
+        @NotNull(message = "O tipo de pagamento é obrigatório.")
+        Integer idTipoPagamento,
 
-            BigDecimal valorPago,
+        Long idCliente,
 
-            String observacoes
-    ) {}
+        String nomeClienteSingular,
+
+        String apelidoClienteSingular,
+
+        BigDecimal valorPago,
+
+        String observacoes
+) {}
 }

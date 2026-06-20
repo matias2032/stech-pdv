@@ -76,10 +76,28 @@ public PedidoResponseDTO criarPedido(PedidoRequestDTO dto) {
 
     pedido = pedidoRepository.save(pedido);
 
-    if (dto.idCliente != null) {
+ if (dto.idCliente != null) {
     clienteRepository.findById(dto.idCliente)
         .orElseThrow(() -> new RuntimeException("Cliente não encontrado: " + dto.idCliente));
+
     pedido.setIdCliente(dto.idCliente);
+    pedido.setNomeClienteSingular(null);
+    pedido.setApelidoClienteSingular(null);
+
+} else {
+    pedido.setIdCliente(null);
+
+    pedido.setNomeClienteSingular(
+        dto.nomeClienteSingular != null && !dto.nomeClienteSingular.isBlank()
+            ? dto.nomeClienteSingular.trim()
+            : null
+    );
+
+    pedido.setApelidoClienteSingular(
+        dto.apelidoClienteSingular != null && !dto.apelidoClienteSingular.isBlank()
+            ? dto.apelidoClienteSingular.trim()
+            : null
+    );
 }
 
         if (dto.itensProduto != null) {

@@ -522,15 +522,24 @@ class AtualizarItemCotacaoRequestModel {
 
 class ConverterCotacaoEmPedidoRequestModel {
   final int idTipoPagamento;
+  final int? idCliente;
+  final String? nomeClienteSingular;
+  final String? apelidoClienteSingular;
   final String? observacoes;
 
   const ConverterCotacaoEmPedidoRequestModel({
     required this.idTipoPagamento,
+    this.idCliente,
+    this.nomeClienteSingular,
+    this.apelidoClienteSingular,
     this.observacoes,
   });
 
   Map<String, dynamic> toJson() => {
         'idTipoPagamento': idTipoPagamento,
-        'observacoes':     observacoes,
+        'idCliente': idCliente,
+        'nomeClienteSingular': nomeClienteSingular,
+        'apelidoClienteSingular': apelidoClienteSingular,
+        'observacoes': observacoes,
       };
 }
