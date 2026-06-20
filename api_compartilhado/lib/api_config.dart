@@ -6,7 +6,7 @@ class ApiConfig {
 
 static const String _prodBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-defaultValue: 'http://127.0.0.1:8080',
+defaultValue: 'https://stech-pdv.onrender.com',
 );
 
   static const int _porta = int.fromEnvironment(
