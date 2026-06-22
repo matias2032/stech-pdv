@@ -13,6 +13,11 @@ class DespesaProvider extends ChangeNotifier {
 int? _idTipoDespesaFiltro;
   DespesaModel? _despesaSelecionada;
   List<TipoDespesaModel> get tiposDespesa => _tiposDespesa;
+
+  DespesaModel? _ultimaDespesaSalva;
+
+DespesaModel? get ultimaDespesaSalva => _ultimaDespesaSalva;
+
 int? get idTipoDespesaFiltro => _idTipoDespesaFiltro;
 
 bool get temFiltroTipoDespesa => _idTipoDespesaFiltro != null;
@@ -145,15 +150,17 @@ Future<void> carregarPorPeriodoComFiltro({
     _limparErro();
 
     try {
-      final criada = await _repository.criar(despesa);
+  final criada = await _repository.criar(despesa);
 
-      _despesas = [
-        criada,
-        ..._despesas.where((d) => d.idDespesa != criada.idDespesa),
-      ];
+_ultimaDespesaSalva = criada;
 
-      notifyListeners();
-      return true;
+_despesas = [
+  criada,
+  ..._despesas.where((d) => d.idDespesa != criada.idDespesa),
+];
+
+notifyListeners();
+return true;
     } catch (e) {
       _erro = e.toString();
       notifyListeners();
@@ -175,6 +182,7 @@ Future<void> carregarPorPeriodoComFiltro({
         id: id,
         despesa: despesa,
       );
+      _ultimaDespesaSalva = atualizada;
 
       _despesas = _despesas.map((item) {
         if (item.idDespesa == id) return atualizada;
@@ -221,6 +229,26 @@ Future<void> carregarPorPeriodoComFiltro({
       _setSalvando(false);
     }
   }
+
+void inserirOuAtualizarNaLista(DespesaModel despesa) {
+  if (_idTipoDespesaFiltro != null &&
+      despesa.idTipoDespesa != _idTipoDespesaFiltro) {
+    return;
+  }
+
+  _despesas = [
+    despesa,
+    ..._despesas.where((d) => d.idDespesa != despesa.idDespesa),
+  ];
+
+  _despesas.sort((a, b) {
+    final dataA = a.dataDespesa ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final dataB = b.dataDespesa ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return dataB.compareTo(dataA);
+  });
+
+  notifyListeners();
+}
 
   void selecionarDespesa(DespesaModel? despesa) {
     _despesaSelecionada = despesa;

@@ -35,7 +35,7 @@ FornecedorModel? _fornecedorSelecionadoCache;
   bool get _isEditMode => widget.despesa != null;
   bool _houveAlteracoes = false;
 
-  @override
+
   @override
 void initState() {
   super.initState();
@@ -141,7 +141,7 @@ final despesa = DespesaModel(
             : 'Despesa cadastrada com sucesso.',
       );
 
-      Navigator.of(context).pop(true);
+Navigator.of(context).pop(provider.ultimaDespesaSalva ?? true);
     } else {
       _mostrarSnack(
         provider.erro ?? 'Erro ao salvar despesa.',
