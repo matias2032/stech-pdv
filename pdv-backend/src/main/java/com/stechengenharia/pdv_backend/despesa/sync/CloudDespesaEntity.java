@@ -23,6 +23,9 @@ public class CloudDespesaEntity {
     @Column(name = "id_fornecedor")
     private Long idFornecedor;
 
+    @Column(name = "id_tipo_despesa")
+private Long idTipoDespesa;
+
     @Column(name = "descricao", nullable = false, length = 500)
     private String descricao;
 

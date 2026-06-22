@@ -9,7 +9,13 @@ class DespesaProvider extends ChangeNotifier {
   }) : _repository = repository ?? DespesaRepository();
 
   List<DespesaModel> _despesas = [];
+  List<TipoDespesaModel> _tiposDespesa = [];
+int? _idTipoDespesaFiltro;
   DespesaModel? _despesaSelecionada;
+  List<TipoDespesaModel> get tiposDespesa => _tiposDespesa;
+int? get idTipoDespesaFiltro => _idTipoDespesaFiltro;
+
+bool get temFiltroTipoDespesa => _idTipoDespesaFiltro != null;
 
   bool _carregando = false;
   bool _salvando = false;
@@ -31,6 +37,50 @@ class DespesaProvider extends ChangeNotifier {
       (total, despesa) => total + despesa.valorGasto,
     );
   }
+
+  Future<void> carregarTiposDespesa() async {
+  try {
+    _tiposDespesa = await _repository.listarTiposDespesa();
+    notifyListeners();
+  } catch (e) {
+    _erro = e.toString();
+    notifyListeners();
+  }
+}
+
+void definirFiltroTipoDespesa(int? idTipoDespesa) {
+  _idTipoDespesaFiltro = idTipoDespesa;
+  notifyListeners();
+}
+
+Future<void> carregarPorPeriodoComFiltro({
+  required DateTime inicio,
+  required DateTime fim,
+}) async {
+  _setCarregando(true);
+  _limparErro();
+
+  try {
+    if (_idTipoDespesaFiltro == null) {
+      _despesas = await _repository.listarPorPeriodo(
+        inicio: inicio,
+        fim: fim,
+      );
+    } else {
+      _despesas = await _repository.listarPorPeriodoETipo(
+        inicio: inicio,
+        fim: fim,
+        idTipoDespesa: _idTipoDespesaFiltro!,
+      );
+    }
+  } catch (e) {
+    _erro = e.toString();
+  } finally {
+    _setCarregando(false);
+  }
+}
+
+
 
   Future<void> carregarDespesas() async {
     _setCarregando(true);

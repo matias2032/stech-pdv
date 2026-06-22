@@ -26,6 +26,10 @@ public class Despesa extends AuditableEntity {
     @JoinColumn(name = "id_fornecedor")
     private Fornecedor fornecedor;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "id_tipo_despesa")
+private TipoDespesa tipoDespesa;
+
     @Column(name = "descricao", nullable = false, length = 500)
     private String descricao;
 

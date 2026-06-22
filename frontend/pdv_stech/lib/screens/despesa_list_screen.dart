@@ -57,24 +57,29 @@ class DespesaListScreen extends StatefulWidget {
 
 class _DespesaListScreenState extends State<DespesaListScreen> {
   PeriodoDespesa _periodo = PeriodoDespesa.hoje;
+  int? _idTipoDespesaFiltro;
 
   @override
   void initState() {
     super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarPorPeriodo();
-    });
+WidgetsBinding.instance.addPostFrameCallback((_) async {
+  final provider = context.read<DespesaProvider>();
+  await provider.carregarTiposDespesa();
+  await _carregarPorPeriodo();
+});
   }
 
-  Future<void> _carregarPorPeriodo() async {
-    final agora = DateTime.now();
+Future<void> _carregarPorPeriodo() async {
+  final agora = DateTime.now();
 
-    await context.read<DespesaProvider>().carregarPorPeriodo(
-          inicio: _periodo.inicio,
-          fim: agora,
-        );
-  }
+  final provider = context.read<DespesaProvider>();
+  provider.definirFiltroTipoDespesa(_idTipoDespesaFiltro);
+
+  await provider.carregarPorPeriodoComFiltro(
+    inicio: _periodo.inicio,
+    fim: agora,
+  );
+}
 
   Future<void> _abrirFormulario({DespesaModel? despesa}) async {
     final resultado = await Navigator.of(context).pushNamed(
@@ -146,13 +151,18 @@ class _DespesaListScreenState extends State<DespesaListScreen> {
       drawer: const AppSidebar(currentRoute: '/gerenciar_despesas'),
       body: Column(
         children: [
-          _FiltroPeriodo(
-            periodo: _periodo,
-            onChanged: (novo) {
-              setState(() => _periodo = novo);
-              _carregarPorPeriodo();
-            },
-          ),
+        _FiltroPeriodo(
+  periodo: _periodo,
+  idTipoDespesaFiltro: _idTipoDespesaFiltro,
+  onPeriodoChanged: (novo) {
+    setState(() => _periodo = novo);
+    _carregarPorPeriodo();
+  },
+  onTipoChanged: (novoTipo) {
+    setState(() => _idTipoDespesaFiltro = novoTipo);
+    _carregarPorPeriodo();
+  },
+),
           const Divider(height: 1),
           Expanded(
             child: _ListagemDespesas(
@@ -212,13 +222,16 @@ class _DespesaListScreenState extends State<DespesaListScreen> {
 
 class _FiltroPeriodo extends StatelessWidget {
   final PeriodoDespesa periodo;
-  final ValueChanged<PeriodoDespesa> onChanged;
+  final int? idTipoDespesaFiltro;
+  final ValueChanged<PeriodoDespesa> onPeriodoChanged;
+  final ValueChanged<int?> onTipoChanged;
 
   const _FiltroPeriodo({
     required this.periodo,
-    required this.onChanged,
+    required this.idTipoDespesaFiltro,
+    required this.onPeriodoChanged,
+    required this.onTipoChanged,
   });
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DespesaProvider>();
@@ -250,10 +263,40 @@ class _FiltroPeriodo extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+         onChanged: (v) {
+  if (v != null) onPeriodoChanged(v);
+},
           ),
+
+          const SizedBox(width: 18),
+const Icon(Icons.account_tree_rounded, color: _kAzul, size: 20),
+const SizedBox(width: 8),
+const Text(
+  'Tipo:',
+  style: TextStyle(
+    color: _kCinzaTexto,
+    fontWeight: FontWeight.w600,
+    fontSize: 13,
+  ),
+),
+const SizedBox(width: 10),
+DropdownButton<int?>(
+  value: idTipoDespesaFiltro,
+  underline: const SizedBox.shrink(),
+  items: [
+    const DropdownMenuItem<int?>(
+      value: null,
+      child: Text('Todos'),
+    ),
+    ...provider.tiposDespesa.map(
+      (tipo) => DropdownMenuItem<int?>(
+        value: tipo.idTipoDespesa,
+        child: Text(tipo.nomeDespesa),
+      ),
+    ),
+  ],
+  onChanged: onTipoChanged,
+),
           const Spacer(),
           Text(
             '${provider.despesas.length} despesa(s)',
@@ -336,11 +379,12 @@ class _ListagemDespesas extends StatelessWidget {
             children: [
               SizedBox(width: 44),
               SizedBox(width: 14),
-              Expanded(flex: 3, child: _HeaderText('Descrição')),
-              Expanded(flex: 2, child: _HeaderText('Fornecedor')),
-              Expanded(flex: 2, child: _HeaderText('NUIT')),
-              Expanded(flex: 2, child: _HeaderText('Valor')),
-              Expanded(flex: 2, child: _HeaderText('Data')),
+             Expanded(flex: 3, child: _HeaderText('Descrição')),
+Expanded(flex: 2, child: _HeaderText('Tipo')),
+Expanded(flex: 2, child: _HeaderText('Fornecedor')),
+Expanded(flex: 2, child: _HeaderText('NUIT')),
+Expanded(flex: 2, child: _HeaderText('Valor')),
+Expanded(flex: 2, child: _HeaderText('Data')),
               // SizedBox(width: 90), // editar/eliminar futuramente
             ],
           ),
@@ -439,6 +483,21 @@ class _LinhaDespesa extends StatelessWidget {
                 ),
               ),
             ),
+            Expanded(
+  flex: 2,
+  child: Text(
+    despesa.nomeTipoDespesa?.isNotEmpty == true
+        ? despesa.nomeTipoDespesa!
+        : 'Sem tipo',
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(
+      fontSize: 12,
+      color: _kCinzaTexto,
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+),
             Expanded(
               flex: 2,
               child: Text(

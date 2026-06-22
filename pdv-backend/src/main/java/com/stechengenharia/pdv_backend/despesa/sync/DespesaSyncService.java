@@ -11,6 +11,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import com.stechengenharia.pdv_backend.despesa.repository.TipoDespesaRepository;
 
 import java.time.Instant;
 import java.util.List;
@@ -22,6 +23,7 @@ public class DespesaSyncService {
 
     private final DespesaRepository despesaRepository;
     private final FornecedorRepository fornecedorRepository;
+    private final TipoDespesaRepository tipoDespesaRepository;
     private final RestTemplate restTemplate;
 
     @Value("${sync.cloud.base-url}")
@@ -112,22 +114,31 @@ public class DespesaSyncService {
             despesa.setFornecedor(null);
         }
 
+        if (dto.idTipoDespesa() != null) {
+    tipoDespesaRepository.findById(dto.idTipoDespesa())
+            .filter(t -> !t.isDeleted())
+            .ifPresent(despesa::setTipoDespesa);
+} else {
+    despesa.setTipoDespesa(null);
+}
+
         despesaRepository.save(despesa);
     }
 
-    private DespesaSyncDTO toDTO(Despesa d) {
-        return new DespesaSyncDTO(
-                d.getIdDespesa(),
-                d.getFornecedor() != null ? d.getFornecedor().getId() : null,
-                d.getDescricao(),
-                d.getValorGasto(),
-                d.getDataDespesa(),
-                d.getSyncStatus(),
-                d.isDeleted(),
-                d.getVersion(),
-                d.getUpdatedAt());
-    }
-
+private DespesaSyncDTO toDTO(Despesa d) {
+    return new DespesaSyncDTO(
+            d.getIdDespesa(),
+            d.getFornecedor() != null ? d.getFornecedor().getId() : null,
+            d.getTipoDespesa() != null ? d.getTipoDespesa().getIdTipoDespesa() : null,
+            d.getDescricao(),
+            d.getValorGasto(),
+            d.getDataDespesa(),
+            d.getSyncStatus(),
+            d.isDeleted(),
+            d.getVersion(),
+            d.getUpdatedAt()
+    );
+}
     private HttpHeaders buildHeaders() {
         HttpHeaders h = new HttpHeaders();
         h.setContentType(MediaType.APPLICATION_JSON);

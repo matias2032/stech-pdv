@@ -23,6 +23,8 @@ class DespesaFormScreen extends StatefulWidget {
 
 class _DespesaFormScreenState extends State<DespesaFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  int? _idTipoDespesaSelecionado;
+TipoDespesaModel? _tipoDespesaSelecionadoCache;
 
   late final TextEditingController _descricaoController;
   late final TextEditingController _valorController;
@@ -34,36 +36,59 @@ FornecedorModel? _fornecedorSelecionadoCache;
   bool _houveAlteracoes = false;
 
   @override
-  void initState() {
-    super.initState();
+  @override
+void initState() {
+  super.initState();
 
-    final d = widget.despesa;
+  final d = widget.despesa;
 
-    _descricaoController = TextEditingController(text: d?.descricao ?? '');
-    _valorController = TextEditingController(
-      text: d != null ? d.valorGasto.toStringAsFixed(2) : '',
-    );
+  _descricaoController = TextEditingController(text: d?.descricao ?? '');
+  _valorController = TextEditingController(
+    text: d != null ? d.valorGasto.toStringAsFixed(2) : '',
+  );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final fornecedorProvider = context.read<FornecedorProvider>();
-      await fornecedorProvider.carregarFornecedores();
+  _idFornecedorSelecionado = d?.idFornecedor;
+  _idTipoDespesaSelecionado = d?.idTipoDespesa;
 
-      if (!mounted || d?.idFornecedor == null) return;
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final fornecedorProvider = context.read<FornecedorProvider>();
+    final despesaProvider = context.read<DespesaProvider>();
 
-      final fornecedor = fornecedorProvider.fornecedores
-          .where((f) => f.id == d!.idFornecedor)
-          .cast<FornecedorModel?>()
-          .firstWhere(
-            (f) => f != null,
-            orElse: () => null,
-          );
+    await fornecedorProvider.carregarFornecedores();
+    await despesaProvider.carregarTiposDespesa();
 
-setState(() {
-  _idFornecedorSelecionado = fornecedor?.id;
-  _fornecedorSelecionadoCache = fornecedor;
-});
+    if (!mounted) return;
+
+    FornecedorModel? fornecedor;
+    if (d?.idFornecedor != null) {
+      for (final item in fornecedorProvider.fornecedores) {
+        if (item.id == d!.idFornecedor) {
+          fornecedor = item;
+          break;
+        }
+      }
+    }
+
+    TipoDespesaModel? tipoDespesa;
+    if (d?.idTipoDespesa != null) {
+      for (final item in despesaProvider.tiposDespesa) {
+        if (item.idTipoDespesa == d!.idTipoDespesa) {
+          tipoDespesa = item;
+          break;
+        }
+      }
+    }
+
+    setState(() {
+      _idFornecedorSelecionado = fornecedor?.id ?? d?.idFornecedor;
+      _fornecedorSelecionadoCache = fornecedor;
+
+      _idTipoDespesaSelecionado =
+          tipoDespesa?.idTipoDespesa ?? d?.idTipoDespesa;
+      _tipoDespesaSelecionadoCache = tipoDespesa;
     });
-  }
+  });
+}
 
   @override
   void dispose() {
@@ -84,15 +109,17 @@ setState(() {
       return;
     }
 
-    final despesa = DespesaModel(
-      idDespesa: widget.despesa?.idDespesa,
-idFornecedor: _idFornecedorSelecionado,
-nomeFornecedor: _fornecedorSelecionadoCache?.nome,
-nuitFornecedor: _fornecedorSelecionadoCache?.nuit,
-      descricao: _descricaoController.text.trim(),
-      valorGasto: valor,
-      dataDespesa: widget.despesa?.dataDespesa ?? DateTime.now(),
-    );
+final despesa = DespesaModel(
+  idDespesa: widget.despesa?.idDespesa,
+  idFornecedor: _idFornecedorSelecionado,
+  nomeFornecedor: _fornecedorSelecionadoCache?.nome,
+  nuitFornecedor: _fornecedorSelecionadoCache?.nuit,
+  idTipoDespesa: _idTipoDespesaSelecionado,
+  nomeTipoDespesa: _tipoDespesaSelecionadoCache?.nomeDespesa,
+  descricao: _descricaoController.text.trim(),
+  valorGasto: valor,
+  dataDespesa: widget.despesa?.dataDespesa,
+);
 
     final provider = context.read<DespesaProvider>();
 
@@ -237,7 +264,7 @@ setState(() {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'A despesa pode ser associada a um fornecedor existente ou cadastrada sem fornecedor.',
+'Escolha o tipo da despesa e, se necessário, associe-a a um fornecedor existente.',
               style: TextStyle(fontSize: 13, color: _kAzul),
             ),
           ),
@@ -339,6 +366,50 @@ setState(() {
               label: 'Dados da Despesa',
             ),
             const SizedBox(height: 16),
+Consumer<DespesaProvider>(
+  builder: (context, provider, _) {
+    return DropdownButtonFormField<int?>(
+      value: _idTipoDespesaSelecionado,
+      isExpanded: true,
+      decoration: _inputDecoration(
+        label: 'Tipo de despesa *',
+        icon: Icons.account_tree_rounded,
+      ),
+      items: provider.tiposDespesa
+          .map(
+            (tipo) => DropdownMenuItem<int?>(
+              value: tipo.idTipoDespesa,
+              child: Text(tipo.nomeDespesa),
+            ),
+          )
+          .toList(),
+      onChanged: provider.salvando
+          ? null
+          : (value) {
+              TipoDespesaModel? tipo;
+
+              for (final item in provider.tiposDespesa) {
+                if (item.idTipoDespesa == value) {
+                  tipo = item;
+                  break;
+                }
+              }
+
+              setState(() {
+                _idTipoDespesaSelecionado = value;
+                _tipoDespesaSelecionadoCache = tipo;
+              });
+            },
+      validator: (value) {
+        if (value == null) {
+          return 'Selecione o tipo de despesa.';
+        }
+        return null;
+      },
+    );
+  },
+),
+const SizedBox(height: 14),
             _Campo(
               controller: _descricaoController,
               label: 'Descrição *',

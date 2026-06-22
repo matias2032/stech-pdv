@@ -11,6 +11,9 @@ public record DespesaRequestDTO(
 
         Long idFornecedor,
 
+        @NotNull(message = "O tipo da despesa é obrigatório")
+        Long idTipoDespesa,
+
         @NotBlank(message = "A descrição da despesa é obrigatória")
         @Size(max = 500, message = "A descrição deve ter no máximo 500 caracteres")
         String descricao,

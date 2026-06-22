@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 11,       
+  version: 12,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -294,6 +294,83 @@ if (oldVersion < 11) {
     'CREATE INDEX IF NOT EXISTS idx_despesa_sync ON despesa(sync_status)',
   );
 }
+
+if (oldVersion < 12) {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS tipo_despesa (
+      id INTEGER PRIMARY KEY,
+      nome_despesa TEXT NOT NULL,
+      descricao TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      sync_status TEXT NOT NULL DEFAULT 'synced',
+      updated_at TEXT
+    )
+  ''');
+
+  await db.execute(
+    'ALTER TABLE despesa ADD COLUMN id_tipo_despesa INTEGER',
+  );
+
+  await db.execute(
+    'ALTER TABLE despesa ADD COLUMN nome_tipo_despesa TEXT',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_tipo_despesa_nome ON tipo_despesa(nome_despesa)',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_despesa_tipo ON despesa(id_tipo_despesa)',
+  );
+
+  await db.insert(
+    'tipo_despesa',
+    {
+      'id': 1,
+      'nome_despesa': 'Bens e Serviços',
+      'deleted': 0,
+      'sync_status': 'synced',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    conflictAlgorithm: ConflictAlgorithm.ignore,
+  );
+
+  await db.insert(
+    'tipo_despesa',
+    {
+      'id': 2,
+      'nome_despesa': 'Imobilizado',
+      'deleted': 0,
+      'sync_status': 'synced',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    conflictAlgorithm: ConflictAlgorithm.ignore,
+  );
+
+  await db.insert(
+    'tipo_despesa',
+    {
+      'id': 3,
+      'nome_despesa': 'Existências',
+      'deleted': 0,
+      'sync_status': 'synced',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    conflictAlgorithm: ConflictAlgorithm.ignore,
+  );
+
+  await db.insert(
+    'tipo_despesa',
+    {
+      'id': 4,
+      'nome_despesa': 'Importação',
+      'deleted': 0,
+      'sync_status': 'synced',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    conflictAlgorithm: ConflictAlgorithm.ignore,
+  );
+}
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -354,12 +431,76 @@ if (oldVersion < 11) {
   )
 ''');
 
+
+await txn.execute('''
+  CREATE TABLE IF NOT EXISTS tipo_despesa (
+    id INTEGER PRIMARY KEY,
+    nome_despesa TEXT NOT NULL,
+    descricao TEXT,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    sync_status TEXT NOT NULL DEFAULT 'synced',
+    updated_at TEXT
+  )
+''');
+
+final agoraTipoDespesa = DateTime.now().toIso8601String();
+
+await txn.insert(
+  'tipo_despesa',
+  {
+    'id': 1,
+    'nome_despesa': 'Bens e Serviços',
+    'deleted': 0,
+    'sync_status': 'synced',
+    'updated_at': agoraTipoDespesa,
+  },
+  conflictAlgorithm: ConflictAlgorithm.ignore,
+);
+
+await txn.insert(
+  'tipo_despesa',
+  {
+    'id': 2,
+    'nome_despesa': 'Imobilizado',
+    'deleted': 0,
+    'sync_status': 'synced',
+    'updated_at': agoraTipoDespesa,
+  },
+  conflictAlgorithm: ConflictAlgorithm.ignore,
+);
+
+await txn.insert(
+  'tipo_despesa',
+  {
+    'id': 3,
+    'nome_despesa': 'Existências',
+    'deleted': 0,
+    'sync_status': 'synced',
+    'updated_at': agoraTipoDespesa,
+  },
+  conflictAlgorithm: ConflictAlgorithm.ignore,
+);
+
+await txn.insert(
+  'tipo_despesa',
+  {
+    'id': 4,
+    'nome_despesa': 'Importação',
+    'deleted': 0,
+    'sync_status': 'synced',
+    'updated_at': agoraTipoDespesa,
+  },
+  conflictAlgorithm: ConflictAlgorithm.ignore,
+);
+
 await txn.execute('''
   CREATE TABLE IF NOT EXISTS despesa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     id_fornecedor INTEGER,
     nome_fornecedor TEXT,
     nuit_fornecedor TEXT,
+    id_tipo_despesa INTEGER,
+    nome_tipo_despesa TEXT,
     descricao TEXT NOT NULL,
     valor_gasto REAL NOT NULL DEFAULT 0,
     data_despesa TEXT NOT NULL,
@@ -668,6 +809,14 @@ await txn.execute(
 
 await txn.execute(
   'CREATE INDEX idx_despesa_sync ON despesa(sync_status)',
+);
+
+await txn.execute(
+  'CREATE INDEX IF NOT EXISTS idx_tipo_despesa_nome ON tipo_despesa(nome_despesa)',
+);
+
+await txn.execute(
+  'CREATE INDEX IF NOT EXISTS idx_despesa_tipo ON despesa(id_tipo_despesa)',
 );
 
     });

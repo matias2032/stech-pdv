@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 public record DespesaSyncDTO(
         Long idDespesa,
         Long idFornecedor,
+        Long idTipoDespesa,
         String descricao,
         BigDecimal valorGasto,
         OffsetDateTime dataDespesa,

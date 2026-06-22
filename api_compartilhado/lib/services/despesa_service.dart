@@ -174,15 +174,19 @@ class DespesaService {
 
   // ── Helpers ───────────────────────────────────────────────────────
 
-  void _validarDespesa(DespesaModel despesa) {
-    if (!despesa.descricaoValida) {
-      throw Exception('A descrição da despesa é obrigatória.');
-    }
-
-    if (!despesa.valorValido) {
-      throw Exception('O valor gasto deve ser maior que zero.');
-    }
+void _validarDespesa(DespesaModel despesa) {
+  if (!despesa.descricaoValida) {
+    throw Exception('A descrição da despesa é obrigatória.');
   }
+
+  if (!despesa.valorValido) {
+    throw Exception('O valor gasto deve ser maior que zero.');
+  }
+
+  if (!despesa.tipoValido) {
+    throw Exception('O tipo de despesa é obrigatório.');
+  }
+}
 
   void _validarResposta(
     http.Response response, {
@@ -211,4 +215,26 @@ class DespesaService {
 
     throw Exception(mensagem);
   }
+
+  Future<List<TipoDespesaModel>> listarTiposDespesa() async {
+  final uri = Uri.parse('${ApiConfig.despesasUrl}/tipos');
+
+  final response = await _client
+      .get(uri, headers: ApiConfig.defaultHeaders)
+      .timeout(ApiConfig.timeout);
+
+  _validarResposta(response);
+
+  final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+  if (data is! List) {
+    throw Exception('Resposta inválida ao listar tipos de despesa.');
+  }
+
+  return data
+      .map((item) => TipoDespesaModel.fromJson(item as Map<String, dynamic>))
+      .toList();
+}
+
+
 }

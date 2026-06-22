@@ -28,6 +28,7 @@ public class DespesaSyncCloudService {
 
             cloud.setIdDespesa(dto.idDespesa());
             cloud.setIdFornecedor(dto.idFornecedor());
+            cloud.setIdTipoDespesa(dto.idTipoDespesa());
             cloud.setDescricao(dto.descricao());
             cloud.setValorGasto(dto.valorGasto());
             cloud.setDataDespesa(dto.dataDespesa());
@@ -44,17 +45,18 @@ public class DespesaSyncCloudService {
     public List<DespesaSyncDTO> listarDesde(Instant since) {
         return despesaRepository.findByUpdatedAtAfter(since)
                 .stream()
-                .map(d -> new DespesaSyncDTO(
-                        d.getIdDespesa(),
-                        d.getIdFornecedor(),
-                        d.getDescricao(),
-                        d.getValorGasto(),
-                        d.getDataDespesa(),
-                        d.getSyncStatus(),
-                        d.isDeleted(),
-                        d.getVersion(),
-                        d.getUpdatedAt()
-                ))
+          .map(d -> new DespesaSyncDTO(
+        d.getIdDespesa(),
+        d.getIdFornecedor(),
+        d.getIdTipoDespesa(),
+        d.getDescricao(),
+        d.getValorGasto(),
+        d.getDataDespesa(),
+        d.getSyncStatus(),
+        d.isDeleted(),
+        d.getVersion(),
+        d.getUpdatedAt()
+))
                 .toList();
     }
 }

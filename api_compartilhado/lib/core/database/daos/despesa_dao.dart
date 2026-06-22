@@ -173,11 +173,15 @@ class DespesaDao {
       'valor_gasto': despesa.valorGasto,
       'data_despesa':
           despesa.dataDespesa?.toIso8601String() ?? now,
+          'id_tipo_despesa': despesa.idTipoDespesa,
+'nome_tipo_despesa': despesa.nomeTipoDespesa,
       'deleted': despesa.deleted ? 1 : 0,
       'sync_status': despesa.syncStatus ?? 'synced',
       'updated_at': now,
     };
   }
+
+  
 
   DespesaModel _fromMap(Map<String, dynamic> map) {
     return DespesaModel(
@@ -188,6 +192,8 @@ class DespesaDao {
       descricao: map['descricao']?.toString() ?? '',
       valorGasto: _parseDouble(map['valor_gasto']),
       dataDespesa: _parseDateOpt(map['data_despesa']),
+      idTipoDespesa: _parseIntOpt(map['id_tipo_despesa']),
+nomeTipoDespesa: _parseStringOpt(map['nome_tipo_despesa']),
       deleted: _parseBool(map['deleted']),
       syncStatus: _parseStringOpt(map['sync_status']),
     );
@@ -220,4 +226,57 @@ class DespesaDao {
     if (value is num) return value == 1;
     return value.toString().toLowerCase() == 'true';
   }
+
+  Future<void> inserirTiposDespesa(List<TipoDespesaModel> tipos) async {
+  final batch = _db.batch();
+
+  for (final tipo in tipos) {
+    batch.insert(
+      'tipo_despesa',
+      tipo.toLocalDb(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  await batch.commit(noResult: true);
+}
+
+Future<List<TipoDespesaModel>> listarTiposDespesa() async {
+  final rows = await _db.query(
+    'tipo_despesa',
+    where: 'deleted = ?',
+    whereArgs: [0],
+    orderBy: 'nome_despesa ASC',
+  );
+
+  return rows.map((map) {
+    return TipoDespesaModel.fromJson(map);
+  }).toList();
+}
+
+Future<List<DespesaModel>> listarPorPeriodoETipo({
+  required DateTime inicio,
+  required DateTime fim,
+  required int idTipoDespesa,
+}) async {
+  final rows = await _db.query(
+    table,
+    where: '''
+      deleted = ?
+      AND id_tipo_despesa = ?
+      AND datetime(data_despesa) BETWEEN datetime(?) AND datetime(?)
+    ''',
+    whereArgs: [
+      0,
+      idTipoDespesa,
+      inicio.toIso8601String(),
+      fim.toIso8601String(),
+    ],
+    orderBy: 'datetime(data_despesa) DESC',
+  );
+
+  return rows.map(_fromMap).toList();
+}
+
+
 }

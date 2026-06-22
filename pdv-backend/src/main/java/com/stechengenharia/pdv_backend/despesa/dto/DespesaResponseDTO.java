@@ -13,6 +13,9 @@ public record DespesaResponseDTO(
         String nomeFornecedor,
         String nuitFornecedor,
 
+        Long idTipoDespesa,
+        String nomeTipoDespesa,
+
         String descricao,
         BigDecimal valorGasto,
         OffsetDateTime dataDespesa,
@@ -24,6 +27,7 @@ public record DespesaResponseDTO(
 
     public static DespesaResponseDTO from(Despesa despesa) {
         var fornecedor = despesa.getFornecedor();
+        var tipoDespesa = despesa.getTipoDespesa();
 
         return new DespesaResponseDTO(
                 despesa.getIdDespesa(),
@@ -31,6 +35,9 @@ public record DespesaResponseDTO(
                 fornecedor != null ? fornecedor.getId() : null,
                 fornecedor != null ? fornecedor.getNome() : null,
                 fornecedor != null ? fornecedor.getNuit() : null,
+
+                tipoDespesa != null ? tipoDespesa.getIdTipoDespesa() : null,
+                tipoDespesa != null ? tipoDespesa.getNomeDespesa() : null,
 
                 despesa.getDescricao(),
                 despesa.getValorGasto(),

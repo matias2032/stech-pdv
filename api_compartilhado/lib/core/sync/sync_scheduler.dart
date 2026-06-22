@@ -502,11 +502,12 @@ Future<void> _processarDespesa(
     case 'CREATE':
       final localId = payload['localId'] as String?;
 
-      final despesa = DespesaModel(
-        idFornecedor: payload['idFornecedor'] as int?,
-        descricao: payload['descricao'] as String,
-        valorGasto: (payload['valorGasto'] as num).toDouble(),
-      );
+   final despesa = DespesaModel(
+  idFornecedor: payload['idFornecedor'] as int?,
+  idTipoDespesa: payload['idTipoDespesa'] as int?,
+  descricao: payload['descricao'] as String,
+  valorGasto: (payload['valorGasto'] as num).toDouble(),
+);
 
       final criada = await service.criar(despesa);
 
@@ -520,11 +521,12 @@ Future<void> _processarDespesa(
       final id = payload['id'] as int;
 
       final despesa = DespesaModel(
-        idDespesa: id,
-        idFornecedor: payload['idFornecedor'] as int?,
-        descricao: payload['descricao'] as String,
-        valorGasto: (payload['valorGasto'] as num).toDouble(),
-      );
+  idDespesa: id,
+  idFornecedor: payload['idFornecedor'] as int?,
+  idTipoDespesa: payload['idTipoDespesa'] as int?,
+  descricao: payload['descricao'] as String,
+  valorGasto: (payload['valorGasto'] as num).toDouble(),
+);
 
       final atualizada = await service.editar(
         id: id,

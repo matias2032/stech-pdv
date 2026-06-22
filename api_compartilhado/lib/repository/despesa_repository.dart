@@ -131,12 +131,13 @@ class DespesaRepository {
 
     final despesaComId = despesaLocal.copyWith(idDespesa: localId);
 
-    final payload = {
-      'localId': localId.toString(),
-      'idFornecedor': despesaComId.idFornecedor,
-      'descricao': despesaComId.descricao,
-      'valorGasto': despesaComId.valorGasto,
-    };
+final payload = {
+  'localId': localId.toString(),
+  'idFornecedor': despesaComId.idFornecedor,
+  'idTipoDespesa': despesaComId.idTipoDespesa,
+  'descricao': despesaComId.descricao,
+  'valorGasto': despesaComId.valorGasto,
+};
 
     await _syncQueueDao.enqueue(
       'despesa',
@@ -204,13 +205,14 @@ class DespesaRepository {
 
     await _dao.atualizar(despesaLocal);
 
-    final payload = {
-      'id': id,
-      'localId': id.toString(),
-      'idFornecedor': despesaLocal.idFornecedor,
-      'descricao': despesaLocal.descricao,
-      'valorGasto': despesaLocal.valorGasto,
-    };
+final payload = {
+  'id': id,
+  'localId': id.toString(),
+  'idFornecedor': despesaLocal.idFornecedor,
+  'idTipoDespesa': despesaLocal.idTipoDespesa,
+  'descricao': despesaLocal.descricao,
+  'valorGasto': despesaLocal.valorGasto,
+};
 
     await _syncQueueDao.enqueue(
       'despesa',
@@ -272,12 +274,69 @@ class DespesaRepository {
   }
 
   void _validarDespesa(DespesaModel despesa) {
-    if (despesa.descricao.trim().isEmpty) {
-      throw Exception('A descrição da despesa é obrigatória.');
-    }
+  if (despesa.descricao.trim().isEmpty) {
+    throw Exception('A descrição da despesa é obrigatória.');
+  }
 
-    if (despesa.valorGasto <= 0) {
-      throw Exception('O valor gasto deve ser maior que zero.');
+  if (despesa.valorGasto <= 0) {
+    throw Exception('O valor gasto deve ser maior que zero.');
+  }
+
+  if (despesa.idTipoDespesa == null || despesa.idTipoDespesa! <= 0) {
+    throw Exception('O tipo de despesa é obrigatório.');
+  }
+}
+
+  Future<List<TipoDespesaModel>> listarTiposDespesa() async {
+  final online = _connectivityService.isOnline;
+
+  if (online) {
+    try {
+      final remotos = await _service.listarTiposDespesa();
+      await _dao.inserirTiposDespesa(remotos);
+      return remotos;
+    } catch (_) {
+      return _dao.listarTiposDespesa();
     }
   }
+
+  return _dao.listarTiposDespesa();
+}
+
+Future<List<DespesaModel>> listarPorPeriodoETipo({
+  required DateTime inicio,
+  required DateTime fim,
+  required int idTipoDespesa,
+}) async {
+  final online = _connectivityService.isOnline;
+
+  if (online) {
+    try {
+      final despesas = await _service.listarPorPeriodo(
+        inicio: inicio,
+        fim: fim,
+      );
+
+      await _dao.inserirTodos(despesas);
+
+      return despesas
+          .where((d) => d.idTipoDespesa == idTipoDespesa)
+          .toList();
+    } catch (_) {
+      return _dao.listarPorPeriodoETipo(
+        inicio: inicio,
+        fim: fim,
+        idTipoDespesa: idTipoDespesa,
+      );
+    }
+  }
+
+  return _dao.listarPorPeriodoETipo(
+    inicio: inicio,
+    fim: fim,
+    idTipoDespesa: idTipoDespesa,
+  );
+}
+
+
 }
