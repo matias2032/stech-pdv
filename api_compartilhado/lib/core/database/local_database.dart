@@ -493,6 +493,8 @@ await txn.insert(
   conflictAlgorithm: ConflictAlgorithm.ignore,
 );
 
+
+
 await txn.execute('''
   CREATE TABLE IF NOT EXISTS despesa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

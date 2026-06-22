@@ -8,7 +8,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 
-
+import 'package:path/path.dart';
 
 
 import 'screens/usuarios_list_screen.dart';
@@ -59,24 +59,20 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
+  // ⚠️ TEMPORÁRIO — apagar toda a BD local SQLite
+  final dbPath = await getDatabasesPath();
+  final path = join(dbPath, 'stech_pdv.db');
+
+  await deleteDatabase(path);
+
+  debugPrint('🗑️ BD local eliminada com sucesso: $path');
+
   await ApiConfig.baseUrlAsync;
   ApiConfig.printConfig();
 
-await LocalDatabase.instance.init();
+  await LocalDatabase.instance.init();
 
-  // if (kDebugMode) {
-  //   await SyncQueueDao().cancelarDeleteOrfao('categoria', 1410051756);
-  // }
-
-//   final count = Sqflite.firstIntValue(
-//   await LocalDatabase.instance.db.rawQuery(
-//     'SELECT COUNT(*) FROM cliente',
-//   ),
-// );
-
-// debugPrint('📦 Clientes no SQLite: $count');
-
-  await ConnectivityService.instance.init(); // ← usa o init() unificado
+  await ConnectivityService.instance.init();
 
   runApp(const MyApp());
 }
