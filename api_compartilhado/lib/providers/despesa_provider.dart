@@ -145,30 +145,30 @@ Future<void> carregarPorPeriodoComFiltro({
     }
   }
 
-  Future<bool> criarDespesa(DespesaModel despesa) async {
-    _setSalvando(true);
-    _limparErro();
+Future<bool> criarDespesa(DespesaModel despesa) async {
+  _setSalvando(true);
+  _limparErro();
 
-    try {
-  final criada = await _repository.criar(despesa);
+  try {
+    final criada = await _repository.criar(despesa);
 
-_ultimaDespesaSalva = criada;
+    _ultimaDespesaSalva = criada; // ← deve estar aqui
 
-_despesas = [
-  criada,
-  ..._despesas.where((d) => d.idDespesa != criada.idDespesa),
-];
+    _despesas = [
+      criada,
+      ..._despesas.where((d) => d.idDespesa != criada.idDespesa),
+    ];
 
-notifyListeners();
-return true;
-    } catch (e) {
-      _erro = e.toString();
-      notifyListeners();
-      return false;
-    } finally {
-      _setSalvando(false);
-    }
+    notifyListeners();
+    return true;
+  } catch (e) {
+    _erro = e.toString();
+    notifyListeners();
+    return false;
+  } finally {
+    _setSalvando(false);
   }
+}
 
   Future<bool> editarDespesa({
     required int id,

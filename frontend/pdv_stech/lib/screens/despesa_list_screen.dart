@@ -91,26 +91,11 @@ Future<void> _abrirFormulario({DespesaModel? despesa}) async {
 
   if (!mounted) return;
 
-  final provider = context.read<DespesaProvider>();
-
-  if (resultado is DespesaModel) {
-    provider.inserirOuAtualizarNaLista(resultado);
-
-    // Recarrega em segundo plano para garantir consistência com BD/API.
-    Future.microtask(() async {
-      if (mounted) {
-        await _carregarPorPeriodo();
-      }
-    });
-
-    return;
-  }
-
-  if (resultado == true) {
+  // Recarrega sempre que houver qualquer alteração
+  if (resultado is DespesaModel || resultado == true) {
     await _carregarPorPeriodo();
   }
 }
-
   void _mostrarSnack(BuildContext ctx, String mensagem, {bool erro = false}) {
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
