@@ -1,84 +1,101 @@
 import 'dart:io';
+
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
 import 'package:api_compartilhado/api_compartilhado.dart';
 
 import '../models/extrato_model.dart';
 
-const _kAzul     = PdfColor.fromInt(0xFF1B2A6B);
+const _kAzul = PdfColor.fromInt(0xFF1B2A6B);
 const _kVermelho = PdfColor.fromInt(0xFFC8102E);
 
 class ExtratoPdfService {
   static final ExtratoPdfService instance = ExtratoPdfService._();
   ExtratoPdfService._();
 
-final _fmtData     = DateFormat('dd/MM/yyyy');
-final _fmtMoeda    = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
-final _fmtNomeArq  = DateFormat('yyyyMMdd_HHmm');
+  final _fmtData = DateFormat('dd/MM/yyyy');
+  final _fmtMoeda = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
+  final _fmtNomeArq = DateFormat('yyyyMMdd_HHmm');
 
-late pw.Font _font;
-late pw.Font _fontBold;
-bool _fontCarregada = false;
+  // ══════════════════════════════════════════════════════════════════════
+  // EXTRACTO DA EMPRESA
+  // Inclui:
+  // 1. Prestação de serviços / documentos fiscais emitidos
+  // 2. Outros bens e serviços
+  // 3. Imobilizado
+  // 4. Existências
+  // 5. Importação
+  // 6. Tabela final de apuramento
+  // ══════════════════════════════════════════════════════════════════════
 
-Future<void> _carregarFontes() async {
-  if (_fontCarregada) return;
-  final fontData     = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
-  final fontBoldData = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
-  _font     = pw.Font.ttf(fontData);
-  _fontBold = pw.Font.ttf(fontBoldData);
-  _fontCarregada = true;
-}
-
-Future<File> gerar(ExtratoModel extrato) async {
-  print('🧾 ExtratoPdfService NOVO — despesas=${extrato.despesas.length}');
-  print('🧾 ExtratoPdfService NOVO — somaDespesas=${extrato.somaDespesas}');
-
-  final pdf = await _build(extrato);
-  return _salvar(pdf, extrato);
-}
+  Future<File> gerar(ExtratoModel extrato) async {
+    final pdf = await _build(extrato);
+    return _salvar(pdf, extrato);
+  }
 
   Future<void> abrirPdf(File file) async {
     final result = await OpenFilex.open(file.path);
+
     if (result.type != ResultType.done) {
       throw Exception('Erro ao abrir PDF: ${result.message}');
     }
   }
 
-  // -- Build ----------------------------------------------------------------
-
   Future<pw.Document> _build(ExtratoModel extrato) async {
-final iconBytes    = await rootBundle.load('assets/icon/app_icon.png');
-final iconImage    = pw.MemoryImage(iconBytes.buffer.asUint8List());
+    final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
+    final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
 
-await _carregarFontes();
-
-final doc = pw.Document(
-      title:  'Extracto ${extrato.labelPeriodo}',
+    final doc = pw.Document(
+      title: 'Extracto ${extrato.labelPeriodo}',
       author: 'Stech Engenharia',
     );
 
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin:     const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
-theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
-        footer:     (ctx) => _rodapePagina(ctx),
+        margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 20),
+        footer: (ctx) => _rodapePagina(ctx),
         build: (ctx) => [
-          _cabecalho(extrato, iconImage),
+          _cabecalho(
+            extrato,
+            iconImage,
+            titulo: 'EXTRACTO DA EMPRESA',
+          ),
+          pw.SizedBox(height: 8),
+
+          _tabelaPrestacaoServicos(extrato),
           pw.SizedBox(height: 10),
-          _tituloTabela('GANHOS DA EMPRESA - DOCUMENTOS FISCAIS EMITIDOS'),
-          pw.SizedBox(height: 4),
-          _tabela(extrato),
+
+          _tabelaDespesaPorTipo(
+            titulo: 'OUTROS BENS E SERVIÇOS',
+            despesas: _despesasDoTipo(extrato, 'Bens e Serviços'),
+          ),
+          pw.SizedBox(height: 10),
+
+          _tabelaDespesaPorTipo(
+            titulo: 'IMOBILIZADO',
+            despesas: _despesasDoTipo(extrato, 'Imobilizado'),
+          ),
+          pw.SizedBox(height: 10),
+
+          _tabelaDespesaPorTipo(
+            titulo: 'EXISTÊNCIAS',
+            despesas: _despesasDoTipo(extrato, 'Existências'),
+          ),
+          pw.SizedBox(height: 10),
+
+          _tabelaDespesaPorTipo(
+            titulo: 'IMPORTAÇÃO',
+            despesas: _despesasDoTipo(extrato, 'Importação'),
+          ),
+
           pw.SizedBox(height: 14),
-          _tituloTabela('GASTOS DA EMPRESA - DESPESAS REGISTADAS'),
-          pw.SizedBox(height: 4),
-          _tabelaDespesas(extrato),
-          pw.SizedBox(height: 12),
-          _rodapeTotais(extrato),
+          _tabelaResumoApuramento(extrato),
           pw.SizedBox(height: 8),
           _notaFiscal(),
         ],
@@ -88,21 +105,19 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     return doc;
   }
 
-  Future<File> gerarHistoricoCliente({
-    required ClienteModel cliente,
-    required Map<String, dynamic> extracto,
-  }) async {
-    final pdf = await _buildHistoricoCliente(cliente, extracto);
-    return _salvarHistoricoCliente(pdf, cliente);
-  }
-
-  // -- PDF com extracto documental do cliente --------------------------------
+  // ══════════════════════════════════════════════════════════════════════
+  // EXTRACTO DOCUMENTAL DO CLIENTE
+  // IMPORTANTE:
+  // Cliente só vê a primeira tabela: documentos/facturas/VDs.
+  // Não lista despesas, nem apuramento interno da empresa.
+  // ══════════════════════════════════════════════════════════════════════
 
   Future<File> gerarExtractoDocumentalCliente({
     required ClienteModel cliente,
     required Map<String, dynamic> extractoDocumental,
   }) async {
     final linhasRaw = (extractoDocumental['linhas'] as List?) ?? const [];
+
     final linhas = linhasRaw
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
@@ -110,41 +125,56 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
 
     final linhasExtrato = linhas.map((l) {
       final emitidoEmStr = l['emitidoEm']?.toString();
-      final emitidoEm =
-          emitidoEmStr != null ? DateTime.tryParse(emitidoEmStr) : DateTime.now();
+      final emitidoEm = emitidoEmStr != null
+          ? DateTime.tryParse(emitidoEmStr)
+          : DateTime.now();
+
       return LinhaExtrato(
-        dataEmissao:     emitidoEm ?? DateTime.now(),
+        dataEmissao: emitidoEm ?? DateTime.now(),
         numeroDocumento: (l['referencia'] ?? '-').toString(),
-        nomeEmpresa:     cliente.nomeCompleto,
-        nuit:            cliente.nuit,
-        valorTotal:      (l['valorTotal'] as num?)?.toDouble() ?? 0.0,
+        nomeEmpresa: cliente.nomeCompleto,
+        nuit: cliente.nuit,
+        valorTotal: (l['valorTotal'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
 
     final dataInicio = linhasExtrato.isNotEmpty
-        ? linhasExtrato.map((l) => l.dataEmissao).reduce((a, b) => a.isBefore(b) ? a : b)
+        ? linhasExtrato
+            .map((l) => l.dataEmissao)
+            .reduce((a, b) => a.isBefore(b) ? a : b)
         : DateTime.now();
+
     final dataFim = linhasExtrato.isNotEmpty
-        ? linhasExtrato.map((l) => l.dataEmissao).reduce((a, b) => a.isAfter(b) ? a : b)
+        ? linhasExtrato
+            .map((l) => l.dataEmissao)
+            .reduce((a, b) => a.isAfter(b) ? a : b)
         : DateTime.now();
 
     final extrato = ExtratoModel(
-      linhas:       linhasExtrato,
-      dataInicio:   dataInicio,
-      dataFim:      dataFim,
+      linhas: linhasExtrato,
+      despesas: const [],
+      dataInicio: dataInicio,
+      dataFim: dataFim,
       labelPeriodo: '${_fmtData.format(dataInicio)} a ${_fmtData.format(dataFim)}',
     );
 
-    final pdf = await _buildExtractoDocumentalCliente(extrato, cliente);
+    final pdf = await _buildExtractoDocumentalCliente(
+      extrato,
+      cliente,
+    );
 
     final nomeCliente = cliente.nomeCompleto
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .replaceAll(' ', '_');
+
     final nome =
         'EXTRATO_DOCUMENTAL-$nomeCliente-${_fmtNomeArq.format(DateTime.now())}.pdf';
-    final dir  = await _resolveDirectory();
+
+    final dir = await _resolveDirectory();
     final file = File('${dir.path}/$nome');
+
     await file.writeAsBytes(await pdf.save());
+
     return file;
   }
 
@@ -154,31 +184,28 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
   ) async {
     final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
     final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
-    await _carregarFontes(); 
 
     final doc = pw.Document(
-      title:  'Extracto Documental - ${cliente.nomeCompleto}',
+      title: 'Extracto Documental - ${cliente.nomeCompleto}',
       author: 'Stech Engenharia',
     );
 
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin:     const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
-theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
-        footer:     (ctx) => _rodapePagina(ctx),
+        margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 20),
+        footer: (ctx) => _rodapePagina(ctx),
         build: (ctx) => [
-          _cabecalho(extrato, iconImage),
-          pw.SizedBox(height: 10),
-          _tituloTabela('GANHOS DA EMPRESA - DOCUMENTOS FISCAIS EMITIDOS'),
-          pw.SizedBox(height: 4),
-          _tabela(extrato),
-          pw.SizedBox(height: 14),
-          _tituloTabela('GASTOS DA EMPRESA - DESPESAS REGISTADAS'),
-          pw.SizedBox(height: 4),
-          _tabelaDespesas(extrato),
-          pw.SizedBox(height: 12),
-          _rodapeTotais(extrato),
+          _cabecalhoClienteDocumental(
+            extrato,
+            cliente,
+            iconImage,
+          ),
+          pw.SizedBox(height: 8),
+          _tabelaPrestacaoServicos(
+            extrato,
+            tituloDescricao: 'DOCUMENTOS FISCAIS',
+          ),
           pw.SizedBox(height: 8),
           _notaFiscal(),
         ],
@@ -188,63 +215,17 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     return doc;
   }
 
-  pw.Widget _cabecalhoClienteDocumental(
-    ExtratoModel extrato,
-    ClienteModel cliente,
-    pw.MemoryImage icon,
-  ) {
-    return pw.Column(
-      children: [
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Image(icon, width: 135, height: 80, fit: pw.BoxFit.contain),
-                pw.SizedBox(height: 6),
-                _t('Segurança Tecnologica SU, LDA (Stech Engenharia)', bold: true, size: 8.5),
-                pw.SizedBox(height: 2),
-                _t('Bairro: Chingodzi, Tete', size: 8),
-                _t('Numero: +258 84 239 0756 ou 87 939 0756', size: 8),
-                _t('Email: info@stech.co.mz', size: 8),
-                _t('Website: www.stecheng.co.mz', size: 8),
-                _t('NUIT: 401 684 530', size: 8),
-              ],
-            ),
-            pw.SizedBox(width: 20),
-            pw.Expanded(
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  _t('EXTRACTO DOCUMENTAL DO CLIENTE', size: 15, bold: true, color: _kAzul),
-                  pw.SizedBox(height: 4),
-                  _t(cliente.nomeCompleto, size: 11, bold: true, color: _kVermelho),
-                  if (cliente.nuit?.isNotEmpty == true)
-                    _t('NUIT: ${cliente.nuit}', size: 8, color: PdfColors.grey700),
-                  pw.SizedBox(height: 4),
-                  _t(
-                    'Periodo: ${_fmtData.format(extrato.dataInicio)}'
-                    ' a ${_fmtData.format(extrato.dataFim)}',
-                    size: 9,
-                    color: PdfColors.grey700,
-                  ),
-                  pw.SizedBox(height: 2),
-                  _t(
-                    'Gerado em: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
-                    size: 8,
-                    color: PdfColors.grey600,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 10),
-        pw.Divider(color: _kAzul, thickness: 2.5),
-      ],
-    );
+  // ══════════════════════════════════════════════════════════════════════
+  // HISTÓRICO COMERCIAL DO CLIENTE
+  // Mantido para não quebrar a funcionalidade existente.
+  // ══════════════════════════════════════════════════════════════════════
+
+  Future<File> gerarHistoricoCliente({
+    required ClienteModel cliente,
+    required Map<String, dynamic> extracto,
+  }) async {
+    final pdf = await _buildHistoricoCliente(cliente, extracto);
+    return _salvarHistoricoCliente(pdf, cliente);
   }
 
   Future<pw.Document> _buildHistoricoCliente(
@@ -253,22 +234,22 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
   ) async {
     final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
     final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
-    await _carregarFontes(); 
 
     final doc = pw.Document(
-      title:  'Historico Comercial - ${cliente.nomeCompleto}',
+      title: 'Historico Comercial - ${cliente.nomeCompleto}',
       author: 'Stech Engenharia',
     );
 
     final linhasRaw = (extracto['linhas'] as List?) ?? const [];
-    final linhas    = linhasRaw
+
+    final linhas = linhasRaw
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final totalDivida        = (extracto['totalDivida'] as num?)?.toDouble() ?? 0.0;
-    final totalPago          = (extracto['totalPago']   as num?)?.toDouble() ?? 0.0;
-    final saldo              = (extracto['saldo']       as num?)?.toDouble() ?? 0.0;
+    final totalDivida = (extracto['totalDivida'] as num?)?.toDouble() ?? 0.0;
+    final totalPago = (extracto['totalPago'] as num?)?.toDouble() ?? 0.0;
+    final saldo = (extracto['saldo'] as num?)?.toDouble() ?? 0.0;
     final quantidadeRegistos = linhas.length;
 
     final totalDocumentos = linhas
@@ -292,34 +273,33 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin:     const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
-theme: pw.ThemeData.withFont(base: _font, bold: _fontBold), 
-        footer:     (ctx) => _rodapePagina(ctx),
+        margin: const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
+        footer: (ctx) => _rodapePagina(ctx),
         build: (ctx) => [
           _cabecalhoHistoricoCliente(cliente, iconImage),
           pw.SizedBox(height: 10),
           _resumoHistoricoCliente(
-            cliente:            cliente,
-            totalDivida:        totalDivida,
-            totalPago:          totalPago,
-            saldo:              saldo,
+            cliente: cliente,
+            totalDivida: totalDivida,
+            totalPago: totalPago,
+            saldo: saldo,
             quantidadeRegistos: quantidadeRegistos,
-            pedidosPagos:       pedidosPagos,
-            pedidosPendentes:   pedidosPendentes,
-            totalDocumentos:    totalDocumentos,
-            mensagemSituacao:   mensagemSituacao,
+            pedidosPagos: pedidosPagos,
+            pedidosPendentes: pedidosPendentes,
+            totalDocumentos: totalDocumentos,
+            mensagemSituacao: mensagemSituacao,
           ),
           pw.SizedBox(height: 12),
           _tabelaHistoricoCliente(linhas),
           pw.SizedBox(height: 12),
           _rodapeHistoricoCliente(
-            totalDivida:        totalDivida,
-            totalPago:          totalPago,
-            saldo:              saldo,
-            totalDocumentos:    totalDocumentos,
+            totalDivida: totalDivida,
+            totalPago: totalPago,
+            saldo: saldo,
+            totalDocumentos: totalDocumentos,
             quantidadeRegistos: quantidadeRegistos,
-            pedidosPagos:       pedidosPagos,
-            pedidosPendentes:   pedidosPendentes,
+            pedidosPagos: pedidosPagos,
+            pedidosPendentes: pedidosPendentes,
           ),
           pw.SizedBox(height: 8),
           _notaFiscal(),
@@ -328,6 +308,167 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     );
 
     return doc;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // CABEÇALHOS
+  // ══════════════════════════════════════════════════════════════════════
+
+  pw.Widget _cabecalho(
+    ExtratoModel extrato,
+    pw.MemoryImage icon, {
+    required String titulo,
+  }) {
+    return pw.Column(
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Image(
+                  icon,
+                  width: 135,
+                  height: 76,
+                  fit: pw.BoxFit.contain,
+                ),
+                pw.SizedBox(height: 4),
+                _t(
+                  'Segurança Tecnologica SU, LDA (Stech Engenharia)',
+                  bold: true,
+                  size: 8.2,
+                ),
+                _t('Bairro: Chingodzi, Tete', size: 7.5),
+                _t('Numero: +258 84 239 0756 ou 87 939 0756', size: 7.5),
+                _t('Email: info@stech.co.mz', size: 7.5),
+                _t('Website: www.stecheng.co.mz', size: 7.5),
+                _t('NUIT: 401 684 530', size: 7.5),
+              ],
+            ),
+            pw.SizedBox(width: 18),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  _t(
+                    titulo,
+                    size: 15,
+                    bold: true,
+                    color: _kAzul,
+                    align: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 4),
+                  _t(
+                    'Periodo: ${_fmtData.format(extrato.dataInicio)}'
+                    ' a ${_fmtData.format(extrato.dataFim)}',
+                    size: 8.5,
+                    color: PdfColors.grey700,
+                    align: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 2),
+                  _t(
+                    'Gerado em: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
+                    size: 7.5,
+                    color: PdfColors.grey600,
+                    align: pw.TextAlign.right,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 8),
+        pw.Divider(color: _kAzul, thickness: 2),
+      ],
+    );
+  }
+
+  pw.Widget _cabecalhoClienteDocumental(
+    ExtratoModel extrato,
+    ClienteModel cliente,
+    pw.MemoryImage icon,
+  ) {
+    return pw.Column(
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Image(
+                  icon,
+                  width: 135,
+                  height: 76,
+                  fit: pw.BoxFit.contain,
+                ),
+                pw.SizedBox(height: 4),
+                _t(
+                  'Segurança Tecnologica SU, LDA (Stech Engenharia)',
+                  bold: true,
+                  size: 8.2,
+                ),
+                _t('Bairro: Chingodzi, Tete', size: 7.5),
+                _t('Numero: +258 84 239 0756 ou 87 939 0756', size: 7.5),
+                _t('Email: info@stech.co.mz', size: 7.5),
+                _t('Website: www.stecheng.co.mz', size: 7.5),
+                _t('NUIT: 401 684 530', size: 7.5),
+              ],
+            ),
+            pw.SizedBox(width: 18),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  _t(
+                    'EXTRACTO DOCUMENTAL DO CLIENTE',
+                    size: 14,
+                    bold: true,
+                    color: _kAzul,
+                    align: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 4),
+                  _t(
+                    cliente.nomeCompleto,
+                    size: 10.5,
+                    bold: true,
+                    color: _kVermelho,
+                    align: pw.TextAlign.right,
+                  ),
+                  if (cliente.nuit?.isNotEmpty == true)
+                    _t(
+                      'NUIT: ${cliente.nuit}',
+                      size: 8,
+                      color: PdfColors.grey700,
+                      align: pw.TextAlign.right,
+                    ),
+                  pw.SizedBox(height: 4),
+                  _t(
+                    'Periodo: ${_fmtData.format(extrato.dataInicio)}'
+                    ' a ${_fmtData.format(extrato.dataFim)}',
+                    size: 8.5,
+                    color: PdfColors.grey700,
+                    align: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 2),
+                  _t(
+                    'Gerado em: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
+                    size: 7.5,
+                    color: PdfColors.grey600,
+                    align: pw.TextAlign.right,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 8),
+        pw.Divider(color: _kAzul, thickness: 2),
+      ],
+    );
   }
 
   pw.Widget _cabecalhoHistoricoCliente(
@@ -343,41 +484,488 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Image(icon, width: 135, height: 80, fit: pw.BoxFit.contain),
-                pw.SizedBox(height: 6),
-                _t('Segurança Tecnologica SU, LDA (Stech Engenharia)', bold: true, size: 8.5),
-                pw.SizedBox(height: 2),
-                _t('Bairro: Chingodzi, Tete', size: 8),
-                _t('Numero: +258 84 239 0756 ou 87 939 0756', size: 8),
-                _t('Email: info@stech.co.mz', size: 8),
-                _t('Website: www.stecheng.co.mz', size: 8),
-                _t('NUIT: 401 684 530', size: 8),
+                pw.Image(
+                  icon,
+                  width: 135,
+                  height: 76,
+                  fit: pw.BoxFit.contain,
+                ),
+                pw.SizedBox(height: 4),
+                _t(
+                  'Segurança Tecnologica SU, LDA (Stech Engenharia)',
+                  bold: true,
+                  size: 8.2,
+                ),
+                _t('Bairro: Chingodzi, Tete', size: 7.5),
+                _t('Numero: +258 84 239 0756 ou 87 939 0756', size: 7.5),
+                _t('Email: info@stech.co.mz', size: 7.5),
+                _t('Website: www.stecheng.co.mz', size: 7.5),
+                _t('NUIT: 401 684 530', size: 7.5),
               ],
             ),
-            pw.SizedBox(width: 20),
+            pw.SizedBox(width: 18),
             pw.Expanded(
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
-                  _t('HISTORICO COMERCIAL DO CLIENTE', size: 16, bold: true, color: _kAzul),
-                  pw.SizedBox(height: 6),
-                  _t(cliente.nomeCompleto, size: 11, bold: true, color: _kVermelho),
+                  _t(
+                    'HISTORICO COMERCIAL DO CLIENTE',
+                    size: 15,
+                    bold: true,
+                    color: _kAzul,
+                    align: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 5),
+                  _t(
+                    cliente.nomeCompleto,
+                    size: 10.5,
+                    bold: true,
+                    color: _kVermelho,
+                    align: pw.TextAlign.right,
+                  ),
                   pw.SizedBox(height: 2),
                   _t(
                     'Gerado em: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
-                    size: 8,
+                    size: 7.5,
                     color: PdfColors.grey600,
+                    align: pw.TextAlign.right,
                   ),
                 ],
               ),
             ),
           ],
         ),
-        pw.SizedBox(height: 10),
-        pw.Divider(color: _kAzul, thickness: 2.5),
+        pw.SizedBox(height: 8),
+        pw.Divider(color: _kAzul, thickness: 2),
       ],
     );
   }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // TABELA 1 — PRESTAÇÃO DE SERVIÇOS / DOCUMENTOS FISCAIS
+  // Usada no extracto da empresa e no extracto documental do cliente.
+  // ══════════════════════════════════════════════════════════════════════
+
+  pw.Widget _tabelaPrestacaoServicos(
+    ExtratoModel extrato, {
+    String tituloDescricao = 'PRESTAÇÃO DE SERVIÇOS',
+  }) {
+final estiloHeader = pw.TextStyle(
+  fontSize: 8,
+  color: PdfColors.white,
+  fontWeight: pw.FontWeight.bold,
+);
+
+    const estiloCell = pw.TextStyle(fontSize: 5.8);
+    final estiloBold = pw.TextStyle(
+      fontSize: 5.8,
+      fontWeight: pw.FontWeight.bold,
+    );
+
+    final linhas = extrato.linhas;
+    final totalFactura = linhas.fold<double>(0, (acc, l) => acc + l.valorTotal);
+    final totalLiquido = _valorSemIva(totalFactura);
+    final totalIva = totalFactura - totalLiquido;
+
+    return pw.Table(
+      border: pw.TableBorder.all(
+        color: PdfColors.grey500,
+        width: 0.45,
+      ),
+      columnWidths: const {
+        0: pw.FixedColumnWidth(20),
+        1: pw.FixedColumnWidth(68),
+        2: pw.FixedColumnWidth(48),
+        3: pw.FixedColumnWidth(46),
+        4: pw.FlexColumnWidth(2.2),
+        5: pw.FixedColumnWidth(60),
+        6: pw.FixedColumnWidth(58),
+        7: pw.FixedColumnWidth(48),
+        8: pw.FixedColumnWidth(68),
+        9: pw.FixedColumnWidth(42),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: _kAzul),
+          children: [
+            _thCell('Nº DE\nORDEM', estiloHeader),
+            _thCell('DOCUMENTO Nº\nFACT Nº', estiloHeader),
+            _thCell('NUIT', estiloHeader),
+            _thCell('DATA', estiloHeader),
+            _thCell('DESCRIÇÃO\n$tituloDescricao', estiloHeader),
+            _thCell('VALOR DE\nFACTURA', estiloHeader),
+            _thCell('IVA COM DEDUÇÃO\nV. LÍQUIDO', estiloHeader),
+            _thCell('IVA', estiloHeader),
+            _thCell('COM EXCLUSÃO', estiloHeader),
+            _thCell('ISENTAS', estiloHeader),
+          ],
+        ),
+        for (int i = 0; i < _linhasMinimas(linhas.length); i++)
+          if (i < linhas.length)
+            pw.TableRow(
+              children: [
+                _tdCell('${i + 1}', estiloCell, align: pw.TextAlign.center),
+                _tdCell(linhas[i].numeroDocumento, estiloBold),
+                _tdCell(_sanitizar(linhas[i].nuit), estiloCell),
+                _tdCell(_fmtData.format(linhas[i].dataEmissao), estiloCell),
+                _tdCell(_sanitizar(linhas[i].nomeEmpresa), estiloCell),
+                _tdCell(
+                  _fmtNumero(linhas[i].valorTotal),
+                  estiloCell,
+                  align: pw.TextAlign.right,
+                ),
+                _tdCell(
+                  _fmtNumero(_valorSemIva(linhas[i].valorTotal)),
+                  estiloCell,
+                  align: pw.TextAlign.right,
+                ),
+                _tdCell(
+                  _fmtNumero(
+                    linhas[i].valorTotal - _valorSemIva(linhas[i].valorTotal),
+                  ),
+                  estiloCell,
+                  align: pw.TextAlign.right,
+                ),
+                _tdCell('-', estiloCell, align: pw.TextAlign.center),
+                _tdCell('-', estiloCell, align: pw.TextAlign.center),
+              ],
+            )
+          else
+            _linhaVaziaTabelaPrincipal(estiloCell),
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          children: [
+            _tdCell('', estiloBold),
+            _tdCell('', estiloBold),
+            _tdCell('', estiloBold),
+            _tdCell('', estiloBold),
+            _tdCell('TOTAL', estiloBold, align: pw.TextAlign.center),
+            _tdCell(
+              _fmtNumero(totalFactura),
+              estiloBold,
+              align: pw.TextAlign.right,
+            ),
+            _tdCell(
+              _fmtNumero(totalLiquido),
+              estiloBold,
+              align: pw.TextAlign.right,
+            ),
+            _tdCell(
+              _fmtNumero(totalIva),
+              estiloBold,
+              align: pw.TextAlign.right,
+            ),
+            _tdCell('-', estiloBold, align: pw.TextAlign.center),
+            _tdCell('-', estiloBold, align: pw.TextAlign.center),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // TABELAS DE DESPESAS POR TIPO
+  // Sempre aparecem no extracto da empresa, mesmo vazias.
+  // ══════════════════════════════════════════════════════════════════════
+
+  pw.Widget _tabelaDespesaPorTipo({
+    required String titulo,
+    required List<LinhaDespesaExtrato> despesas,
+  }) {
+final estiloHeader = pw.TextStyle(
+  fontSize: 5.7,
+  fontWeight: pw.FontWeight.bold,
+  color: PdfColors.white,
+);
+
+    const estiloCell = pw.TextStyle(fontSize: 5.8);
+    final estiloBold = pw.TextStyle(
+      fontSize: 5.8,
+      fontWeight: pw.FontWeight.bold,
+    );
+
+    final totalFactura = despesas.fold<double>(0, (acc, d) => acc + d.valorGasto);
+    final totalLiquido = _valorSemIva(totalFactura);
+    final totalIva = totalFactura - totalLiquido;
+
+    return pw.Table(
+      border: pw.TableBorder.all(
+        color: PdfColors.grey500,
+        width: 0.45,
+      ),
+      columnWidths: const {
+        0: pw.FixedColumnWidth(20),
+        1: pw.FixedColumnWidth(68),
+        2: pw.FixedColumnWidth(48),
+        3: pw.FixedColumnWidth(46),
+        4: pw.FlexColumnWidth(2.2),
+        5: pw.FixedColumnWidth(60),
+        6: pw.FixedColumnWidth(58),
+        7: pw.FixedColumnWidth(48),
+        8: pw.FixedColumnWidth(68),
+        9: pw.FixedColumnWidth(42),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: _kAzul),
+          children: [
+            _thCell('Nº DE\nORDEM', estiloHeader),
+            _thCell('DOCUMENTO Nº\nFACT Nº', estiloHeader),
+            _thCell('NUIT', estiloHeader),
+            _thCell('DATA', estiloHeader),
+            _thCell('DESCRIÇÃO\n$titulo', estiloHeader),
+            _thCell('VALOR DE\nFACTURA', estiloHeader),
+            _thCell('IVA COM DEDUÇÃO\nV. LÍQUIDO', estiloHeader),
+            _thCell('IVA', estiloHeader),
+            _thCell('Com exclusão do direito a dedução', estiloHeader),
+            _thCell('Isentas', estiloHeader),
+          ],
+        ),
+        for (int i = 0; i < _linhasMinimas(despesas.length); i++)
+          if (i < despesas.length)
+            pw.TableRow(
+              children: [
+                _tdCell('${i + 1}', estiloCell, align: pw.TextAlign.center),
+                _tdCell('-', estiloCell, align: pw.TextAlign.center),
+                _tdCell(_sanitizar(despesas[i].nuitFornecedor), estiloCell),
+                _tdCell(_fmtData.format(despesas[i].dataDespesa), estiloCell),
+                _tdCell(_sanitizar(despesas[i].descricao), estiloCell),
+                _tdCell(
+                  _fmtNumero(despesas[i].valorGasto),
+                  estiloCell,
+                  align: pw.TextAlign.right,
+                ),
+                _tdCell(
+                  _fmtNumero(_valorSemIva(despesas[i].valorGasto)),
+                  estiloCell,
+                  align: pw.TextAlign.right,
+                ),
+                _tdCell(
+                  _fmtNumero(
+                    despesas[i].valorGasto -
+                        _valorSemIva(despesas[i].valorGasto),
+                  ),
+                  estiloCell,
+                  align: pw.TextAlign.right,
+                ),
+                _tdCell('-', estiloCell, align: pw.TextAlign.center),
+                _tdCell('-', estiloCell, align: pw.TextAlign.center),
+              ],
+            )
+          else
+            _linhaVaziaTabelaPrincipal(estiloCell),
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          children: [
+            _tdCell('', estiloBold),
+            _tdCell('', estiloBold),
+            _tdCell('', estiloBold),
+            _tdCell('', estiloBold),
+            _tdCell('TOTAL', estiloBold, align: pw.TextAlign.center),
+            _tdCell(
+              _fmtNumero(totalFactura),
+              estiloBold,
+              align: pw.TextAlign.right,
+            ),
+            _tdCell(
+              _fmtNumero(totalLiquido),
+              estiloBold,
+              align: pw.TextAlign.right,
+            ),
+            _tdCell(
+              _fmtNumero(totalIva),
+              estiloBold,
+              align: pw.TextAlign.right,
+            ),
+            _tdCell('-', estiloBold, align: pw.TextAlign.center),
+            _tdCell('-', estiloBold, align: pw.TextAlign.center),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // TABELA FINAL — SIMULAÇÃO DO APURAMENTO DO IVA
+  // ══════════════════════════════════════════════════════════════════════
+
+  pw.Widget _tabelaResumoApuramento(ExtratoModel extrato) {
+    const estilo = pw.TextStyle(fontSize: 6.7);
+    final estiloBold = pw.TextStyle(
+      fontSize: 6.7,
+      fontWeight: pw.FontWeight.bold,
+    );
+
+    final prestacaoFactura = extrato.somaTotal;
+    final prestacaoLiquido = _valorSemIva(prestacaoFactura);
+    final prestacaoIva = prestacaoFactura - prestacaoLiquido;
+
+    final bens = _totalTipo(extrato, 'Bens e Serviços');
+    final imobilizado = _totalTipo(extrato, 'Imobilizado');
+    final existencias = _totalTipo(extrato, 'Existências');
+    final importacao = _totalTipo(extrato, 'Importação');
+
+    final bensIva = bens - _valorSemIva(bens);
+    final imobilizadoIva = imobilizado - _valorSemIva(imobilizado);
+    final existenciasIva = existencias - _valorSemIva(existencias);
+    final importacaoIva = importacao - _valorSemIva(importacao);
+
+    final totalIvaDedutivel =
+        bensIva + imobilizadoIva + existenciasIva + importacaoIva;
+
+    final ivaAPagarOuRecuperar = prestacaoIva - totalIvaDedutivel;
+    final resultadoLiquido = extrato.somaTotal - extrato.somaDespesas;
+
+    return pw.Align(
+      alignment: pw.Alignment.center,
+      child: pw.Container(
+        width: 370,
+        padding: const pw.EdgeInsets.all(6),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(
+            color: PdfColors.grey600,
+            width: 0.6,
+          ),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 3),
+              color: _kAzul,
+              child: _t(
+                'Simulação do Apuramento do IVA',
+                size: 7.5,
+                bold: true,
+                color: PdfColors.white,
+                align: pw.TextAlign.center,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+
+            _linhaResumo(
+              'Prestação de Serviços - Base Tributável',
+              _fmtNumero(prestacaoLiquido),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'IVA Apurado',
+              _fmtNumero(prestacaoIva),
+              estilo,
+              estiloBold,
+            ),
+
+            pw.Divider(color: PdfColors.grey400, thickness: 0.4),
+
+            _linhaResumo(
+              'Bens e Serviços - IVA dedutível',
+              _fmtNumero(bensIva),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'Imobilizado - IVA dedutível',
+              _fmtNumero(imobilizadoIva),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'Existências - IVA dedutível',
+              _fmtNumero(existenciasIva),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'Importação - IVA dedutível',
+              _fmtNumero(importacaoIva),
+              estilo,
+              estiloBold,
+            ),
+
+            pw.Divider(color: PdfColors.grey400, thickness: 0.4),
+
+            _linhaResumo(
+              'Total IVA dedutível',
+              _fmtNumero(totalIvaDedutivel),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'IVA a pagar / recuperar',
+              _fmtNumero(ivaAPagarOuRecuperar),
+              estilo,
+              estiloBold,
+            ),
+
+            pw.Divider(color: PdfColors.grey400, thickness: 0.4),
+
+            _linhaResumo(
+              'Total facturado',
+              _fmtNumero(extrato.somaTotal),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'Total gasto',
+              _fmtNumero(extrato.somaDespesas),
+              estilo,
+              estiloBold,
+            ),
+            _linhaResumo(
+              'Resultado líquido',
+              _fmtNumero(resultadoLiquido),
+              estilo,
+              estiloBold,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _linhaResumo(
+    String label,
+    String valor,
+    pw.TextStyle estilo,
+    pw.TextStyle estiloBold,
+  ) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Text(
+              label,
+              style: estilo,
+            ),
+          ),
+          pw.Container(
+            width: 100,
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 2,
+            ),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(
+                color: PdfColors.grey500,
+                width: 0.4,
+              ),
+            ),
+            child: pw.Text(
+              valor,
+              textAlign: pw.TextAlign.right,
+              style: estiloBold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // HISTÓRICO COMERCIAL — Widgets
+  // ══════════════════════════════════════════════════════════════════════
 
   pw.Widget _resumoHistoricoCliente({
     required ClienteModel cliente,
@@ -390,68 +978,138 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     required int totalDocumentos,
     required String mensagemSituacao,
   }) {
-    final situacao    = saldo > 0 ? 'EM DIVIDA' : 'REGULAR';
+    final situacao = saldo > 0 ? 'EM DIVIDA' : 'REGULAR';
     final situacaoCor = saldo > 0 ? _kVermelho : PdfColors.green700;
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
-        color:        PdfColors.grey100,
-        border:       pw.Border.all(color: PdfColors.grey400, width: 0.5),
+        color: PdfColors.grey100,
+        border: pw.Border.all(
+          color: PdfColors.grey400,
+          width: 0.5,
+        ),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          _t('Dados do Cliente', size: 10, bold: true, color: _kAzul),
+          _t(
+            'Dados do Cliente',
+            size: 10,
+            bold: true,
+            color: _kAzul,
+          ),
           pw.SizedBox(height: 8),
           pw.Wrap(
-            spacing:    20,
+            spacing: 20,
             runSpacing: 6,
             children: [
               _t('Empresa: ${cliente.nomeCompleto}', size: 8),
-              _t('NUIT: ${cliente.nuit?.isNotEmpty == true ? cliente.nuit! : '-'}', size: 8),
-              _t('Contacto: ${cliente.contacto?.isNotEmpty == true ? cliente.contacto! : '-'}', size: 8),
-              _t('Email: ${cliente.email?.isNotEmpty == true ? cliente.email! : '-'}', size: 8),
-              _t('Morada: ${cliente.morada?.isNotEmpty == true ? cliente.morada! : '-'}', size: 8),
+              _t(
+                'NUIT: ${cliente.nuit?.isNotEmpty == true ? cliente.nuit! : '-'}',
+                size: 8,
+              ),
+              _t(
+                'Contacto: ${cliente.contacto?.isNotEmpty == true ? cliente.contacto! : '-'}',
+                size: 8,
+              ),
+              _t(
+                'Email: ${cliente.email?.isNotEmpty == true ? cliente.email! : '-'}',
+                size: 8,
+              ),
+              _t(
+                'Morada: ${cliente.morada?.isNotEmpty == true ? cliente.morada! : '-'}',
+                size: 8,
+              ),
             ],
           ),
           pw.SizedBox(height: 10),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              _t('Situacao: $situacao', size: 10, bold: true, color: situacaoCor),
-              _t('Registos: $quantidadeRegistos', size: 9, bold: true, color: _kAzul),
-              _t('Documentos: $totalDocumentos', size: 9, bold: true, color: _kAzul),
+              _t(
+                'Situacao: $situacao',
+                size: 10,
+                bold: true,
+                color: situacaoCor,
+              ),
+              _t(
+                'Registos: $quantidadeRegistos',
+                size: 9,
+                bold: true,
+                color: _kAzul,
+              ),
+              _t(
+                'Documentos: $totalDocumentos',
+                size: 9,
+                bold: true,
+                color: _kAzul,
+              ),
             ],
           ),
           pw.SizedBox(height: 8),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              _t('Total em credito: ${_fmtMoeda.format(totalDivida)}', size: 9, bold: true, color: _kAzul),
-              _t('Total pago: ${_fmtMoeda.format(totalPago)}', size: 9, bold: true, color: PdfColors.green700),
-              _t('Saldo actual: ${_fmtMoeda.format(saldo)}', size: 9, bold: true, color: _kVermelho),
+              _t(
+                'Total em credito: ${_fmtMoeda.format(totalDivida)}',
+                size: 9,
+                bold: true,
+                color: _kAzul,
+              ),
+              _t(
+                'Total pago: ${_fmtMoeda.format(totalPago)}',
+                size: 9,
+                bold: true,
+                color: PdfColors.green700,
+              ),
+              _t(
+                'Saldo actual: ${_fmtMoeda.format(saldo)}',
+                size: 9,
+                bold: true,
+                color: _kVermelho,
+              ),
             ],
           ),
           pw.SizedBox(height: 8),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              _t('Pedidos pagos: $pedidosPagos', size: 9, bold: true, color: PdfColors.green700),
-              _t('Pendentes / parciais: $pedidosPendentes', size: 9, bold: true, color: PdfColors.orange700),
+              _t(
+                'Pedidos pagos: $pedidosPagos',
+                size: 9,
+                bold: true,
+                color: PdfColors.green700,
+              ),
+              _t(
+                'Pendentes / parciais: $pedidosPendentes',
+                size: 9,
+                bold: true,
+                color: PdfColors.orange700,
+              ),
             ],
           ),
           pw.SizedBox(height: 10),
           pw.Container(
-            width:   double.infinity,
+            width: double.infinity,
             padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
-              color: situacaoCor == _kVermelho ? PdfColors.red50 : PdfColors.green50,
-              border: pw.Border.all(color: situacaoCor, width: 0.7),
+              color: situacaoCor == _kVermelho
+                  ? PdfColors.red50
+                  : PdfColors.green50,
+              border: pw.Border.all(
+                color: situacaoCor,
+                width: 0.7,
+              ),
               borderRadius: pw.BorderRadius.circular(4),
             ),
-            child: _t(mensagemSituacao, size: 8.5, bold: true, color: situacaoCor),
+            child: _t(
+              mensagemSituacao,
+              size: 8.5,
+              bold: true,
+              color: situacaoCor,
+            ),
           ),
         ],
       ),
@@ -459,23 +1117,35 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
   }
 
   pw.Widget _tabelaHistoricoCliente(List<Map<String, dynamic>> linhas) {
-    const estiloHeader = pw.TextStyle(fontSize: 8, color: PdfColors.white);
-    const estiloCell   = pw.TextStyle(fontSize: 8);
-    final estiloCellBold = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
+final estiloHeader = pw.TextStyle(
+  fontSize: 5.7,
+  fontWeight: pw.FontWeight.bold,
+  color: PdfColors.white,
+);
+
+    const estiloCell = pw.TextStyle(fontSize: 8);
+
+    final estiloCellBold = pw.TextStyle(
+      fontSize: 8,
+      fontWeight: pw.FontWeight.bold,
+    );
 
     if (linhas.isEmpty) {
       return pw.Container(
-        width:   double.infinity,
+        width: double.infinity,
         padding: const pw.EdgeInsets.all(16),
         decoration: pw.BoxDecoration(
-          color:        PdfColors.grey100,
-          border:       pw.Border.all(color: PdfColors.grey400, width: 0.5),
+          color: PdfColors.grey100,
+          border: pw.Border.all(
+            color: PdfColors.grey400,
+            width: 0.5,
+          ),
           borderRadius: pw.BorderRadius.circular(4),
         ),
         child: pw.Center(
           child: _t(
             'Nenhum historico comercial encontrado para este cliente.',
-            size:  9,
+            size: 9,
             color: PdfColors.grey700,
           ),
         ),
@@ -483,7 +1153,10 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     }
 
     return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+      border: pw.TableBorder.all(
+        color: PdfColors.grey400,
+        width: 0.5,
+      ),
       columnWidths: const {
         0: pw.FixedColumnWidth(100),
         1: pw.FixedColumnWidth(72),
@@ -496,12 +1169,24 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: _kAzul),
           children: [
-            _thCell('Pedido',    estiloHeader),
+            _thCell('Pedido', estiloHeader),
             _thCell('Documento', estiloHeader),
-            _thCell('Total',     estiloHeader, align: pw.TextAlign.right),
-            _thCell('Pago',      estiloHeader, align: pw.TextAlign.right),
-            _thCell('Saldo',     estiloHeader, align: pw.TextAlign.right),
-            _thCell('Estado',    estiloHeader),
+            _thCell(
+              'Total',
+              estiloHeader,
+              align: pw.TextAlign.right,
+            ),
+            _thCell(
+              'Pago',
+              estiloHeader,
+              align: pw.TextAlign.right,
+            ),
+            _thCell(
+              'Saldo',
+              estiloHeader,
+              align: pw.TextAlign.right,
+            ),
+            _thCell('Estado', estiloHeader),
           ],
         ),
         for (int i = 0; i < linhas.length; i++)
@@ -511,7 +1196,8 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
             ),
             children: [
               _tdCell(
-                '${(linhas[i]['referencia'] ?? '-').toString()}\nPedido #${(linhas[i]['idPedido'] ?? '-').toString()}',
+                '${(linhas[i]['referencia'] ?? '-').toString()}\n'
+                'Pedido #${(linhas[i]['idPedido'] ?? '-').toString()}',
                 estiloCellBold,
               ),
               _tdCell(
@@ -521,22 +1207,30 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
                 estiloCell,
               ),
               _tdCell(
-                _fmtMoeda.format(((linhas[i]['total']      as num?) ?? 0).toDouble()),
+                _fmtMoeda.format(
+                  ((linhas[i]['total'] as num?) ?? 0).toDouble(),
+                ),
                 estiloCell,
                 align: pw.TextAlign.right,
               ),
               _tdCell(
-                _fmtMoeda.format(((linhas[i]['valorPago']  as num?) ?? 0).toDouble()),
+                _fmtMoeda.format(
+                  ((linhas[i]['valorPago'] as num?) ?? 0).toDouble(),
+                ),
                 estiloCell,
                 align: pw.TextAlign.right,
               ),
               _tdCell(
-                _fmtMoeda.format(((linhas[i]['saldo']      as num?) ?? 0).toDouble()),
+                _fmtMoeda.format(
+                  ((linhas[i]['saldo'] as num?) ?? 0).toDouble(),
+                ),
                 estiloCell,
                 align: pw.TextAlign.right,
               ),
               _tdCell(
-                _statusLabelPdf((linhas[i]['statusPagamento'] ?? '-').toString()),
+                _statusLabelPdf(
+                  (linhas[i]['statusPagamento'] ?? '-').toString(),
+                ),
                 estiloCell,
               ),
             ],
@@ -557,8 +1251,11 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
-        color:        PdfColors.grey100,
-        border:       pw.Border.all(color: PdfColors.grey400, width: 0.5),
+        color: PdfColors.grey100,
+        border: pw.Border.all(
+          color: PdfColors.grey400,
+          width: 0.5,
+        ),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Column(
@@ -566,54 +1263,157 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                _t('Total de registos:',   size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t('$quantidadeRegistos',  size: 12, bold: true, color: _kAzul),
-              ]),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                _t('Total de documentos:', size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t('$totalDocumentos',     size: 12, bold: true, color: _kAzul),
-              ]),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                _t('Pedidos pagos:',       size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t('$pedidosPagos',        size: 12, bold: true, color: PdfColors.green700),
-              ]),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                _t('Pend./Parciais:',      size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t('$pedidosPendentes',    size: 12, bold: true, color: PdfColors.orange700),
-              ]),
+              _blocoResumo(
+                titulo: 'Total de registos:',
+                valor: '$quantidadeRegistos',
+                cor: _kAzul,
+              ),
+              _blocoResumo(
+                titulo: 'Total de documentos:',
+                valor: '$totalDocumentos',
+                cor: _kAzul,
+              ),
+              _blocoResumo(
+                titulo: 'Pedidos pagos:',
+                valor: '$pedidosPagos',
+                cor: PdfColors.green700,
+              ),
+              _blocoResumo(
+                titulo: 'Pend./Parciais:',
+                valor: '$pedidosPendentes',
+                cor: PdfColors.orange700,
+              ),
             ],
           ),
           pw.SizedBox(height: 12),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                _t('Total em credito:', size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t(_fmtMoeda.format(totalDivida), size: 12, bold: true, color: _kAzul),
-              ]),
+              _blocoFinanceiro(
+                titulo: 'Total em credito:',
+                valor: _fmtMoeda.format(totalDivida),
+                cor: _kAzul,
+              ),
               pw.SizedBox(width: 24),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                _t('Total pago:', size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t(_fmtMoeda.format(totalPago), size: 12, bold: true, color: PdfColors.green700),
-              ]),
+              _blocoFinanceiro(
+                titulo: 'Total pago:',
+                valor: _fmtMoeda.format(totalPago),
+                cor: PdfColors.green700,
+              ),
               pw.SizedBox(width: 24),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                _t('Saldo actual:', size: 8, color: PdfColors.grey700),
-                pw.SizedBox(height: 2),
-                _t(_fmtMoeda.format(saldo), size: 12, bold: true, color: _kVermelho),
-              ]),
+              _blocoFinanceiro(
+                titulo: 'Saldo actual:',
+                valor: _fmtMoeda.format(saldo),
+                cor: _kVermelho,
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // WIDGETS PEQUENOS
+  // ══════════════════════════════════════════════════════════════════════
+
+  pw.Widget _blocoResumo({
+    required String titulo,
+    required String valor,
+    required PdfColor cor,
+  }) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _t(
+          titulo,
+          size: 8,
+          color: PdfColors.grey700,
+        ),
+        pw.SizedBox(height: 2),
+        _t(
+          valor,
+          size: 12,
+          bold: true,
+          color: cor,
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _blocoFinanceiro({
+    required String titulo,
+    required String valor,
+    required PdfColor cor,
+  }) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.end,
+      children: [
+        _t(
+          titulo,
+          size: 8,
+          color: PdfColors.grey700,
+        ),
+        pw.SizedBox(height: 2),
+        _t(
+          valor,
+          size: 12,
+          bold: true,
+          color: cor,
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _notaFiscal() {
+    return pw.Center(
+      child: _t(
+        'Documento processado por computador atraves do Sistema de Facturacao Stech ERP.',
+        size: 7,
+        color: PdfColors.grey600,
+      ),
+    );
+  }
+
+  pw.Widget _rodapePagina(pw.Context ctx) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        _t(
+          'Stech Engenharia (c) ${DateTime.now().year}',
+          size: 7,
+          color: PdfColors.grey600,
+        ),
+        _t(
+          'Pagina ${ctx.pageNumber} de ${ctx.pagesCount}',
+          size: 7,
+          color: PdfColors.grey600,
+        ),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SALVAR
+  // ══════════════════════════════════════════════════════════════════════
+
+  Future<File> _salvar(
+    pw.Document pdf,
+    ExtratoModel extrato,
+  ) async {
+    final periodoSeguro = extrato.labelPeriodo
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(' ', '_');
+
+    final nome =
+        'EXTRATO_EMPRESA-$periodoSeguro-${_fmtNomeArq.format(DateTime.now())}.pdf';
+
+    final dir = await _resolveDirectory();
+    final file = File('${dir.path}/$nome');
+
+    await file.writeAsBytes(await pdf.save());
+
+    return file;
   }
 
   Future<File> _salvarHistoricoCliente(
@@ -623,319 +1423,15 @@ theme: pw.ThemeData.withFont(base: _font, bold: _fontBold),
     final nomeCliente = cliente.nomeCompleto
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .replaceAll(' ', '_');
+
     final nome =
-        'HISTORICO_CLIENTE-${nomeCliente}-${_fmtNomeArq.format(DateTime.now())}.pdf';
-    final dir  = await _resolveDirectory();
+        'HISTORICO_CLIENTE-$nomeCliente-${_fmtNomeArq.format(DateTime.now())}.pdf';
+
+    final dir = await _resolveDirectory();
     final file = File('${dir.path}/$nome');
+
     await file.writeAsBytes(await pdf.save());
-    return file;
-  }
 
-  // -- Cabecalho ------------------------------------------------------------
-
-  pw.Widget _cabecalho(ExtratoModel extrato, pw.MemoryImage icon) {
-    return pw.Column(
-      children: [
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Image(icon, width: 135, height: 80, fit: pw.BoxFit.contain),
-                pw.SizedBox(height: 6),
-                _t('Segurança Tecnologica SU, LDA (Stech Engenharia)', bold: true, size: 8.5),
-                pw.SizedBox(height: 2),
-                _t('Bairro: Chingodzi, Tete', size: 8),
-                _t('Numero: +258 84 239 0756 ou 87 939 0756', size: 8),
-                _t('Email: info@stech.co.mz', size: 8),
-                _t('Website: www.stecheng.co.mz', size: 8),
-                _t('NUIT: 401 684 530', size: 8),
-              ],
-            ),
-            pw.SizedBox(width: 20),
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                _t('EXTRACTO DE DOCUMENTOS FISCAIS', size: 16, bold: true, color: _kAzul),
-                pw.SizedBox(height: 6),
-                _t(
-                  'Periodo: ${_fmtData.format(extrato.dataInicio)}'
-                  ' a ${_fmtData.format(extrato.dataFim)}',
-                  size:  9,
-                  color: PdfColors.grey700,
-                ),
-                pw.SizedBox(height: 2),
-                _t(
-                  'Gerado em: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
-                  size:  8,
-                  color: PdfColors.grey600,
-                ),
-              ],
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 10),
-        pw.Divider(color: _kAzul, thickness: 2.5),
-      ],
-    );
-  }
-
-  // -- Tabelas --------------------------------------------------------------
-
-  pw.Widget _tituloTabela(String titulo) {
-    return pw.Container(
-      width:   double.infinity,
-      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: pw.BoxDecoration(
-        color:        _kAzul,
-        borderRadius: pw.BorderRadius.circular(3),
-      ),
-      child: _t(titulo, size: 8.5, bold: true, color: PdfColors.white),
-    );
-  }
-
-  pw.Widget _tabela(ExtratoModel extrato) {
-    const estiloHeader   = pw.TextStyle(fontSize: 8, color: PdfColors.white);
-    const estiloCell     = pw.TextStyle(fontSize: 8);
-    final estiloCellBold = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-      columnWidths: const {
-        0: pw.FixedColumnWidth(60),
-        1: pw.FixedColumnWidth(80),
-        2: pw.FlexColumnWidth(),
-        3: pw.FixedColumnWidth(72),
-        4: pw.FixedColumnWidth(88),
-      },
-      children: [
-        pw.TableRow(
-          decoration: const pw.BoxDecoration(color: _kAzul),
-          children: [
-            _thCell('Data',        estiloHeader),
-            _thCell('Documento',   estiloHeader),
-            _thCell('Empresa',     estiloHeader),
-            _thCell('NUIT',        estiloHeader),
-            _thCell('Valor Total', estiloHeader, align: pw.TextAlign.right),
-          ],
-        ),
-        for (int i = 0; i < extrato.linhas.length; i++)
-          pw.TableRow(
-            decoration: pw.BoxDecoration(
-              color: i.isOdd ? PdfColors.grey100 : PdfColors.white,
-            ),
-            children: [
-              _tdCell(_fmtData.format(extrato.linhas[i].dataEmissao), estiloCell),
-              _tdCell(extrato.linhas[i].numeroDocumento, estiloCellBold),
-              _tdCell(_sanitizar(extrato.linhas[i].nomeEmpresa), estiloCell),
-              _tdCell(_sanitizar(extrato.linhas[i].nuit), estiloCell),
-              _tdCell(
-                _fmtMoeda.format(extrato.linhas[i].valorTotal),
-                estiloCell,
-                align: pw.TextAlign.right,
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  pw.Widget _tabelaDespesas(ExtratoModel extrato) {
-    const estiloHeader   = pw.TextStyle(fontSize: 8, color: PdfColors.white);
-    const estiloCell     = pw.TextStyle(fontSize: 8);
-    final estiloCellBold = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
-
-    if (extrato.despesas.isEmpty) {
-      return pw.Container(
-        width:   double.infinity,
-        padding: const pw.EdgeInsets.all(12),
-        decoration: pw.BoxDecoration(
-          color:        PdfColors.grey100,
-          border:       pw.Border.all(color: PdfColors.grey400, width: 0.5),
-          borderRadius: pw.BorderRadius.circular(4),
-        ),
-        child: pw.Center(
-          child: _t(
-            'Nenhuma despesa registada neste periodo.',
-            size:  8.5,
-            color: PdfColors.grey700,
-          ),
-        ),
-      );
-    }
-
-    return pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(3),
-        1: pw.FlexColumnWidth(2),
-        2: pw.FixedColumnWidth(72),
-        3: pw.FixedColumnWidth(88),
-        4: pw.FixedColumnWidth(62),
-      },
-      children: [
-        pw.TableRow(
-          decoration: const pw.BoxDecoration(color: _kAzul),
-          children: [
-            _thCell('Descricao',  estiloHeader),
-            _thCell('Fornecedor', estiloHeader),
-            _thCell('NUIT',       estiloHeader),
-            _thCell('Valor',      estiloHeader, align: pw.TextAlign.right),
-            _thCell('Data',       estiloHeader),
-          ],
-        ),
-        for (int i = 0; i < extrato.despesas.length; i++)
-          pw.TableRow(
-            decoration: pw.BoxDecoration(
-              color: i.isOdd ? PdfColors.grey100 : PdfColors.white,
-            ),
-            children: [
-          _tdCell(_sanitizar(extrato.despesas[i].descricao), estiloCellBold),
-             _tdCell(_sanitizar(extrato.despesas[i].nomeFornecedor), estiloCell),
-              _tdCell(
-  _sanitizar(extrato.despesas[i].nuitFornecedor),
-  estiloCell,
-),
-              _tdCell(
-                _fmtMoeda.format(extrato.despesas[i].valorGasto),
-                estiloCellBold,
-                align: pw.TextAlign.right,
-              ),
-              _tdCell(
-                _fmtData.format(extrato.despesas[i].dataDespesa),
-                estiloCell,
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  // -- Rodape de totais -----------------------------------------------------
-
-  pw.Widget _rodapeTotais(ExtratoModel extrato) {
-    final resultadoCor =
-        extrato.resultadoLiquido >= 0 ? PdfColors.green700 : _kVermelho;
-
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color:        PdfColors.grey100,
-        border:       pw.Border.all(color: PdfColors.grey400, width: 0.5),
-        borderRadius: pw.BorderRadius.circular(4),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              _blocoResumo(
-                titulo: 'Documentos emitidos',
-                valor:  '${extrato.totalDocumentos}',
-                cor:    _kAzul,
-              ),
-              _blocoResumo(
-                titulo: 'Despesas registadas',
-                valor:  '${extrato.totalDespesasRegistadas}',
-                cor:    _kVermelho,
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 12),
-          pw.Divider(color: PdfColors.grey400, thickness: 0.5),
-          pw.SizedBox(height: 8),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [
-              _blocoFinanceiro(
-                titulo: 'Total facturado / emitido',
-                valor:  _fmtMoeda.format(extrato.somaTotal),
-                cor:    _kAzul,
-              ),
-              pw.SizedBox(width: 24),
-              _blocoFinanceiro(
-                titulo: 'Total gasto',
-                valor:  _fmtMoeda.format(extrato.somaDespesas),
-                cor:    _kVermelho,
-              ),
-              pw.SizedBox(width: 24),
-              _blocoFinanceiro(
-                titulo: 'Resultado liquido',
-                valor:  _fmtMoeda.format(extrato.resultadoLiquido),
-                cor:    resultadoCor,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _blocoResumo({
-    required String   titulo,
-    required String   valor,
-    required PdfColor cor,
-  }) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _t(titulo, size: 8, color: PdfColors.grey700),
-        pw.SizedBox(height: 2),
-        _t(valor, size: 12, bold: true, color: cor),
-      ],
-    );
-  }
-
-  pw.Widget _blocoFinanceiro({
-    required String   titulo,
-    required String   valor,
-    required PdfColor cor,
-  }) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.end,
-      children: [
-        _t(titulo, size: 8, color: PdfColors.grey700),
-        pw.SizedBox(height: 2),
-        _t(valor, size: 12, bold: true, color: cor),
-      ],
-    );
-  }
-
-  // -- Nota fiscal ----------------------------------------------------------
-
-  pw.Widget _notaFiscal() {
-    return pw.Center(
-      child: _t(
-        'Documento processado por computador atraves do Sistema de Facturacao Stech ERP.',
-        size:  7,
-        color: PdfColors.grey600,
-      ),
-    );
-  }
-
-  // -- Rodape de pagina -----------------------------------------------------
-
-  pw.Widget _rodapePagina(pw.Context ctx) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        _t('Stech Engenharia (c) ${DateTime.now().year}', size: 7, color: PdfColors.grey600),
-        _t('Pagina ${ctx.pageNumber} de ${ctx.pagesCount}', size: 7, color: PdfColors.grey600),
-      ],
-    );
-  }
-
-  // -- Salvar ---------------------------------------------------------------
-
-  Future<File> _salvar(pw.Document pdf, ExtratoModel extrato) async {
-final nome =
-    'EXTRATO-NOVO-${DateTime.now().millisecondsSinceEpoch}.pdf';
-    final dir  = await _resolveDirectory();
-    final file = File('${dir.path}/$nome');
-    await file.writeAsBytes(await pdf.save());
     return file;
   }
 
@@ -943,73 +1439,180 @@ final nome =
     try {
       if (Platform.isAndroid) {
         final d = Directory('/storage/emulated/0/Download/');
-        if (await d.exists()) return d;
+
+        if (await d.exists()) {
+          return d;
+        }
+
         final ext = await getExternalStorageDirectory();
+
         if (ext != null) {
           final d2 = Directory('${ext.path}/Downloads');
-          if (!await d2.exists()) await d2.create(recursive: true);
+
+          if (!await d2.exists()) {
+            await d2.create(recursive: true);
+          }
+
           return d2;
         }
       } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         final dl = await getDownloadsDirectory();
-        if (dl != null) return dl;
+
+        if (dl != null) {
+          return dl;
+        }
       }
     } catch (_) {}
+
     return getApplicationDocumentsDirectory();
   }
 
-  // -- Helpers --------------------------------------------------------------
+  // ══════════════════════════════════════════════════════════════════════
+  // HELPERS DE TABELAS E CÁLCULOS
+  // ══════════════════════════════════════════════════════════════════════
 
-pw.Widget _t(String text, {double size = 10, bool bold = false, PdfColor? color}) {
-  return pw.Text(
-    text,
-    style: pw.TextStyle(
-      font:       bold ? _fontBold : _font,
-      fontSize:   size,
-      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-      color:      color,
-    ),
-  );
-}
+  List<LinhaDespesaExtrato> _despesasDoTipo(
+    ExtratoModel extrato,
+    String tipo,
+  ) {
+    final tipoNormalizado = tipo.trim().toLowerCase();
 
-pw.Widget _thCell(String text, pw.TextStyle style, {pw.TextAlign align = pw.TextAlign.left}) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-    child:   pw.Text(text, style: style.copyWith(font: _font), textAlign: align),
-  );
-}
+    return extrato.despesas.where((d) {
+      final nome = (d.nomeTipoDespesa ?? '').trim().toLowerCase();
+      return nome == tipoNormalizado;
+    }).toList();
+  }
 
-pw.Widget _tdCell(String text, pw.TextStyle style, {pw.TextAlign align = pw.TextAlign.left}) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-    child:   pw.Text(text, style: style.copyWith(font: _font), textAlign: align),
-  );
-}
+  double _totalTipo(
+    ExtratoModel extrato,
+    String tipo,
+  ) {
+    return _despesasDoTipo(extrato, tipo).fold<double>(
+      0,
+      (acc, d) => acc + d.valorGasto,
+    );
+  }
+
+  int _linhasMinimas(int quantidade) {
+    if (quantidade <= 0) return 2;
+    if (quantidade < 3) return 3;
+    return quantidade;
+  }
+
+  pw.TableRow _linhaVaziaTabelaPrincipal(pw.TextStyle estiloCell) {
+    return pw.TableRow(
+      children: [
+        _tdCell('', estiloCell),
+        _tdCell('', estiloCell),
+        _tdCell('', estiloCell),
+        _tdCell('', estiloCell),
+        _tdCell('', estiloCell),
+        _tdCell('-', estiloCell, align: pw.TextAlign.right),
+        _tdCell('-', estiloCell, align: pw.TextAlign.right),
+        _tdCell('-', estiloCell, align: pw.TextAlign.right),
+        _tdCell('-', estiloCell, align: pw.TextAlign.center),
+        _tdCell('-', estiloCell, align: pw.TextAlign.center),
+      ],
+    );
+  }
+
+  double _valorSemIva(double valorComIva) {
+    if (valorComIva <= 0) return 0;
+    return valorComIva / 1.16;
+  }
+
+  String _fmtNumero(double valor) {
+    if (valor == 0) return '-';
+
+    return NumberFormat('#,##0.00', 'pt_PT').format(valor);
+  }
 
   String _statusLabelPdf(String status) {
     switch (status.toUpperCase()) {
-      case 'PAGO':     return 'Pago';
-      case 'PARCIAL':  return 'Parcial';
-      case 'PENDENTE': return 'Pendente';
-      default:         return status;
+      case 'PAGO':
+        return 'Pago';
+      case 'PARCIAL':
+        return 'Parcial';
+      case 'PENDENTE':
+        return 'Pendente';
+      default:
+        return status;
     }
   }
 
   String _sanitizar(String? texto) {
-  if (texto == null || texto.trim().isEmpty) return '-';
-  final resultado = texto
-      .replaceAll('—', '-')
-      .replaceAll('–', '-')
-      .replaceAll('\u2014', '-')
-      .replaceAll('\u2013', '-')
-      .replaceAll('\u00A0', ' ')
-      .replaceAll(RegExp(r'[^\x00-\x7F]'), '?');
-  
-  // TEMPORÁRIO
-  if (texto != resultado) {
-    print('>>> _sanitizar alterou: "$texto" -> "$resultado"');
-  }
-  return resultado;
-}
-}
+    if (texto == null || texto.trim().isEmpty) {
+      return '-';
+    }
 
+    return texto
+        .replaceAll('—', '-')
+        .replaceAll('–', '-')
+        .replaceAll('\u2014', '-')
+        .replaceAll('\u2013', '-')
+        .replaceAll('\u00A0', ' ')
+        .trim();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // HELPERS DE TEXTO
+  // Sem Roboto, sem assets/fonts, sem ThemeData.withFont.
+  // ══════════════════════════════════════════════════════════════════════
+
+  pw.Widget _t(
+    String text, {
+    double size = 10,
+    bool bold = false,
+    PdfColor? color,
+    pw.TextAlign? align,
+  }) {
+    return pw.Text(
+      text,
+      textAlign: align,
+      style: pw.TextStyle(
+        fontSize: size,
+        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+        color: color,
+      ),
+    );
+  }
+
+  pw.Widget _thCell(
+    String text,
+    pw.TextStyle style, {
+    pw.TextAlign align = pw.TextAlign.center,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(
+        horizontal: 2,
+        vertical: 3,
+      ),
+      child: pw.Text(
+        text,
+        style: style,
+        textAlign: align,
+        maxLines: 3,
+      ),
+    );
+  }
+
+  pw.Widget _tdCell(
+    String text,
+    pw.TextStyle style, {
+    pw.TextAlign align = pw.TextAlign.left,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(
+        horizontal: 2,
+        vertical: 2.5,
+      ),
+      child: pw.Text(
+        text,
+        style: style,
+        textAlign: align,
+        maxLines: 2,
+        overflow: pw.TextOverflow.clip,
+      ),
+    );
+  }
+}

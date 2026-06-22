@@ -108,6 +108,8 @@ final despesas = despesasRaw.map((d) {
         : 'Sem fornecedor',
     nuitFornecedor: d.nuitFornecedor,
     valorGasto: d.valorGasto,
+    idTipoDespesa: d.idTipoDespesa,
+    nomeTipoDespesa: d.nomeTipoDespesa,
   );
 }).toList();
 

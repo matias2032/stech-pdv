@@ -324,7 +324,9 @@ Future<void> _exportar() async {
   // ── Botão exportar ────────────────────────────────────────────────────────
 
   Widget _botaoExportar() {
-    final temDados = (_previa?.totalDocumentos ?? 0) > 0;
+final temDados =
+    ((_previa?.totalDocumentos ?? 0) > 0) ||
+    ((_previa?.totalDespesasRegistadas ?? 0) > 0);
     return ElevatedButton.icon(
       onPressed: (_gerando || !temDados) ? null : _exportar,
       icon: _gerando

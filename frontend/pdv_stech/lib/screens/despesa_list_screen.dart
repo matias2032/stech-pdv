@@ -70,9 +70,11 @@ WidgetsBinding.instance.addPostFrameCallback((_) async {
   }
 
 Future<void> _carregarPorPeriodo() async {
-  final agora = DateTime.now();
+  if (!mounted) return;
 
+  final agora = DateTime.now();
   final provider = context.read<DespesaProvider>();
+
   provider.definirFiltroTipoDespesa(_idTipoDespesaFiltro);
 
   await provider.carregarPorPeriodoComFiltro(
@@ -81,16 +83,18 @@ Future<void> _carregarPorPeriodo() async {
   );
 }
 
-  Future<void> _abrirFormulario({DespesaModel? despesa}) async {
-    final resultado = await Navigator.of(context).pushNamed(
-      '/cadastrar_despesas',
-      arguments: despesa,
-    );
+Future<void> _abrirFormulario({DespesaModel? despesa}) async {
+  final resultado = await Navigator.of(context).pushNamed(
+    '/cadastrar_despesas',
+    arguments: despesa,
+  );
 
-    if (resultado == true && mounted) {
-      _carregarPorPeriodo();
-    }
+  if (!mounted) return;
+
+  if (resultado == true) {
+    await _carregarPorPeriodo();
   }
+}
 
   void _mostrarSnack(BuildContext ctx, String mensagem, {bool erro = false}) {
     ScaffoldMessenger.of(ctx).showSnackBar(
@@ -154,14 +158,14 @@ Future<void> _carregarPorPeriodo() async {
         _FiltroPeriodo(
   periodo: _periodo,
   idTipoDespesaFiltro: _idTipoDespesaFiltro,
-  onPeriodoChanged: (novo) {
-    setState(() => _periodo = novo);
-    _carregarPorPeriodo();
-  },
-  onTipoChanged: (novoTipo) {
-    setState(() => _idTipoDespesaFiltro = novoTipo);
-    _carregarPorPeriodo();
-  },
+onPeriodoChanged: (novo) async {
+  setState(() => _periodo = novo);
+  await _carregarPorPeriodo();
+},
+onTipoChanged: (novoTipo) async {
+  setState(() => _idTipoDespesaFiltro = novoTipo);
+  await _carregarPorPeriodo();
+},
 ),
           const Divider(height: 1),
           Expanded(
@@ -212,7 +216,9 @@ Future<void> _carregarPorPeriodo() async {
         IconButton(
           icon: const Icon(Icons.refresh_rounded),
           tooltip: 'Recarregar',
-          onPressed: _carregarPorPeriodo,
+onPressed: () async {
+  await _carregarPorPeriodo();
+},
         ),
         const SizedBox(width: 8),
       ],

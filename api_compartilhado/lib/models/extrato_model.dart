@@ -24,12 +24,17 @@ class LinhaDespesaExtrato {
   final String? nuitFornecedor;
   final double valorGasto;
 
+  final int? idTipoDespesa;
+  final String? nomeTipoDespesa;
+
   const LinhaDespesaExtrato({
     required this.dataDespesa,
     required this.descricao,
     required this.nomeFornecedor,
     this.nuitFornecedor,
     required this.valorGasto,
+    this.idTipoDespesa,
+    this.nomeTipoDespesa,
   });
 }
 

@@ -8,7 +8,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 
-import 'package:path/path.dart';
+
 
 
 import 'screens/usuarios_list_screen.dart';
@@ -59,20 +59,13 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // ⚠️ TEMPORÁRIO — apagar toda a BD local SQLite
-  final dbPath = await getDatabasesPath();
-  final path = join(dbPath, 'stech_pdv.db');
-
-  await deleteDatabase(path);
-
-  debugPrint('🗑️ BD local eliminada com sucesso: $path');
-
   await ApiConfig.baseUrlAsync;
   ApiConfig.printConfig();
 
-  await LocalDatabase.instance.init();
+await LocalDatabase.instance.init();
 
-  await ConnectivityService.instance.init();
+
+  await ConnectivityService.instance.init(); // ← usa o init() unificado
 
   runApp(const MyApp());
 }
