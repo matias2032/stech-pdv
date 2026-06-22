@@ -153,18 +153,25 @@ Future<pw.Document> _buildExtractoDocumentalCliente(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
       footer: (ctx) => _rodapePagina(ctx),
-      build: (ctx) => [
-        // Reutiliza cabeçalho original mas com título adaptado
-        _cabecalhoClienteDocumental(extrato, cliente, iconImage),
-        pw.SizedBox(height: 10),
-        // Reutiliza tabela original — já tem Data, Documento, Empresa, NUIT, Valor
-        _tabela(extrato),
-        pw.SizedBox(height: 12),
-        // Reutiliza rodapé de totais original
-        _rodapeTotais(extrato),
-        pw.SizedBox(height: 8),
-        _notaFiscal(),
-      ],
+build: (ctx) => [
+  _cabecalho(extrato, iconImage),
+
+  pw.SizedBox(height: 10),
+  _tituloTabela('DOCUMENTOS FISCAIS EMITIDOS'),
+  pw.SizedBox(height: 4),
+  _tabela(extrato),
+
+  pw.SizedBox(height: 14),
+  _tituloTabela('DESPESAS REGISTADAS'),
+  pw.SizedBox(height: 4),
+  _tabelaDespesas(extrato),
+
+  pw.SizedBox(height: 12),
+  _rodapeTotais(extrato),
+
+  pw.SizedBox(height: 8),
+  _notaFiscal(),
+],
     ),
   );
 
@@ -796,7 +803,26 @@ Future<File> _salvarHistoricoCliente(
   );
 }
 
+
+
   // ── Tabela ───────────────────────────────────────────────────────────────
+pw.Widget _tituloTabela(String titulo) {
+  return pw.Container(
+    width: double.infinity,
+    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: pw.BoxDecoration(
+      color: _kAzul,
+      borderRadius: pw.BorderRadius.circular(3),
+    ),
+    child: _t(
+      titulo,
+      size: 8.5,
+      bold: true,
+      color: PdfColors.white,
+    ),
+  );
+}
+
 
   pw.Widget _tabela(ExtratoModel extrato) {
     const estiloHeader = pw.TextStyle(
@@ -856,67 +882,195 @@ Future<File> _salvarHistoricoCliente(
     );
   }
 
-  // ── Rodapé de totais ─────────────────────────────────────────────────────
+  pw.Widget _tabelaDespesas(ExtratoModel extrato) {
+  const estiloHeader = pw.TextStyle(
+    fontSize: 8,
+    color: PdfColors.white,
+  );
 
-  pw.Widget _rodapeTotais(ExtratoModel extrato) {
+  const estiloCell = pw.TextStyle(fontSize: 8);
+
+  final estiloCellBold = pw.TextStyle(
+    fontSize: 8,
+    fontWeight: pw.FontWeight.bold,
+  );
+
+  if (extrato.despesas.isEmpty) {
     return pw.Container(
+      width: double.infinity,
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey100,
         border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
         borderRadius: pw.BorderRadius.circular(4),
       ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _t('Período considerado:', size: 8, color: PdfColors.grey700),
-              pw.SizedBox(height: 2),
-              _t(
-                '${_fmtData.format(extrato.dataInicio)}'
-                ' → ${_fmtData.format(extrato.dataFim)}',
-                size: 9,
-                bold: true,
-              ),
-            ],
-          ),
-          pw.Row(
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  _t('Total de documentos:', size: 8, color: PdfColors.grey700),
-                  pw.SizedBox(height: 2),
-                  _t(
-                    '${extrato.totalDocumentos}',
-                    size: 12,
-                    bold: true,
-                    color: _kAzul,
-                  ),
-                ],
-              ),
-              pw.SizedBox(width: 32),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  _t('Soma total:', size: 8, color: PdfColors.grey700),
-                  pw.SizedBox(height: 2),
-                  _t(
-                    _fmtMoeda.format(extrato.somaTotal),
-                    size: 12,
-                    bold: true,
-                    color: _kVermelho,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+      child: pw.Center(
+        child: _t(
+          'Nenhuma despesa registada neste período.',
+          size: 8.5,
+          color: PdfColors.grey700,
+        ),
       ),
     );
   }
+
+  return pw.Table(
+    border: pw.TableBorder.all(
+      color: PdfColors.grey400,
+      width: 0.5,
+    ),
+    columnWidths: const {
+      0: pw.FixedColumnWidth(60),  // Data
+      1: pw.FlexColumnWidth(2.5),  // Descrição
+      2: pw.FlexColumnWidth(2),    // Fornecedor
+      3: pw.FixedColumnWidth(70),  // NUIT
+      4: pw.FixedColumnWidth(80),  // Valor
+    },
+    children: [
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: _kVermelho),
+        children: [
+          _thCell('Data', estiloHeader),
+          _thCell('Descrição', estiloHeader),
+          _thCell('Fornecedor', estiloHeader),
+          _thCell('NUIT', estiloHeader),
+          _thCell('Valor gasto', estiloHeader, align: pw.TextAlign.right),
+        ],
+      ),
+
+      for (int i = 0; i < extrato.despesas.length; i++)
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: i.isOdd ? PdfColors.grey100 : PdfColors.white,
+          ),
+          children: [
+            _tdCell(
+              _fmtData.format(extrato.despesas[i].dataDespesa),
+              estiloCell,
+            ),
+            _tdCell(
+              extrato.despesas[i].descricao,
+              estiloCellBold,
+            ),
+            _tdCell(
+              extrato.despesas[i].nomeFornecedor,
+              estiloCell,
+            ),
+            _tdCell(
+              extrato.despesas[i].nuitFornecedor?.isNotEmpty == true
+                  ? extrato.despesas[i].nuitFornecedor!
+                  : '—',
+              estiloCell,
+            ),
+            _tdCell(
+              _fmtMoeda.format(extrato.despesas[i].valorGasto),
+              estiloCellBold,
+              align: pw.TextAlign.right,
+            ),
+          ],
+        ),
+    ],
+  );
+}
+
+
+
+  // ── Rodapé de totais ─────────────────────────────────────────────────────
+
+  pw.Widget _rodapeTotais(ExtratoModel extrato) {
+  final resultadoCor =
+      extrato.resultadoLiquido >= 0 ? PdfColors.green700 : _kVermelho;
+
+  return pw.Container(
+    padding: const pw.EdgeInsets.all(12),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.grey100,
+      border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+      borderRadius: pw.BorderRadius.circular(4),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            _blocoResumo(
+              titulo: 'Documentos emitidos',
+              valor: '${extrato.totalDocumentos}',
+              cor: _kAzul,
+            ),
+            _blocoResumo(
+              titulo: 'Despesas registadas',
+              valor: '${extrato.totalDespesasRegistadas}',
+              cor: _kVermelho,
+            ),
+          ],
+        ),
+
+        pw.SizedBox(height: 12),
+
+        pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+
+        pw.SizedBox(height: 8),
+
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.end,
+          children: [
+            _blocoFinanceiro(
+              titulo: 'Total facturado / emitido',
+              valor: _fmtMoeda.format(extrato.somaTotal),
+              cor: _kAzul,
+            ),
+            pw.SizedBox(width: 24),
+            _blocoFinanceiro(
+              titulo: 'Total gasto',
+              valor: _fmtMoeda.format(extrato.somaDespesas),
+              cor: _kVermelho,
+            ),
+            pw.SizedBox(width: 24),
+            _blocoFinanceiro(
+              titulo: 'Resultado líquido',
+              valor: _fmtMoeda.format(extrato.resultadoLiquido),
+              cor: resultadoCor,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+pw.Widget _blocoResumo({
+  required String titulo,
+  required String valor,
+  required PdfColor cor,
+}) {
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      _t(titulo, size: 8, color: PdfColors.grey700),
+      pw.SizedBox(height: 2),
+      _t(valor, size: 12, bold: true, color: cor),
+    ],
+  );
+}
+
+pw.Widget _blocoFinanceiro({
+  required String titulo,
+  required String valor,
+  required PdfColor cor,
+}) {
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.end,
+    children: [
+      _t(titulo, size: 8, color: PdfColors.grey700),
+      pw.SizedBox(height: 2),
+      _t(valor, size: 12, bold: true, color: cor),
+    ],
+  );
+}
+
+
 
   // ── Nota fiscal ──────────────────────────────────────────────────────────
 

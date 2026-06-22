@@ -120,138 +120,150 @@ class _AppSidebarState extends State<AppSidebar>
   // Definição dos grupos (recebe pedidosAbertos para badge)
   // ─────────────────────────────────────────────────────────────────
 
-  List<_MenuGroup> _grupos(int pedidosAbertos) => [
-    _MenuGroup(
-  icon: Icons.point_of_sale_rounded,
-  title: 'Vendas',
-  items: [
-    _MenuItem(
-      icon:  Icons.storefront_rounded,
-      title: 'Balcão de Vendas',
-      route: '/catalogo',
-      badge: pedidosAbertos,
-    ),
-_MenuItem(
-  icon: Icons.fact_check_rounded,
-  title: 'Pedidos Finalizados',
-  route: '/pedidos_finalizados',
-),
+List<_MenuGroup> _grupos(int pedidosAbertos) => [
+  _MenuGroup(
+    icon: Icons.point_of_sale_rounded,
+    title: 'Vendas',
+    items: [
+      _MenuItem(
+        icon: Icons.storefront_rounded,
+        title: 'Balcão de Vendas',
+        route: '/catalogo',
+        badge: pedidosAbertos,
+      ),
+      _MenuItem(
+        icon: Icons.task_alt_rounded,
+        title: 'Pedidos Finalizados',
+        route: '/pedidos_finalizados',
+      ),
+      _MenuItem(
+        icon: Icons.account_balance_wallet_rounded,
+        title: 'Pedidos à Crédito',
+        route: '/pedidos_credito',
+      ),
+      _MenuItem(
+        icon: Icons.receipt_long_rounded,
+        title: 'Facturação',
+        route: '/gerenciar_documentos',
+      ),
+      _MenuItem(
+        icon: Icons.analytics_rounded,
+        title: 'Extractos',
+        route: '/gerenciar_extractos',
+      ),
+    ],
+  ),
 
-_MenuItem(
-  icon: Icons.account_balance_wallet_rounded,
-  title: 'Pedidos à Crédito',
-  route: '/pedidos_credito',
-),
-    _MenuItem(
-      icon:  Icons.description_rounded,
-      title: 'Facturação',
-      route: '/gerenciar_documentos',
-    ),
-    _MenuItem(
-      icon:  Icons.swap_horiz_rounded,
-      title: 'Extractos',
-      route: '/gerenciar_extractos',
-    ),
-  ],
-),
+  _MenuGroup(
+    icon: Icons.payments_rounded,
+    title: 'Despesas',
+    items: [
+      _MenuItem(
+        icon: Icons.request_quote_rounded,
+        title: 'Ver Despesas',
+        route: '/gerenciar_despesas',
+      ),
+    ],
+  ),
 
-_MenuGroup(
-  icon: Icons.request_quote_rounded,
-  title: 'Cotações',
-  items: [
-    _MenuItem(
-      icon:  Icons.price_check_rounded,
-      title: 'Criar Cotação',
-      route: '/criar_cotacao',
-    ),
-    _MenuItem(
-      icon:  Icons.assignment_turned_in_rounded,
-      title: 'Cotações Prontas',
-      route: '/cotacoes_prontas',
-    ),
+  _MenuGroup(
+    icon: Icons.assignment_rounded,
+    title: 'Cotações',
+    items: [
+      _MenuItem(
+        icon: Icons.post_add_rounded,
+        title: 'Criar Cotação',
+        route: '/criar_cotacao',
+      ),
+      _MenuItem(
+        icon: Icons.fact_check_rounded,
+        title: 'Cotações Prontas',
+        route: '/cotacoes_prontas',
+      ),
+      _MenuItem(
+        icon: Icons.manage_search_rounded,
+        title: 'Histórico de Cotações',
+        route: '/historico_cotacoes',
+      ),
+    ],
+  ),
 
-     _MenuItem(
-  icon:  Icons.history_edu_rounded,
-  title: 'Histórico de Cotações',
-  route: '/historico_cotacoes',
-),
-  ],
-),
+  _MenuGroup(
+    icon: Icons.groups_rounded,
+    title: 'Clientes',
+    items: [
+      _MenuItem(
+        icon: Icons.apartment_rounded,
+        title: 'Empresas',
+        route: '/gerenciar_clientes',
+      ),
+    ],
+  ),
 
+  _MenuGroup(
+    icon: Icons.handshake_rounded,
+    title: 'Fornecedores',
+    items: [
+      _MenuItem(
+        icon: Icons.local_shipping_rounded,
+        title: 'Fornecedores',
+        route: '/gerenciar_fornecedores',
+      ),
+    ],
+  ),
 
-    _MenuGroup(
-      icon: Icons.people_alt_rounded,
-      title: 'Clientes',
-      items: [
-        _MenuItem(
-          icon:  Icons.business_rounded,
-          title: 'Empresas',
-          route: '/gerenciar_clientes',
-        ),
-      ],
-    ),
+  _MenuGroup(
+    icon: Icons.warehouse_rounded,
+    title: 'Inventário',
+    items: [
+      _MenuItem(
+        icon: Icons.inventory_2_rounded,
+        title: 'Produtos',
+        route: '/gerenciar_produtos',
+      ),
+      _MenuItem(
+        icon: Icons.category_rounded,
+        title: 'Categorias',
+        route: '/gerenciar_categorias',
+      ),
+      _MenuItem(
+        icon: Icons.sell_rounded,
+        title: 'Marcas',
+        route: '/gerenciar_marcas',
+      ),
+    ],
+  ),
 
-      _MenuGroup(
-  icon: Icons.inventory_2_rounded,
-  title: 'Fornecedores',
-  items: [
-    _MenuItem(
-      icon: Icons.local_shipping_rounded,
-      title: 'Fornecedores',
-      route: '/gerenciar_fornecedores',
-    ),
-  ],
-),
-    _MenuGroup(
-      icon: Icons.inventory_2_rounded,
-      title: 'Inventário',
-      items: [
+  _MenuGroup(
+    icon: Icons.engineering_rounded,
+    title: 'Serviços',
+    items: [
+      _MenuItem(
+        icon: Icons.design_services_rounded,
+        title: 'Gestão de Serviços',
+        route: '/gerenciar_servicos',
+      ),
+    ],
+  ),
+
+  _MenuGroup(
+    icon: Icons.admin_panel_settings_rounded,
+    title: 'Administração',
+    items: [
+      _MenuItem(
+        icon: Icons.manage_accounts_rounded,
+        title: 'Utilizadores',
+        route: '/gerenciar_usuarios',
+      ),
+      if (!Platform.isAndroid && !Platform.isIOS)
         _MenuItem(
-          icon:  Icons.inventory_rounded,
-          title: 'Produtos',
-          route: '/gerenciar_produtos',
+          icon: Icons.print_rounded,
+          title: 'Impressora',
+          route: '/configuracoes_impressora',
         ),
-        _MenuItem(
-          icon:  Icons.category_rounded,
-          title: 'Categorias',
-          route: '/gerenciar_categorias',
-        ),
-        _MenuItem(
-          icon:  Icons.label_rounded,
-          title: 'Marcas',
-          route: '/gerenciar_marcas',
-        ),
-      ],
-    ),
-    _MenuGroup(
-      icon: Icons.build_circle_rounded,
-      title: 'Serviços',
-      items: [
-        _MenuItem(
-          icon:  Icons.miscellaneous_services_rounded,
-          title: 'Gestão de Serviços',
-          route: '/gerenciar_servicos',
-        ),
-      ],
-    ),
-    _MenuGroup(
-      icon: Icons.admin_panel_settings_rounded,
-      title: 'Administração',
-      items: [
-        _MenuItem(
-          icon:  Icons.manage_accounts_rounded,
-          title: 'Utilizadores',
-          route: '/gerenciar_usuarios',
-        ),
-        if (!Platform.isAndroid && !Platform.isIOS)
-          _MenuItem(
-            icon:  Icons.print_rounded,
-            title: 'Impressora',
-            route: '/configuracoes_impressora',
-          ),
-      ],
-    ),
-  ];
+    ],
+  ),
+];
 
   // ─────────────────────────────────────────────────────────────────
   // Build principal

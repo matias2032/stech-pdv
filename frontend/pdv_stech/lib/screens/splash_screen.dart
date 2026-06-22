@@ -337,6 +337,25 @@ Future<void> _sincronizarCompleto() async {
       debugPrint('⚠️ Splash sync fornecedores: $e');
     }
 
+            // ── despesas ──────────────────────────────────────────────────
+    _setStep('A sincronizar despesas…', 0.95);
+    try {
+      final resp = await client
+          .get(Uri.parse('$url/api/despesas'),
+               headers: ApiConfig.defaultHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final lista = (jsonDecode(resp.body) as List<dynamic>)
+            .map((e) => DespesaModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final dao = DespesaDao();
+        await dao.upsertAll(lista.map((d) => d.toLocalDb()).toList());
+        debugPrint('✅ Splash sync — ${lista.length} despesas');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Splash sync despesas: $e');
+    }
+
     _setStep('A sincronizar Pedidos', 0.97);
 
  try {

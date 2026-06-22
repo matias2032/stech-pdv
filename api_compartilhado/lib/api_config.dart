@@ -43,6 +43,7 @@ class ApiConfig {
   static const String fornecedores = '/api/fornecedores';
   static const String _documentosFiscais = '/api/documentos-fiscais';
   static const String cotacoes = '/api/cotacoes';
+  static const String despesas = '/api/despesas';
   static const String _sync = '/api/sync';
 
   // ── URLs completas ────────────────────────────────────────────────
@@ -64,6 +65,7 @@ class ApiConfig {
   static String get fornecedoresUrl => '$baseUrl$fornecedores';
   static String get documentosFiscaisUrl => '$baseUrl$_documentosFiscais';
   static String get cotacoesUrl => '$baseUrl$cotacoes';
+  static String get despesasUrl => '$baseUrl$despesas';
   static String get syncBatchUrl => '$baseUrl$_sync/batch';
 
   // ── Configurações gerais ──────────────────────────────────────────

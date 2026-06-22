@@ -619,7 +619,7 @@ bool _cotacaoEhSingular(CotacaoModel c) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        _t('Stech Engenharia © ${DateTime.now().year}',
+        _t('Stech Engenharia (c) ${DateTime.now().year}',
             size: 7, color: PdfColors.grey600),
         _t('Página ${ctx.pageNumber} de ${ctx.pagesCount}',
             size: 7, color: PdfColors.grey600),

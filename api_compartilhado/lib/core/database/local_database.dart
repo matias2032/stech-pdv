@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 10,       
+  version: 11,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -266,7 +266,34 @@ if (oldVersion < 10) {
     )
   ''');
 }
+if (oldVersion < 11) {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS despesa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id_fornecedor INTEGER,
+      nome_fornecedor TEXT,
+      nuit_fornecedor TEXT,
+      descricao TEXT NOT NULL,
+      valor_gasto REAL NOT NULL DEFAULT 0,
+      data_despesa TEXT NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      sync_status TEXT NOT NULL DEFAULT 'synced',
+      updated_at TEXT
+    )
+  ''');
 
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_despesa_fornecedor ON despesa(id_fornecedor)',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_despesa_data ON despesa(data_despesa)',
+  );
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_despesa_sync ON despesa(sync_status)',
+  );
+}
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -323,6 +350,21 @@ if (oldVersion < 10) {
     contacto TEXT NOT NULL UNIQUE,
     morada TEXT,
     deleted INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT
+  )
+''');
+
+await txn.execute('''
+  CREATE TABLE IF NOT EXISTS despesa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_fornecedor INTEGER,
+    nome_fornecedor TEXT,
+    nuit_fornecedor TEXT,
+    descricao TEXT NOT NULL,
+    valor_gasto REAL NOT NULL DEFAULT 0,
+    data_despesa TEXT NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    sync_status TEXT NOT NULL DEFAULT 'synced',
     updated_at TEXT
   )
 ''');
@@ -616,8 +658,20 @@ await txn.execute('CREATE INDEX idx_cotacao_status ON cotacao(status_cotacao)');
 await txn.execute('CREATE INDEX idx_cotacao_item_produto ON cotacao_item_produto(id_cotacao)');
 await txn.execute('CREATE INDEX idx_cotacao_item_servico ON cotacao_item_servico(id_cotacao)');
       await txn.execute('CREATE INDEX idx_sync_queue     ON sync_queue(tentativas)');
+      await txn.execute(
+  'CREATE INDEX idx_despesa_fornecedor ON despesa(id_fornecedor)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_despesa_data ON despesa(data_despesa)',
+);
+
+await txn.execute(
+  'CREATE INDEX idx_despesa_sync ON despesa(sync_status)',
+);
 
     });
+    
   }
 
   // ── Utilitários ───────────────────────────────────────────────────
@@ -647,6 +701,7 @@ await txn.delete('pedido_credito_parcela');
       await txn.delete('cotacao_item_produto');
 await txn.delete('cotacao_item_servico');
 await txn.delete('cotacao');
+await txn.delete('despesa');
     });
   }
 }

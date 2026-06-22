@@ -10,6 +10,7 @@ import com.stechengenharia.pdv_backend.servico.sync.ServicoSyncService;
 import com.stechengenharia.pdv_backend.usuario.sync.UsuarioSyncService;
 import com.stechengenharia.pdv_backend.cotacao.sync.CotacaoSyncService;
 import com.stechengenharia.pdv_backend.fornecedor.sync.FornecedorSyncService;
+import com.stechengenharia.pdv_backend.despesa.sync.DespesaSyncService;
 
 
 import lombok.RequiredArgsConstructor;
@@ -32,9 +33,7 @@ private final DocumentoSyncService documentoSyncService;
 private final PedidoSyncService pedidoSyncService;
 private final CotacaoSyncService cotacaoSyncService;
 private final FornecedorSyncService fornecedorSyncService;
-
-    // private final ClienteSyncService clienteSyncService;
-   
+private final DespesaSyncService despesaSyncService;
 
     /**
      * Executa a cada 60 segundos.
@@ -59,6 +58,7 @@ private final FornecedorSyncService fornecedorSyncService;
         documentoSyncService.push(); // PUSH
         pedidoSyncService.push();
         cotacaoSyncService.push();
+        despesaSyncService.push();
         
         // clienteSyncService.push();
 
@@ -74,6 +74,7 @@ private final FornecedorSyncService fornecedorSyncService;
         documentoSyncService.pull(); // PULL
         pedidoSyncService.pull();
         cotacaoSyncService.pull();
+        despesaSyncService.pull();
         
 
         log.debug("[Orchestrator] Ciclo de sincronização concluído");

@@ -811,7 +811,7 @@ pw.Widget _reciboCreditoEmissorCliente(ReciboCreditoPdfModel doc) {
 
 pw.Widget _reciboCreditoMetadados(ReciboCreditoPdfModel doc) {
   final parcelaTexto = doc.numeroParcela == null
-      ? '—'
+      ? '-'
       : doc.totalParcelas == null
           ? '${doc.numeroParcela}'
           : '${doc.numeroParcela}/${doc.totalParcelas}';
@@ -1281,7 +1281,7 @@ pw.Widget _docFiscalCodigoAT(String codigoAT) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        _t('Stech Engenharia © ${DateTime.now().year}', size: 7, color: PdfColors.grey600),
+        _t('Stech Engenharia (c) ${DateTime.now().year}', size: 7, color: PdfColors.grey600),
         _t('Página ${ctx.pageNumber} de ${ctx.pagesCount}', size: 7, color: PdfColors.grey600),
       ],
     );
@@ -1662,7 +1662,7 @@ final bool temCliente =
             bold: true, size: baseFontSize + (isSmall ? 0 : 2),
             color: isSmall ? PdfColors.black : _kAzul),
         pw.SizedBox(height: isSmall ? 2 : 4),
-        _t('Stech Engenharia © ${DateTime.now().year}',
+        _t('Stech Engenharia (c) ${DateTime.now().year}',
             size: baseFontSize - 1, color: PdfColors.grey600),
       ],
     );

@@ -29,6 +29,8 @@ import com.stechengenharia.pdv_backend.pedido.dto.CriarParcelasRequestDTO;
 import com.stechengenharia.pdv_backend.pedido.dto.RegistarPagamentoCreditoRequestDTO;
 import com.stechengenharia.pdv_backend.fornecedor.dto.FornecedorRequestDTO;
 import com.stechengenharia.pdv_backend.fornecedor.service.FornecedorService;
+import com.stechengenharia.pdv_backend.despesa.dto.DespesaRequestDTO;
+import com.stechengenharia.pdv_backend.despesa.service.DespesaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,7 @@ public class SyncService {
     private final PedidoService    pedidoService;
 private final CotacaoService   cotacaoService;
 private final FornecedorService fornecedorService;
+private final DespesaService despesaService;
 private final ObjectMapper     objectMapper;
 
     // ────────────────────────────────────────────────────────────────────────
@@ -88,6 +91,7 @@ private final ObjectMapper     objectMapper;
                 case "produto"   -> processarProduto(op);
                 case "pedido"    -> processarPedido(op);
                 case "cotacao"   -> processarCotacao(op);
+                case "despesa" -> processarDespesa(op);
                 default          -> erroIndividual(op,
                         "Entidade não suportada: " + op.getEntidade());
             };
@@ -424,6 +428,39 @@ private SyncResultadoDTO processarFornecedor(SyncOperacaoDTO op) {
 
         default -> erroIndividual(op,
                 "Operação não suportada para fornecedor via sync: " + op.getOperacao());
+    };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DESPESA
+// ══════════════════════════════════════════════════════════════════════
+
+private SyncResultadoDTO processarDespesa(SyncOperacaoDTO op) {
+    DespesaRequestDTO dto =
+            converter(op.getPayload(), DespesaRequestDTO.class);
+
+    return switch (op.getOperacao().toUpperCase()) {
+
+        case "CREATE" -> {
+            var response = despesaService.criar(dto);
+            yield sucesso(op, response.idDespesa());
+        }
+
+        case "UPDATE" -> {
+            var response = despesaService.editar(op.getId(), dto);
+            yield sucesso(op, response.idDespesa());
+        }
+
+        case "DELETE" -> {
+            despesaService.excluir(op.getId());
+            yield sucesso(op, op.getId());
+        }
+
+        default -> erroIndividual(
+                op,
+                "Operação não suportada para despesa via sync: "
+                        + op.getOperacao()
+        );
     };
 }
 

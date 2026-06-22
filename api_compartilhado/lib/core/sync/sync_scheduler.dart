@@ -16,6 +16,9 @@ import 'package:api_compartilhado/services/documento_fiscal_service.dart';
 import 'package:api_compartilhado/models/cotacao_model.dart';
 import 'package:api_compartilhado/models/fornecedor_model.dart';
 import 'package:api_compartilhado/services/fornecedor_service.dart';
+import 'package:api_compartilhado/models/despesa_model.dart';
+import 'package:api_compartilhado/services/despesa_service.dart';
+
 
 import '../connectivity/connectivity_service.dart';
 import '../database/local_database.dart';
@@ -29,7 +32,7 @@ import '../database/daos/pedido_dao.dart';
 import '../database/daos/documento_fiscal_dao.dart';
 import '../database/daos/cotacao_dao.dart';
 import '../database/daos/fornecedor_dao.dart';
-
+import '../database/daos/despesa_dao.dart';
 
 class SyncScheduler {
   SyncScheduler._();
@@ -55,6 +58,8 @@ FornecedorService? _fornecedorService;
   DocumentoFiscalService? _documentoFiscalService;
   CotacaoDao? _cotacaoDao;
   CotacaoService? _cotacaoService;
+  DespesaDao? _despesaDao;
+DespesaService? _despesaService;
   
   Database get _db => LocalDatabase.instance.db;
 
@@ -87,6 +92,8 @@ FornecedorService? _fornecedorService;
     required DocumentoFiscalService documentoFiscalService,
     required CotacaoDao cotacaoDao,
     required CotacaoService cotacaoService,
+    required DespesaDao despesaDao,
+required DespesaService despesaService,
   }) {
     _connectivity = connectivity;
     _syncQueueDao = syncQueueDao;
@@ -108,6 +115,8 @@ _fornecedorService = fornecedorService;
     _documentoFiscalService = documentoFiscalService;
     _cotacaoDao = cotacaoDao;
     _cotacaoService = cotacaoService;
+    _despesaDao = despesaDao;
+_despesaService = despesaService;
 
     _subscription = connectivity.isOnlineStream.listen((isOnline) {
       if (isOnline) {
@@ -155,14 +164,15 @@ _fornecedorService = fornecedorService;
       // ── PASSAGEM 1: pedido/CREATE e cotacao/CREATE ────────────────
       // Estes precisam de ser processados primeiro para que _idMapping
       // seja populado antes de resolver dependências.
-      final creates = pendentes
-          .where(
-            (item) =>
-                (item['entidade'] == 'pedido' ||
-                    item['entidade'] == 'cotacao') &&
-                item['operacao'] == 'CREATE',
-          )
-          .toList();
+    final creates = pendentes
+    .where(
+      (item) =>
+          (item['entidade'] == 'fornecedor' ||
+              item['entidade'] == 'pedido' ||
+              item['entidade'] == 'cotacao') &&
+          item['operacao'] == 'CREATE',
+    )
+    .toList();
 
       if (creates.isNotEmpty) {
         await _enviarEProcessarLote(creates);
@@ -170,13 +180,14 @@ _fornecedorService = fornecedorService;
 
       // ── PASSAGEM 2: restantes, já com _idMapping populado ─────────
       final restantes = pendentes
-          .where(
-            (item) =>
-                !((item['entidade'] == 'pedido' ||
-                        item['entidade'] == 'cotacao') &&
-                    item['operacao'] == 'CREATE'),
-          )
-          .toList();
+    .where(
+      (item) =>
+          !((item['entidade'] == 'fornecedor' ||
+                  item['entidade'] == 'pedido' ||
+                  item['entidade'] == 'cotacao') &&
+              item['operacao'] == 'CREATE'),
+    )
+    .toList();
 
       if (restantes.isNotEmpty) {
         await _enviarEProcessarLote(restantes);
@@ -245,6 +256,16 @@ _fornecedorService = fornecedorService;
           continue;
         }
       }
+
+      if (entidade == 'despesa' &&
+    (operacao == 'CREATE' || operacao == 'UPDATE')) {
+  try {
+    payload = await _resolverIdFornecedorDespesa(payload);
+  } catch (_) {
+    idsSaltados.add(item['id'] as int);
+    continue;
+  }
+}
 
       final queueId = item['id'] as int;
 
@@ -379,6 +400,9 @@ _fornecedorService = fornecedorService;
         case 'fornecedor':
     await _processarFornecedor(operacao, payload);
 
+    case 'despesa':
+  await _processarDespesa(operacao, payload);
+
       case 'marca':
         await _processarMarca(operacao, payload);
 
@@ -464,6 +488,59 @@ Future<void> _processarFornecedor(
 
     default:
       throw Exception('Operação desconhecida para fornecedor: $operacao');
+  }
+}
+
+Future<void> _processarDespesa(
+  String operacao,
+  Map<String, dynamic> payload,
+) async {
+  final service = _despesaService!;
+  final dao = _despesaDao!;
+
+  switch (operacao) {
+    case 'CREATE':
+      final localId = payload['localId'] as String?;
+
+      final despesa = DespesaModel(
+        idFornecedor: payload['idFornecedor'] as int?,
+        descricao: payload['descricao'] as String,
+        valorGasto: (payload['valorGasto'] as num).toDouble(),
+      );
+
+      final criada = await service.criar(despesa);
+
+      if (localId != null) {
+        await dao.deleteByLocalId(localId);
+      }
+
+      await dao.salvarOuAtualizar(criada);
+
+    case 'UPDATE':
+      final id = payload['id'] as int;
+
+      final despesa = DespesaModel(
+        idDespesa: id,
+        idFornecedor: payload['idFornecedor'] as int?,
+        descricao: payload['descricao'] as String,
+        valorGasto: (payload['valorGasto'] as num).toDouble(),
+      );
+
+      final atualizada = await service.editar(
+        id: id,
+        despesa: despesa,
+      );
+
+      await dao.salvarOuAtualizar(atualizada);
+
+    case 'DELETE':
+      final id = payload['id'] as int;
+
+      await service.excluir(id);
+      await dao.excluir(id);
+
+    default:
+      throw Exception('Operação desconhecida para despesa: $operacao');
   }
 }
 
@@ -638,6 +715,40 @@ Future<void> _processarFornecedor(
 
     throw Exception('Cotação temporária $idCotacao ainda não sincronizada');
   }
+
+  Future<Map<String, dynamic>> _resolverIdFornecedorDespesa(
+  Map<String, dynamic> payload,
+) async {
+  final idFornecedor = payload['idFornecedor'] as int?;
+
+  if (idFornecedor == null || idFornecedor > 0) {
+    return payload;
+  }
+
+  final chave = '$idFornecedor';
+
+  final idRealMapeado = _idMapping[chave];
+
+  if (idRealMapeado != null) {
+    final resolvido = Map<String, dynamic>.from(payload);
+    resolvido['idFornecedor'] = idRealMapeado;
+    return resolvido;
+  }
+
+  final row = await _fornecedorDao!.getById(idFornecedor);
+
+  if (row != null) {
+    final idReal = row['id'] as int?;
+
+    if (idReal != null && idReal > 0) {
+      final resolvido = Map<String, dynamic>.from(payload);
+      resolvido['idFornecedor'] = idReal;
+      return resolvido;
+    }
+  }
+
+  throw Exception('Fornecedor temporário $idFornecedor ainda não sincronizado');
+}
 
   // ── Processar operações de cliente ────────────────────────────────
 
@@ -1027,7 +1138,7 @@ Future<void> _processarFornecedor(
           if (existente != null) await _clienteDao!.marcarSynced(idReal);
         }
 
-        case 'fornecedor':
+case 'fornecedor':
   if (operacao == 'CREATE' && localId != null && idReal != null) {
     await _fornecedorDao!.deleteByLocalId(localId);
 
@@ -1036,6 +1147,26 @@ Future<void> _processarFornecedor(
       await _fornecedorDao!.salvarOuAtualizar(fornecedorReal);
     } catch (e) {
       debugPrint('⚠️ SyncScheduler — pull fornecedor $idReal falhou: $e');
+    }
+
+    final tempId = int.tryParse(localId);
+
+    if (tempId != null) {
+      _idMapping['$tempId'] = idReal;
+    }
+  }
+
+  
+
+  case 'despesa':
+  if (operacao == 'CREATE' && localId != null && idReal != null) {
+    await _despesaDao!.deleteByLocalId(localId);
+
+    try {
+      final despesaReal = await _despesaService!.buscarPorId(idReal);
+      await _despesaDao!.salvarOuAtualizar(despesaReal);
+    } catch (e) {
+      debugPrint('⚠️ SyncScheduler — pull despesa $idReal falhou: $e');
     }
   }
 

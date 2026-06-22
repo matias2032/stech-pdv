@@ -48,7 +48,8 @@ import 'screens/historico_cotacoes.dart';
 import 'screens/pedidos_credito.dart';
 import 'screens/detalhes_pedido_credito.dart';
 import 'screens/detalhes_cliente.dart';
-
+import 'screens/despesa_list_screen.dart';
+import 'screens/despesa_form_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,6 +100,7 @@ final marcaService     = MarcaService();
   final pedidoService    = PedidoService();
   final docFiscalService = DocumentoFiscalService();
   final cotacaoService = CotacaoService();
+final despesaService = DespesaService();
 
   // ── Repositórios ──────────────────────────────────────────────────
   final clienteRepository = ClienteRepository(
@@ -168,6 +170,13 @@ final cotacaoRepository = CotacaoRepository(
   servicoDao:   ServicoDao(),
 );
 
+final despesaRepository = DespesaRepository(
+  service: despesaService,
+  dao: DespesaDao(),
+  syncQueueDao: SyncQueueDao(),
+  connectivityService: connectivity,
+);
+
 
 SyncScheduler.instance.init(
   connectivity:           connectivity,
@@ -175,6 +184,8 @@ SyncScheduler.instance.init(
   clienteDao:             ClienteDao(),
   clienteService:         clienteService,
    fornecedorDao: FornecedorDao(),
+   despesaDao: DespesaDao(),
+despesaService: despesaService,
   fornecedorService: FornecedorService(),
   marcaDao:               MarcaDao(),
   marcaService:           marcaService,
@@ -254,6 +265,10 @@ SyncScheduler.instance.init(
        ChangeNotifierProvider(
         create: (_) => CotacaoProvider(repository: cotacaoRepository),
       ),
+
+      ChangeNotifierProvider(
+  create: (_) => DespesaProvider(repository: despesaRepository),
+),
       ],
 
 
@@ -301,6 +316,8 @@ SyncScheduler.instance.init(
           '/cotacoes_prontas'      : (_) => const CotacaoListScreen(),
           '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
            '/pedidos_credito'      : (_) => const PedidosCreditoScreen(),  
+           '/gerenciar_despesas': (_) => const DespesaListScreen(),
+          '/cadastrar_despesas': (_) => const DespesaFormScreen(),
            
         },
 
@@ -330,6 +347,15 @@ SyncScheduler.instance.init(
     builder: (_) => DetalhesClienteScreen(
       cliente: cliente,
     ),
+    settings: settings,
+  );
+}
+
+if (settings.name == '/despesas/form') {
+  final despesa = settings.arguments as DespesaModel?;
+
+  return MaterialPageRoute(
+    builder: (_) => DespesaFormScreen(despesa: despesa),
     settings: settings,
   );
 }

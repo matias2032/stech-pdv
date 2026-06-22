@@ -23,6 +23,7 @@ class ExtratoService {
   }) async {
     final docService     = DocumentoFiscalService();
     final pedidoService  = PedidoService();
+    final despesaService = DespesaService();
     final clienteService = ClienteService(
   baseUrl: ApiConfig.baseUrl,
   httpClient: http.Client(),
@@ -45,19 +46,30 @@ class ExtratoService {
       try {
         final pedido = await pedidoService.buscarPorId(doc.idPedido);
 
-        String nomeEmpresa = 'Cliente Avulso';
-        String? nuit;
+String nomeEmpresa = 'Cliente Avulso';
+String? nuit;
 
-        if (pedido.idCliente != null) {
-          try {
-            final cliente = await clienteService.buscarPorId(pedido.idCliente!);
-            final nome    = '${cliente.nome ?? ''} ${cliente.apelido ?? ''}'.trim();
-            nomeEmpresa   = nome.isEmpty ? 'Cliente #${cliente.id}' : nome;
-            nuit          = cliente.nuit;
-          } catch (_) {
-            nomeEmpresa = 'Cliente #${pedido.idCliente}';
-          }
-        }
+final nomeSingular = [
+  pedido.nomeClienteSingular,
+  pedido.apelidoClienteSingular,
+]
+    .where((v) => v != null && v.trim().isNotEmpty)
+    .map((v) => v!.trim())
+    .join(' ');
+
+if (nomeSingular.isNotEmpty) {
+  nomeEmpresa = nomeSingular;
+  nuit = null;
+} else if (pedido.idCliente != null) {
+  try {
+    final cliente = await clienteService.buscarPorId(pedido.idCliente!);
+    nomeEmpresa = cliente.nomeCompleto;
+    nuit = cliente.nuit;
+    print('>>> NUIT do cliente: "${nuit}" | bytes: ${nuit?.codeUnits}');
+  } catch (_) {
+    nomeEmpresa = 'Cliente #${pedido.idCliente}';
+  }
+}
 
         linhas.add(LinhaExtrato(
           dataEmissao:     doc.emitidoEm,
@@ -71,14 +83,45 @@ class ExtratoService {
       }
     }
 
+final todasDespesas = await despesaService.listar();
+print('>>> total despesas na BD: ${todasDespesas.length}');
+
+final despesasRaw = todasDespesas.where((d) {
+  if (d.dataDespesa == null) {
+    print('   [IGNORADA] sem data: ${d.descricao}');
+    return false;
+  }
+  final dentroDoIntervalo = !d.dataDespesa!.isBefore(dataInicio) &&
+                            !d.dataDespesa!.isAfter(dataFim);
+  print('   [${dentroDoIntervalo ? "OK" : "FORA"}] ${d.descricao} | data: ${d.dataDespesa} | inicio: $dataInicio | fim: $dataFim');
+  return dentroDoIntervalo;
+}).toList();
+
+print('>>> despesas no período: ${despesasRaw.length}');
+
+final despesas = despesasRaw.map((d) {
+  return LinhaDespesaExtrato(
+    dataDespesa: d.dataDespesa ?? DateTime.now(),
+    descricao: d.descricao,
+    nomeFornecedor: d.nomeFornecedor?.trim().isNotEmpty == true
+        ? d.nomeFornecedor!.trim()
+        : 'Sem fornecedor',
+    nuitFornecedor: d.nuitFornecedor,
+    valorGasto: d.valorGasto,
+  );
+}).toList();
+
+
+
     // Ordenar por data crescente
     linhas.sort((a, b) => a.dataEmissao.compareTo(b.dataEmissao));
 
-    return ExtratoModel(
-      linhas:       linhas,
-      dataInicio:   dataInicio,
-      dataFim:      dataFim,
-      labelPeriodo: labelPeriodo,
-    );
+return ExtratoModel(
+  linhas: linhas,
+  despesas: despesas,
+  dataInicio: dataInicio,
+  dataFim: dataFim,
+  labelPeriodo: labelPeriodo,
+);
   }
 }
