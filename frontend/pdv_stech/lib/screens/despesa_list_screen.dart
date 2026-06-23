@@ -91,8 +91,12 @@ Future<void> _abrirFormulario({DespesaModel? despesa}) async {
 
   if (!mounted) return;
 
-  // Recarrega sempre que houver qualquer alteração
-  if (resultado is DespesaModel || resultado == true) {
+  if (resultado is DespesaModel) {
+    context.read<DespesaProvider>().inserirOuAtualizarNaLista(resultado);
+    return;
+  }
+
+  if (resultado == true) {
     await _carregarPorPeriodo();
   }
 }

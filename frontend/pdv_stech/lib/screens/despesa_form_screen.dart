@@ -141,7 +141,9 @@ final despesa = DespesaModel(
             : 'Despesa cadastrada com sucesso.',
       );
 
-Navigator.of(context).pop(provider.ultimaDespesaSalva ?? true);
+final despesaSalva = provider.ultimaDespesaSalva;
+
+Navigator.of(context).pop(despesaSalva ?? true);
     } else {
       _mostrarSnack(
         provider.erro ?? 'Erro ao salvar despesa.',

@@ -152,15 +152,11 @@ Future<bool> criarDespesa(DespesaModel despesa) async {
   try {
     final criada = await _repository.criar(despesa);
 
-    _ultimaDespesaSalva = criada; // ← deve estar aqui
+_ultimaDespesaSalva = criada;
 
-    _despesas = [
-      criada,
-      ..._despesas.where((d) => d.idDespesa != criada.idDespesa),
-    ];
+inserirOuAtualizarNaLista(criada);
 
-    notifyListeners();
-    return true;
+return true;
   } catch (e) {
     _erro = e.toString();
     notifyListeners();
@@ -182,19 +178,15 @@ Future<bool> criarDespesa(DespesaModel despesa) async {
         id: id,
         despesa: despesa,
       );
-      _ultimaDespesaSalva = atualizada;
+_ultimaDespesaSalva = atualizada;
 
-      _despesas = _despesas.map((item) {
-        if (item.idDespesa == id) return atualizada;
-        return item;
-      }).toList();
+if (_despesaSelecionada?.idDespesa == id) {
+  _despesaSelecionada = atualizada;
+}
 
-      if (_despesaSelecionada?.idDespesa == id) {
-        _despesaSelecionada = atualizada;
-      }
+inserirOuAtualizarNaLista(atualizada);
 
-      notifyListeners();
-      return true;
+return true;
     } catch (e) {
       _erro = e.toString();
       notifyListeners();
