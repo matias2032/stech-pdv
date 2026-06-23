@@ -1,55 +1,7 @@
+// frontend/lib/main.dart
 
-//frontend/lib/main.dart
-import 'package:flutter/material.dart';
+import 'app_imports.dart';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import 'package:api_compartilhado/api_compartilhado.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'dart:io';
-import 'package:sqflite/sqflite.dart';
-
-
-
-
-import 'screens/usuarios_list_screen.dart';
-import 'screens/criar_usuario_screen.dart';
-import 'screens/detalhes_usuario_screen.dart';
-import 'screens/marcas_list_screen.dart';
-import 'screens/marca_form_screen.dart';
-import 'screens/categorias_list_screen.dart';
-import 'screens/categoria_form_screen.dart';
-import 'screens/servico_form_screen.dart';
-import 'screens/servico_list_screen.dart';
-import 'screens/produto_form_screen.dart';
-import 'screens/produto_list_screen.dart';
-import 'screens/tela_login.dart';
-import 'screens/primeira_troca_senha.dart';
-import 'screens/catalogo_screen.dart';
-import 'screens/configuracoes_impressora_screen.dart';
-import 'screens/pedidos_finalizados_screen.dart';
-import 'screens/alterar_senha.dart';
-import 'screens/editar_usuario.dart';
-import 'screens/dashboard.dart';
-import 'screens/splash_screen.dart';
-import 'screens/cliente_list_screen.dart';
-import 'screens/cliente_form_screen.dart';
-import 'screens/fornecedor_list_screen.dart';
-import 'screens/fornecedor_form_screen.dart';
-import 'screens/documentos_list_screen.dart';
-import 'screens/documentos_form_screen.dart';
-import 'screens/extractos_list_screen.dart';
-import 'screens/extractos_form_screen.dart';
-import 'package:flutter/foundation.dart';
-import 'screens/cotacao_list_screen.dart';
-import 'screens/cotacao_detalhes_screen.dart';
-import 'screens/cotacoes_abertas_screen.dart';
-import 'screens/cotacao_catalogo_screen.dart';
-import 'screens/historico_cotacoes.dart';
-import 'screens/pedidos_credito.dart';
-import 'screens/detalhes_pedido_credito.dart';
-import 'screens/detalhes_cliente.dart';
-import 'screens/despesa_list_screen.dart';
-import 'screens/despesa_form_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,10 +14,26 @@ void main() async {
   await ApiConfig.baseUrlAsync;
   ApiConfig.printConfig();
 
-await LocalDatabase.instance.init();
+  // ─────────────────────────────────────────────────────────────
+  // RESET TEMPORÁRIO DO SQLITE — REMOVER DEPOIS DO PRIMEIRO RUN
+  // ─────────────────────────────────────────────────────────────
+  const resetarSqliteNoArranque = false;
 
+  if (resetarSqliteNoArranque) {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'stech_pdv.db');
 
-  await ConnectivityService.instance.init(); // ← usa o init() unificado
+    debugPrint('🧨 Apagando BD SQLite local: $path');
+
+    await deleteDatabase(path);
+
+    debugPrint('✅ BD SQLite local apagada. Será recriada no init().');
+  }
+  // ─────────────────────────────────────────────────────────────
+
+  await LocalDatabase.instance.init();
+
+  await ConnectivityService.instance.init();
 
   runApp(const MyApp());
 }

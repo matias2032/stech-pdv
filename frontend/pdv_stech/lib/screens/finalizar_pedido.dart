@@ -57,6 +57,8 @@ class _FinalizarPedidoScreenState extends State<FinalizarPedidoScreen> {
   bool _finalizando = false;
   bool    _clienteBloqueado     = false;
 String? _nomeClienteBloqueado;
+bool _clienteSingularBloqueado = false;
+
 
   bool get _ehDinheiro => _idTipoPagamento == 1;
   bool get _modoCredito => widget.modo == ModoFinalizacaoPedido.credito;
@@ -151,12 +153,28 @@ if (_modoCredito) {
 } else if (!_ehDinheiro && _idTipoPagamento != null) {
   _valorPagoCtrl.text = widget.pedido.total.toStringAsFixed(2);
 }
-    _clienteBloqueado     = widget.pedido.idCliente != null;
-    _nomeClienteBloqueado = clienteDoPedido?.nomeCompleto
-        ?? (widget.pedido.idCliente != null
-            ? 'Cliente #${widget.pedido.idCliente}'
-            : null);
-    _carregando = false;
+final nomeSingular = widget.pedido.nomeClienteSingular?.trim();
+final apelidoSingular = widget.pedido.apelidoClienteSingular?.trim();
+
+final temClienteSingular = widget.pedido.idCliente == null &&
+    ((nomeSingular != null && nomeSingular.isNotEmpty) ||
+     (apelidoSingular != null && apelidoSingular.isNotEmpty));
+
+_clienteBloqueado = widget.pedido.idCliente != null;
+_clienteSingularBloqueado = temClienteSingular;
+
+_nomeClienteBloqueado = clienteDoPedido?.nomeCompleto
+    ?? (widget.pedido.idCliente != null
+        ? 'Cliente #${widget.pedido.idCliente}'
+        : null);
+
+if (temClienteSingular) {
+  _tipoCliente = 'singular';
+  _nomeCtrl.text = nomeSingular ?? '';
+  _apelidoCtrl.text = apelidoSingular ?? '';
+}
+
+_carregando = false;
   });
 }
 
@@ -219,15 +237,16 @@ Future<void> _finalizar() async {
       ? widget.pedido.idCliente
       : (_tipoCliente == 'empresa' ? _empresaSelecionada?.id : null);
 
-  final nomeSingularFinal =
-      (!_clienteBloqueado && _tipoCliente == 'singular')
-          ? _nomeCtrl.text.trim().nullIfEmpty
-          : null;
+final usarClienteSingular =
+    !_clienteBloqueado && _tipoCliente == 'singular';
 
-  final apelidoSingularFinal =
-      (!_clienteBloqueado && _tipoCliente == 'singular')
-          ? _apelidoCtrl.text.trim().nullIfEmpty
-          : null;
+final nomeSingularFinal = usarClienteSingular
+    ? _nomeCtrl.text.trim().nullIfEmpty
+    : null;
+
+final apelidoSingularFinal = usarClienteSingular
+    ? _apelidoCtrl.text.trim().nullIfEmpty
+    : null;
 
   final valorPagoFinal = _ehDinheiro ? _valorPago : widget.pedido.total;
 
@@ -612,10 +631,14 @@ else
   Widget _toggleBtn(String tipo, IconData icon, String label) {
     final sel = _tipoCliente == tipo;
     return GestureDetector(
-      onTap: () => setState(() {
-        _tipoCliente = tipo;
-        _empresaSelecionada = null;
-      }),
+   onTap: () => setState(() {
+  _tipoCliente = tipo;
+  _empresaSelecionada = null;
+
+  if (tipo == 'empresa') {
+    _clienteSingularBloqueado = false;
+  }
+}),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 9),
@@ -661,23 +684,72 @@ else
     );
   }
 
+
 Widget _buildSingularFields() {
+  final bloqueado = _clienteSingularBloqueado;
+
   return Column(
-    // remover: key: const ValueKey('singular-fields'),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Row(children: [
-        Expanded(child: _textField(_nomeCtrl, 'Nome (opcional)')),
-        const SizedBox(width: 8),
-        Expanded(child: _textField(_apelidoCtrl, 'Apelido (opcional)')),
-      ]),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _textField(
+              _nomeCtrl,
+              'Nome (opcional)',
+              enabled: !bloqueado,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _textField(
+              _apelidoCtrl,
+              'Apelido (opcional)',
+              enabled: !bloqueado,
+            ),
+          ),
+          if (bloqueado) ...[
+            const SizedBox(width: 6),
+            Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: _kPrimary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _kPrimary.withOpacity(0.20)),
+              ),
+              child: IconButton(
+                tooltip: 'Editar cliente',
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: _kPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _clienteSingularBloqueado = false;
+                  });
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
       const SizedBox(height: 5),
-      Row(children: [
-        Icon(Icons.info_outline, size: 11, color: Colors.grey[400]),
-        const SizedBox(width: 4),
-        Text('Cliente não será cadastrado na base de dados.',
-            style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-      ]),
+      Row(
+        children: [
+          Icon(Icons.info_outline, size: 11, color: Colors.grey[400]),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              bloqueado
+                  ? 'Cliente vindo da cotação. Clique no lápis para editar.'
+                  : 'Cliente não será cadastrado na base de dados.',
+              style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+            ),
+          ),
+        ],
+      ),
     ],
   );
 }
@@ -1000,11 +1072,30 @@ Widget _buildBotao() {
         ),
       );
 
-  Widget _textField(TextEditingController ctrl, String hint) => TextField(
-        controller: ctrl,
-        style: const TextStyle(fontSize: 13),
-        decoration: _inputDecoration(hint),
-      );
+Widget _textField(
+  TextEditingController ctrl,
+  String hint, {
+  bool enabled = true,
+}) =>
+    TextField(
+      controller: ctrl,
+      enabled: enabled,
+      style: TextStyle(
+        fontSize: 13,
+        color: enabled ? Colors.black87 : _kPrimary,
+        fontWeight: enabled ? FontWeight.normal : FontWeight.w600,
+      ),
+      decoration: _inputDecoration(hint).copyWith(
+        fillColor: enabled ? _kBackground : _kPrimary.withOpacity(0.05),
+        suffixIcon: enabled
+            ? null
+            : const Icon(
+                Icons.lock_outline_rounded,
+                size: 15,
+                color: _kPrimary,
+              ),
+      ),
+    );
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
         hintText: hint,

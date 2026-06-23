@@ -661,34 +661,54 @@ Future<CotacaoModel> atualizarCotacao(
   // CONVERSÃO — requer ligação (cria pedido no backend)
   // ══════════════════════════════════════════════════════════════════
 
-  Future<PedidoModel> converterEmPedido(
-    int idCotacao,
-    ConverterCotacaoEmPedidoRequestModel dto,
-  ) async {
-    if (_connectivity.isOffline) {
-      throw Exception(
-        'Sem ligação — a conversão em pedido requer internet.',
-      );
-    }
-
-    final pedido = await _service.converterEmPedido(idCotacao, dto);
-
-    // Actualiza o estado local da cotação para reflectir a conversão
-    await _db.update(
-      'cotacao',
-      {
-        'status_cotacao': 'CONVERTIDA',
-        'id_pedido_convertido': pedido.idPedido,
-        'referencia_pedido_convertido': pedido.referencia,
-        'sync_status': 'synced',
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [idCotacao],
+Future<PedidoModel> converterEmPedido(
+  int idCotacao,
+  ConverterCotacaoEmPedidoRequestModel dto,
+) async {
+  if (_connectivity.isOffline) {
+    throw Exception(
+      'Sem ligação — a conversão em pedido requer internet.',
     );
-
-    return pedido;
   }
+
+  // Busca a cotação local antes da conversão para preservar cliente singular
+  final rowCotacao = await _dao.getById(idCotacao);
+  final cotacaoLocal = rowCotacao != null
+      ? await _cotacaoComItensDoCache(rowCotacao)
+      : null;
+
+final dtoCorrigido = ConverterCotacaoEmPedidoRequestModel(
+  idTipoPagamento: dto.idTipoPagamento,
+
+  idCliente: cotacaoLocal?.idCliente ?? dto.idCliente,
+
+  nomeClienteSingular:
+      dto.nomeClienteSingular ?? cotacaoLocal?.nomeClienteSingular,
+
+  apelidoClienteSingular:
+      dto.apelidoClienteSingular ?? cotacaoLocal?.apelidoClienteSingular,
+
+  observacoes: dto.observacoes,
+);
+
+  final pedido = await _service.converterEmPedido(idCotacao, dtoCorrigido);
+
+  // Actualiza o estado local da cotação para reflectir a conversão
+  await _db.update(
+    'cotacao',
+    {
+      'status_cotacao': 'CONVERTIDA',
+      'id_pedido_convertido': pedido.idPedido,
+      'referencia_pedido_convertido': pedido.referencia,
+      'sync_status': 'synced',
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    where: 'id = ?',
+    whereArgs: [idCotacao],
+  );
+
+  return pedido;
+}
 
   // ══════════════════════════════════════════════════════════════════
   // HELPERS

@@ -537,9 +537,19 @@ class ConverterCotacaoEmPedidoRequestModel {
 
   Map<String, dynamic> toJson() => {
         'idTipoPagamento': idTipoPagamento,
-        'idCliente': idCliente,
-        'nomeClienteSingular': nomeClienteSingular,
-        'apelidoClienteSingular': apelidoClienteSingular,
-        'observacoes': observacoes,
+
+        if (idCliente != null)
+          'idCliente': idCliente,
+
+        if (nomeClienteSingular != null &&
+            nomeClienteSingular!.trim().isNotEmpty)
+          'nomeClienteSingular': nomeClienteSingular!.trim(),
+
+        if (apelidoClienteSingular != null &&
+            apelidoClienteSingular!.trim().isNotEmpty)
+          'apelidoClienteSingular': apelidoClienteSingular!.trim(),
+
+        if (observacoes != null && observacoes!.trim().isNotEmpty)
+          'observacoes': observacoes!.trim(),
       };
 }
