@@ -8,6 +8,8 @@ import com.stechengenharia.pdv_backend.cliente.exception.ClienteNotFoundExceptio
 import com.stechengenharia.pdv_backend.cliente.repository.ClienteRepository;
 import com.stechengenharia.pdv_backend.cliente.repository.PerfilClienteRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,20 +98,19 @@ public ClienteResponseDTO criar(ClienteRequestDTO dto) {
         return new ClienteResponseDTO(clienteRepository.save(cliente));
     }
 
-// ── EXCLUSÃO (Soft Delete) ────────────────────────────────────────
-// ── EXCLUSÃO (Soft Delete) ────────────────────────────────────────
+// ── EXCLUSÃO FÍSICA SEGURA ─────────────────────────────────────────
 @Transactional
 public void excluir(Long id) {
     Cliente cliente = encontrarOuLancar(id);
 
-    cliente.setDeleted(true);
-    cliente.setSyncStatus("PENDING_DELETE");
-
-    Cliente salvo = clienteRepository.saveAndFlush(cliente);
-
-    System.out.println("✅ Cliente soft-deleted id=" + salvo.getId()
-            + " deleted=" + salvo.isDeleted()
-            + " syncStatus=" + salvo.getSyncStatus());
+    try {
+        clienteRepository.delete(cliente);
+        clienteRepository.flush();
+    } catch (DataIntegrityViolationException e) {
+        throw new IllegalStateException(
+                "Não é possível excluir este cliente porque ele possui pedidos, documentos ou histórico associado."
+        );
+    }
 }
 
 // ── VALIDAÇÕES PRIVADAS ───────────────────────────────────────────
