@@ -23,15 +23,15 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     boolean existsByContactoAndIdNotAndDeletedFalse(String contacto, Long id);
 
     // ── Busca por ID (filtra deletados) ───────────────────────────────
-    @Query("SELECT c FROM Cliente c JOIN FETCH c.perfil WHERE c.id = :id AND c.deleted = false")
-    Optional<Cliente> findByIdComPerfil(@Param("id") Long id);
+@Query("SELECT c FROM Cliente c JOIN FETCH c.perfil WHERE c.id = :id AND c.deleted = false")
+Optional<Cliente> findByIdComPerfil(@Param("id") Long id);
 
     // ── Listagem (filtra deletados) ───────────────────────────────────
-    @Query("SELECT c FROM Cliente c JOIN FETCH c.perfil WHERE c.deleted = false")
-    List<Cliente> findAllComPerfil();
+   @Query("SELECT c FROM Cliente c JOIN FETCH c.perfil WHERE c.deleted = false")
+List<Cliente> findAllComPerfil();
 
-    @Query("SELECT c FROM Cliente c JOIN FETCH c.perfil WHERE c.perfil.id = :idPerfil AND c.deleted = false")
-    List<Cliente> findByPerfilId(@Param("idPerfil") Long idPerfil);
+@Query("SELECT c FROM Cliente c JOIN FETCH c.perfil WHERE c.perfil.id = :idPerfil AND c.deleted = false")
+List<Cliente> findByPerfilId(@Param("idPerfil") Long idPerfil);
 
     // ── Pesquisa (filtra deletados) ───────────────────────────────────
     @Query("""

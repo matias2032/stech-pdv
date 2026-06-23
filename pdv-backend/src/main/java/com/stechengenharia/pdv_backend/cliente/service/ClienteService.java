@@ -97,12 +97,19 @@ public ClienteResponseDTO criar(ClienteRequestDTO dto) {
     }
 
 // ── EXCLUSÃO (Soft Delete) ────────────────────────────────────────
+// ── EXCLUSÃO (Soft Delete) ────────────────────────────────────────
 @Transactional
 public void excluir(Long id) {
     Cliente cliente = encontrarOuLancar(id);
+
     cliente.setDeleted(true);
-    cliente.setSyncStatus("PENDING_DELETE"); // ← impede que o @PreUpdate sobreponha com PENDING_UPDATE
-    clienteRepository.save(cliente);
+    cliente.setSyncStatus("PENDING_DELETE");
+
+    Cliente salvo = clienteRepository.saveAndFlush(cliente);
+
+    System.out.println("✅ Cliente soft-deleted id=" + salvo.getId()
+            + " deleted=" + salvo.isDeleted()
+            + " syncStatus=" + salvo.getSyncStatus());
 }
 
 // ── VALIDAÇÕES PRIVADAS ───────────────────────────────────────────

@@ -795,12 +795,13 @@ Future<void> _processarDespesa(
         final clienteEditado = await service.editar(id, dto);
         await dao.upsert(clienteEditado.toLocalDb());
 
-      case 'DELETE':
-        final id = payload['id'] as int;
-        await service.excluir(id);
+case 'DELETE':
+  final id = payload['id'] as int;
+  await service.excluir(id);
+  await dao.delete(id); // ← apaga também do SQLite local
 
-      default:
-        throw Exception('Operação desconhecida para cliente: $operacao');
+default:
+  throw Exception('Operação desconhecida para cliente: $operacao');
     }
   }
 
@@ -1133,11 +1134,14 @@ Future<void> _processarDespesa(
     required int? idReal,
   }) async {
     switch (entidade) {
-      case 'cliente':
-        if (operacao == 'CREATE' && localId != null && idReal != null) {
-          await _clienteDao!.deleteByLocalId(localId);
-          final existente = await _clienteDao!.getById(idReal);
-          if (existente != null) await _clienteDao!.marcarSynced(idReal);
+case 'cliente':
+  if (operacao == 'CREATE' && localId != null && idReal != null) {
+    await _clienteDao!.deleteByLocalId(localId);
+    final existente = await _clienteDao!.getById(idReal);
+    if (existente != null) await _clienteDao!.marcarSynced(idReal);
+  } else if (operacao == 'DELETE' && idReal != null) {
+    await _clienteDao!.delete(idReal); // ← garante remoção após sync confirmado
+  
         }
 
 case 'fornecedor':

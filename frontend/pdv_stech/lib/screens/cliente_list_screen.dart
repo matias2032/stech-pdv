@@ -81,14 +81,16 @@ class _ClienteListScreenState extends State<ClienteListScreen> {
 
       if (!ctx.mounted) return;
 
-      if (exclusaoProvider.sucesso) {
-        ctx.read<ClienteListaProvider>().removerLocal(cliente.id);
-        _mostrarSnack(ctx, '${cliente.nomeCompleto} removido com sucesso.');
-        exclusaoProvider.resetar();
-      } else if (exclusaoProvider.temErro) {
-        _mostrarSnack(ctx, exclusaoProvider.erro ?? 'Erro ao remover.', erro: true);
-        exclusaoProvider.resetar();
-      }
+if (exclusaoProvider.sucesso) {
+  ctx.read<ClienteListaProvider>().removerLocal(cliente.id);
+
+  await ctx
+      .read<ClienteListaProvider>()
+      .filtrarPorPerfil(_kIdPerfilEmpresa);
+
+  _mostrarSnack(ctx, '${cliente.nomeCompleto} removido com sucesso.');
+  exclusaoProvider.resetar();
+}
     }
   }
 

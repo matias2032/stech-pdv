@@ -68,19 +68,35 @@ Future<List<ClienteModel>> listarTodos() async {
 }
 
   /// Lista clientes filtrados por perfil.
-  Future<List<ClienteModel>> listarPorPerfil(int idPerfil) async {
-    if (_connectivity.isOnline) {
-      try {
-        final lista = await _service.listarPorPerfil(idPerfil);
-        await _dao.upsertAll(lista.map((c) => c.toLocalDb()).toList());
-        return lista;
-      } catch (e) {
-        debugPrint('⚠️ ClienteRepository.listarPorPerfil HTTP falhou — usando cache: $e');
+
+Future<List<ClienteModel>> listarPorPerfil(int idPerfil) async {
+  debugPrint('🔌 [Cliente] listarPorPerfil=$idPerfil isOnline=${_connectivity.isOnline}');
+  if (_connectivity.isOnline) {
+    try {
+      final lista = await _service.listarPorPerfil(idPerfil);
+      debugPrint('✅ [Cliente] listarPorPerfil HTTP OK: ${lista.length} registos');
+
+      // Apaga do cache local os registos que o backend já não devolve (soft-deleted)
+      final idsServidor = lista.map((c) => c.id).toSet();
+      final cacheActual = await _dao.getByPerfil(idPerfil);
+      for (final row in cacheActual) {
+        final idLocal = row['id'] as int;
+        if (!idsServidor.contains(idLocal)) {
+          await _dao.delete(idLocal);
+          debugPrint('🗑️ [Cliente] removido do cache local id=$idLocal (deleted no servidor)');
+        }
       }
+
+      await _dao.upsertAll(lista.map((c) => c.toLocalDb()).toList());
+      return lista;
+    } catch (e) {
+      debugPrint('⚠️ [Cliente] listarPorPerfil HTTP falhou — usando cache: $e');
     }
-    final rows = await _dao.getByPerfil(idPerfil);
-    return rows.map(ClienteModel.fromLocalDb).toList();
   }
+  final rows = await _dao.getByPerfil(idPerfil);
+  debugPrint('📦 [Cliente] listarPorPerfil cache local: ${rows.length} registos');
+  return rows.map(ClienteModel.fromLocalDb).toList();
+}
 
   /// Pesquisa clientes por termo.
   Future<List<ClienteModel>> pesquisar(String termo) async {
@@ -129,16 +145,16 @@ Future<List<ClienteModel>> listarTodos() async {
   /// Online  → HTTP → guarda resultado no SQLite.
   /// Offline → cria localmente com ID temporário → enfileira sync.
   Future<ClienteModel> criar(ClienteRequestDTO dto) async {
-    if (_connectivity.isOnline) {
-      try {
-        final cliente = await _service.criar(dto);
-        await _dao.upsert(cliente.toLocalDb());
-        return cliente;
-      } catch (e) {
-        debugPrint('⚠️ ClienteRepository.criar HTTP falhou: $e');
-        rethrow; // Online mas falhou → erro real (ex: validação) → propaga
-      }
-    }
+if (_connectivity.isOnline) {
+  try {
+    final cliente = await _service.criar(dto);
+    await _dao.upsert(cliente.toLocalDb());
+    return cliente;
+  } catch (e) {
+    debugPrint('⚠️ ClienteRepository.criar HTTP falhou: $e');
+    rethrow;
+  }
+}
 
     // ── Modo offline: criar localmente ────────────────────────────
     final localId   = _uuid.v4();
@@ -170,16 +186,17 @@ Future<List<ClienteModel>> listarTodos() async {
 
   /// Edita um cliente existente.
   Future<ClienteModel> editar(int id, ClienteRequestDTO dto) async {
-    if (_connectivity.isOnline) {
-      try {
-        final cliente = await _service.editar(id, dto);
-        await _dao.upsert(cliente.toLocalDb());
-        return cliente;
-      } catch (e) {
-        debugPrint('⚠️ ClienteRepository.editar HTTP falhou: $e');
-        rethrow;
-      }
-    }
+if (_connectivity.isOnline) {
+  try {
+    final cliente = await _service.editar(id, dto);
+    await _dao.upsert(cliente.toLocalDb());
+    debugPrint('✅ [Cliente] editado online id=$id');
+    return cliente;
+  } catch (e) {
+    debugPrint('⚠️ [Cliente] editar HTTP falhou: $e');
+    rethrow;
+  }
+}
 
     // ── Modo offline: actualizar localmente ───────────────────────
     final existente = await _dao.getById(id);
@@ -209,17 +226,18 @@ Future<List<ClienteModel>> listarTodos() async {
   }
 
   /// Exclui um cliente.
-  Future<void> excluir(int id) async {
-    if (_connectivity.isOnline) {
-      try {
-        await _service.excluir(id);
-        await _dao.delete(id);
-        return;
-      } catch (e) {
-        debugPrint('⚠️ ClienteRepository.excluir HTTP falhou: $e');
-        rethrow;
-      }
-    }
+Future<void> excluir(int id) async {
+if (_connectivity.isOnline) {
+  try {
+    await _service.excluir(id);
+    await _dao.delete(id);
+    debugPrint('✅ [Cliente] excluído online id=$id');
+    return;
+  } catch (e) {
+    debugPrint('⚠️ [Cliente] excluir HTTP falhou: $e');
+    rethrow;
+  }
+}
 
     // ── Modo offline: marcar como pending delete ──────────────────
     await _syncQueueDao.enqueue('cliente', 'DELETE', {'id': id});
