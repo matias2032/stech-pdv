@@ -60,25 +60,23 @@ private final DocumentoFiscalService            documentoFiscalService;
 public PedidoResponseDTO criarPedido(PedidoRequestDTO dto) {
     log.info("Criando pedido para utilizador {}", dto.idUsuario);
 
-    Pedido pedido = Pedido.builder()
-            .referencia(gerarReferencia())
-            .idUsuario(dto.idUsuario)
-            .idTipoPagamento(dto.idTipoPagamento)
-            .statusPedido("aberto")
-            .total(BigDecimal.ZERO)
-            .valorPago(BigDecimal.ZERO)
-            .pontoReferencia(dto.pontoReferencia)
-            .observacoes(dto.observacoes)
-            .dataPedido(LocalDateTime.now())
-            .build();
+Pedido pedido = Pedido.builder()
+        .referencia(gerarReferencia())
+        .idUsuario(dto.idUsuario)
+        .idTipoPagamento(dto.idTipoPagamento)
+        .statusPedido("aberto")
+        .total(BigDecimal.ZERO)
+        .valorPago(BigDecimal.ZERO)
+        .pontoReferencia(dto.pontoReferencia)
+        .observacoes(dto.observacoes)
+        .dataPedido(LocalDateTime.now())
+        .build();
 
-    pedido.setSyncStatus("PENDING_CREATE"); // AuditableEntity já define, mas explícito
-
-    pedido = pedidoRepository.save(pedido);
-
- if (dto.idCliente != null) {
+// ── Cliente cadastrado OU cliente singular ─────────────────────────
+if (dto.idCliente != null) {
     clienteRepository.findById(dto.idCliente)
-        .orElseThrow(() -> new RuntimeException("Cliente não encontrado: " + dto.idCliente));
+            .orElseThrow(() -> new RuntimeException(
+                    "Cliente não encontrado: " + dto.idCliente));
 
     pedido.setIdCliente(dto.idCliente);
     pedido.setNomeClienteSingular(null);
@@ -86,19 +84,16 @@ public PedidoResponseDTO criarPedido(PedidoRequestDTO dto) {
 
 } else {
     pedido.setIdCliente(null);
-
-    pedido.setNomeClienteSingular(
-        dto.nomeClienteSingular != null && !dto.nomeClienteSingular.isBlank()
-            ? dto.nomeClienteSingular.trim()
-            : null
-    );
-
-    pedido.setApelidoClienteSingular(
-        dto.apelidoClienteSingular != null && !dto.apelidoClienteSingular.isBlank()
-            ? dto.apelidoClienteSingular.trim()
-            : null
-    );
+    pedido.setNomeClienteSingular(normalizarTexto(dto.nomeClienteSingular));
+    pedido.setApelidoClienteSingular(normalizarTexto(dto.apelidoClienteSingular));
 }
+
+pedido.setSyncStatus("PENDING_CREATE");
+
+pedido = pedidoRepository.save(pedido);
+
+
+
 
         if (dto.itensProduto != null) {
             for (ItemPedidoRequestDTO itemDto : dto.itensProduto) {
@@ -119,6 +114,11 @@ public PedidoResponseDTO criarPedido(PedidoRequestDTO dto) {
         return toResponseDTO(pedido);
     }
 
+    private String normalizarTexto(String valor) {
+    return valor != null && !valor.isBlank()
+            ? valor.trim()
+            : null;
+}
     // ════════════════════════════════════════════════════════════════════════
     // b) ADICIONAR ITEM DE PRODUTO
     // ════════════════════════════════════════════════════════════════════════

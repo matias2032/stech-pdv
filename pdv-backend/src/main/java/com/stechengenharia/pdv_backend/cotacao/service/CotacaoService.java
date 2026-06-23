@@ -68,23 +68,30 @@ public class CotacaoService {
                 ? encontrarClienteOuLancar(dto.idCliente())
                 : null;
 
-        Cotacao cotacao = Cotacao.builder()
-                .referencia(gerarReferencia())
-                .usuario(usuario)
-                .cliente(cliente)
-      
-                .statusCotacao("ABERTA")
-                .total(BigDecimal.ZERO)
-                .validadeAte(dto.validadeAte())
-                .observacoes(dto.observacoes())
-                .syncStatus("PENDING_CREATE")
-                .build();
+Cotacao cotacao = Cotacao.builder()
+        .referencia(gerarReferencia())
+        .usuario(usuario)
+        .cliente(cliente)
+        .nomeClienteSingular(cliente == null ? normalizarTexto(dto.nomeClienteSingular()) : null)
+        .apelidoClienteSingular(cliente == null ? normalizarTexto(dto.apelidoClienteSingular()) : null)
+        .statusCotacao("ABERTA")
+        .total(BigDecimal.ZERO)
+        .validadeAte(dto.validadeAte())
+        .observacoes(dto.observacoes())
+        .syncStatus("PENDING_CREATE")
+        .build();
 
         cotacaoRepository.save(cotacao);
 
         log.info("Cotação {} criada", cotacao.getReferencia());
         return toDetalhe(cotacao);
     }
+
+    private String normalizarTexto(String valor) {
+    return valor != null && !valor.isBlank()
+            ? valor.trim()
+            : null;
+}
 
     // ════════════════════════════════════════════════════════════════════
     // b) LISTAR COTAÇÕES
@@ -461,15 +468,19 @@ if (!cotacao.temItens()) {
                 ? dto.observacoes()
                 : cotacao.getObservacoes();
 
-                // ── Cliente cadastrado ou cliente singular vindo da cotação ─────────────
+// ── Cliente cadastrado ou cliente singular vindo da cotação ─────────
 if (cotacao.getCliente() != null) {
     pedidoRequest.idCliente = cotacao.getCliente().getId();
     pedidoRequest.nomeClienteSingular = null;
     pedidoRequest.apelidoClienteSingular = null;
+
 } else {
     pedidoRequest.idCliente = null;
-    pedidoRequest.nomeClienteSingular = cotacao.getNomeClienteSingular();
-    pedidoRequest.apelidoClienteSingular = cotacao.getApelidoClienteSingular();
+    pedidoRequest.nomeClienteSingular =
+            normalizarTexto(cotacao.getNomeClienteSingular());
+
+    pedidoRequest.apelidoClienteSingular =
+            normalizarTexto(cotacao.getApelidoClienteSingular());
 }
 
         pedidoRequest.itensProduto = cotacao.getItensProduto().stream()
@@ -489,9 +500,7 @@ if (cotacao.getCliente() != null) {
                     return i;
                 }).toList();
 
-                pedidoRequest.idCliente = cotacao.getCliente() != null
-        ? cotacao.getCliente().getId()
-        : null;
+
 
         // ── Cria o pedido via PedidoService ───────────────────────────
         PedidoResponseDTO pedidoResponse = pedidoService.criarPedido(pedidoRequest);
