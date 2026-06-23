@@ -275,6 +275,7 @@ despesaService: despesaService,
            '/pedidos_credito'      : (_) => const PedidosCreditoScreen(),  
            '/gerenciar_despesas': (_) => const DespesaListScreen(),
           '/cadastrar_despesas': (_) => const DespesaFormScreen(),
+       
            
         },
 

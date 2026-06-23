@@ -63,9 +63,12 @@ class _AppSidebarState extends State<AppSidebar>
   final Set<String> _expandidos = {};
 
   // ── Badge pedidos abertos ─────────────────────────────────────────
-  final _pedidoService    = PedidoService();
-  int   _pedidosAbertos   = 0;
+  final _pedidoService  = PedidoService();
+final _cotacaoService = CotacaoService();
 
+int _pedidosAbertos  = 0;
+int _cotacoesAbertas = 0;
+int _cotacoesProntas = 0;
   // ─────────────────────────────────────────────────────────────────
 
   @override
@@ -80,9 +83,14 @@ class _AppSidebarState extends State<AppSidebar>
       CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
     );
 
-    _carregarPedidosAbertos();
-    PedidoAtivoController.instance.pedidoAtivo
-        .addListener(_carregarPedidosAbertos);
+_carregarPedidosAbertos();
+_carregarCotacoes();
+
+PedidoAtivoController.instance.pedidoAtivo
+    .addListener(_carregarPedidosAbertos);
+
+CotacaoAtivaController.instance.cotacaoAtiva
+    .addListener(_carregarCotacoes);
 
     // Expande automaticamente o grupo da rota activa
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,8 +113,40 @@ class _AppSidebarState extends State<AppSidebar>
     } catch (_) {}
   }
 
+  Future<void> _carregarCotacoes() async {
+  try {
+    final abertas = await _cotacaoService.listarPorStatus('ABERTA');
+    final prontas = await _cotacaoService.listarPorStatus('PRONTA');
+
+    var totalAbertas = abertas.length;
+
+    final cotacaoAtiva = CotacaoAtivaController.instance.cotacaoAtiva.value;
+
+    final ativaJaEstaNaLista = cotacaoAtiva == null
+        ? true
+        : abertas.any((c) => c.idCotacao == cotacaoAtiva.idCotacao);
+
+    if (cotacaoAtiva != null &&
+        cotacaoAtiva.estaAberta &&
+        !ativaJaEstaNaLista) {
+      totalAbertas++;
+    }
+
+    if (mounted) {
+      setState(() {
+        _cotacoesAbertas = totalAbertas;
+        _cotacoesProntas = prontas.length;
+      });
+    }
+  } catch (_) {}
+}
+
   void _expandirGrupoActivo() {
-    for (final grupo in _grupos(0)) {
+  for (final grupo in _grupos(
+  _pedidosAbertos,
+  _cotacoesAbertas,
+  _cotacoesProntas,
+)) {
       for (final item in grupo.items) {
         if (item.route == widget.currentRoute) {
           setState(() => _expandidos.add(grupo.title));
@@ -120,7 +160,11 @@ class _AppSidebarState extends State<AppSidebar>
   // Definição dos grupos (recebe pedidosAbertos para badge)
   // ─────────────────────────────────────────────────────────────────
 
-List<_MenuGroup> _grupos(int pedidosAbertos) => [
+List<_MenuGroup> _grupos(
+  int pedidosAbertos,
+  int cotacoesAbertas,
+  int cotacoesProntas,
+) => [
   _MenuGroup(
     icon: Icons.point_of_sale_rounded,
     title: 'Vendas',
@@ -166,27 +210,33 @@ List<_MenuGroup> _grupos(int pedidosAbertos) => [
     ],
   ),
 
-  _MenuGroup(
-    icon: Icons.assignment_rounded,
-    title: 'Cotações',
-    items: [
-      _MenuItem(
-        icon: Icons.post_add_rounded,
-        title: 'Criar Cotação',
-        route: '/criar_cotacao',
-      ),
-      _MenuItem(
-        icon: Icons.fact_check_rounded,
-        title: 'Cotações Prontas',
-        route: '/cotacoes_prontas',
-      ),
-      _MenuItem(
-        icon: Icons.manage_search_rounded,
-        title: 'Histórico de Cotações',
-        route: '/historico_cotacoes',
-      ),
-    ],
-  ),
+_MenuGroup(
+  icon: Icons.assignment_rounded,
+  title: 'Cotações',
+  items: [
+    // Badge das cotações abertas anexado à rota Criar Cotação
+    _MenuItem(
+      icon: Icons.post_add_rounded,
+      title: 'Criar Cotação',
+      route: '/criar_cotacao',
+      badge: cotacoesAbertas,
+    ),
+
+    // Badge das cotações prontas — permanece até mudar de estado
+    _MenuItem(
+      icon: Icons.fact_check_rounded,
+      title: 'Cotações Prontas',
+      route: '/cotacoes_prontas',
+      badge: cotacoesProntas,
+    ),
+
+    _MenuItem(
+      icon: Icons.manage_search_rounded,
+      title: 'Histórico de Cotações',
+      route: '/historico_cotacoes',
+    ),
+  ],
+),
 
   _MenuGroup(
     icon: Icons.groups_rounded,
@@ -274,11 +324,17 @@ List<_MenuGroup> _grupos(int pedidosAbertos) => [
     final usuario = SessaoService.instance.usuario;
     if (usuario == null) return const SizedBox.shrink();
 
-    final grupos = usuario.isAdmin
-        ? _grupos(_pedidosAbertos)
-        : _grupos(_pedidosAbertos)
-            .where((g) => g.title == 'Vendas')
-            .toList();
+ final gruposBase = _grupos(
+  _pedidosAbertos,
+  _cotacoesAbertas,
+  _cotacoesProntas,
+);
+
+final grupos = usuario.isAdmin
+    ? gruposBase
+    : gruposBase
+        .where((g) => g.title == 'Vendas')
+        .toList();
 
     return Drawer(
       child: Column(
