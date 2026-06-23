@@ -66,7 +66,7 @@ class _ExtratosFormScreenState extends State<ExtratosFormScreen> {
   _Periodo _periodoSelecionado = _Periodo.ultimoMes;
   bool     _gerando            = false;
   ExtratoModel? _previa;
-  final _campo19Ctrl = TextEditingController(text: '0.00');
+final _campo19Ctrl = TextEditingController();
 SimulacaoApuramentoIvaModel? _apuramentoIva;
 
   final _fmtData  = DateFormat('dd/MM/yyyy');
