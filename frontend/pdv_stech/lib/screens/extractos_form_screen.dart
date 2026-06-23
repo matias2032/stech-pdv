@@ -66,12 +66,20 @@ class _ExtratosFormScreenState extends State<ExtratosFormScreen> {
   _Periodo _periodoSelecionado = _Periodo.ultimoMes;
   bool     _gerando            = false;
   ExtratoModel? _previa;
+  final _campo19Ctrl = TextEditingController(text: '0.00');
+SimulacaoApuramentoIvaModel? _apuramentoIva;
 
   final _fmtData  = DateFormat('dd/MM/yyyy');
   final _fmtMoeda = NumberFormat.currency(locale: 'pt_PT', symbol: 'MZN');
 
   // ── Gerar prévia ──────────────────────────────────────────────────────────
 
+
+@override
+void dispose() {
+  _campo19Ctrl.dispose();
+  super.dispose();
+}
   Future<void> _gerarPrevia() async {
     setState(() { _gerando = true; _previa = null; });
 
@@ -82,7 +90,17 @@ class _ExtratosFormScreenState extends State<ExtratosFormScreen> {
         dataFim:      fim,
         labelPeriodo: _periodoSelecionado.label,
       );
-      if (mounted) setState(() => _previa = extrato);
+final apuramento = SimulacaoApuramentoIvaModel.fromExtrato(
+  extrato,
+  campo19: _parseNumero(_campo19Ctrl.text),
+);
+
+if (mounted) {
+  setState(() {
+    _apuramentoIva = apuramento;
+    _previa = extrato.copyWith(apuramentoIva: apuramento);
+  });
+}
     } catch (e) {
       if (mounted) _snack('Erro ao gerar extracto: $e', erro: true);
     } finally {
@@ -97,12 +115,16 @@ Future<void> _exportar() async {
   setState(() => _gerando = true);
 
   try {
-    final file = await ExtratoPdfService.instance.gerar(_previa!);
+final extratoFinal = _previa!.copyWith(
+  apuramentoIva: _apuramentoIva,
+);
+
+final file = await ExtratoPdfService.instance.gerar(extratoFinal);
     if (mounted) {
       setState(() => _gerando = false);
       await ExtratoPdfService.instance.abrirPdf(file);
       // Devolve o extracto para a list_screen registar no histórico
-      if (mounted) Navigator.pop(context, _previa);
+if (mounted) Navigator.pop(context, extratoFinal);
     }
   } catch (e) {
     if (mounted) {
@@ -148,6 +170,26 @@ Future<void> _exportar() async {
       ),
     );
   }
+
+  double _parseNumero(String valor) {
+  final normalizado = valor
+      .replaceAll(' ', '')
+      .replaceAll('.', '')
+      .replaceAll(',', '.')
+      .trim();
+
+  return double.tryParse(normalizado) ?? 0.0;
+}
+
+void _recalcularCampo19() {
+  if (_apuramentoIva == null) return;
+
+  final campo19 = _parseNumero(_campo19Ctrl.text);
+
+  setState(() {
+    _apuramentoIva = _apuramentoIva!.recalcularComCampo19(campo19);
+  });
+}
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
@@ -247,79 +289,236 @@ Future<void> _exportar() async {
 
   // ── Card prévia ───────────────────────────────────────────────────────────
 
-  Widget _cardPrevia() {
-    final e = _previa!;
-    return _CardSecao(
-      icon:    Icons.preview_rounded,
-      titulo:  'Prévia do Extracto',
-      subtitulo: '${_fmtData.format(e.dataInicio)} → '
-          '${_fmtData.format(e.dataFim)}  ·  '
-          '${e.labelPeriodo}',
-      filho: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Totais
-          Container(
-            padding: const EdgeInsets.all(14),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color:        _kAzul.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(10),
-              border:
-                  Border.all(color: _kAzul.withOpacity(0.15)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _ResumoItem(
-                  label: 'Documentos',
-                  valor: '${e.totalDocumentos}',
-                  cor:   _kAzul,
-                ),
-                Container(
-                    width: 1, height: 36,
-                    color: Colors.grey.shade300),
-                _ResumoItem(
-                  label: 'Total',
-                  valor: _fmtMoeda.format(e.somaTotal),
-                  cor:   _kVermelho,
-                ),
-              ],
-            ),
+Widget _cardPrevia() {
+  final e = _previa!;
+
+  return _CardSecao(
+    icon: Icons.preview_rounded,
+    titulo: 'Prévia do Extracto',
+    subtitulo: '${_fmtData.format(e.dataInicio)} → '
+        '${_fmtData.format(e.dataFim)}  ·  '
+        '${e.labelPeriodo}',
+    filho: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Totais
+        Container(
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: _kAzul.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _kAzul.withOpacity(0.15)),
           ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _ResumoItem(
+                label: 'Documentos',
+                valor: '${e.totalDocumentos}',
+                cor: _kAzul,
+              ),
+              Container(
+                width: 1,
+                height: 36,
+                color: Colors.grey.shade300,
+              ),
+              _ResumoItem(
+                label: 'Total',
+                valor: _fmtMoeda.format(e.somaTotal),
+                cor: _kVermelho,
+              ),
+            ],
+          ),
+        ),
 
-          // Cabeçalho da tabela
-          if (e.linhas.isNotEmpty)
-            _CabecalhoTabela(),
+        // Simulação do apuramento do IVA
+        if (_apuramentoIva != null) ...[
+          _cardSimulacaoApuramentoIva(),
+          const SizedBox(height: 12),
+        ],
 
-          // Linhas
-          if (e.linhas.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.inbox_outlined,
-                        color: _kCinzaTexto, size: 40),
-                    SizedBox(height: 8),
-                    Text('Nenhum documento FAT ou VD no período.',
-                        style: TextStyle(
-                            color: _kCinzaTexto, fontSize: 13)),
-                  ],
+        // Cabeçalho da tabela
+        if (e.linhas.isNotEmpty)
+          _CabecalhoTabela(),
+
+        // Linhas
+        if (e.linhas.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.inbox_outlined,
+                    color: _kCinzaTexto,
+                    size: 40,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Nenhum documento FAT ou VD no período.',
+                    style: TextStyle(
+                      color: _kCinzaTexto,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...e.linhas.asMap().entries.map(
+                (entry) => _LinhaExtrato(
+                  linha: entry.value,
+                  isAlternate: entry.key.isOdd,
+                  fmtData: _fmtData,
+                  fmtMoeda: _fmtMoeda,
                 ),
               ),
-            )
-          else
-            ...e.linhas.asMap().entries.map((entry) => _LinhaExtrato(
-                  linha:       entry.value,
-                  isAlternate: entry.key.isOdd,
-                  fmtData:     _fmtData,
-                  fmtMoeda:    _fmtMoeda,
-                )),
-        ],
+      ],
+    ),
+  );
+}
+
+Widget _cardSimulacaoApuramentoIva() {
+  final a = _apuramentoIva!;
+  final fmt = NumberFormat('#,##0.00', 'pt_PT');
+
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE8F1FA),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: _kAzul.withOpacity(0.25)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(
+          width: double.infinity,
+          child: Text(
+            'Simulação do Apuramento do IVA',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _kAzul,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final largura = constraints.maxWidth;
+
+            final larguraCampo = largura >= 640
+                ? (largura - 24) / 4
+                : largura >= 460
+                    ? (largura - 16) / 3
+                    : largura >= 300
+                        ? (largura - 8) / 2
+                        : largura;
+
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _campoIva('1', 'Base Tributável', fmt.format(a.campo1), larguraCampo),
+                _campoIva('2', 'IVA Apurado', fmt.format(a.campo2), larguraCampo),
+                _campoIva('3', 'Base 5%', fmt.format(a.campo3), larguraCampo),
+                _campoIva('4', 'IVA 5%', fmt.format(a.campo4), larguraCampo),
+                _campoIva('5', 'Isentas', fmt.format(a.campo5), larguraCampo),
+                _campoIva('6', 'Sem dedução', fmt.format(a.campo6), larguraCampo),
+                _campoIva('7', 'Outras', fmt.format(a.campo7), larguraCampo),
+                _campoIva('8', 'Imobilizado', fmt.format(a.campo8), larguraCampo),
+                _campoIva('9', 'Existências', fmt.format(a.campo9), larguraCampo),
+                _campoIva('10', 'Outros bens/serviços', fmt.format(a.campo10), larguraCampo),
+                _campoIva('11', 'Importação', fmt.format(a.campo11), larguraCampo),
+                _campoIva('12', 'Regularizações SP', fmt.format(a.campo12), larguraCampo),
+                _campoIva('13', 'Regularizações Estado', fmt.format(a.campo13), larguraCampo),
+                _campoIva('14', 'Soma Base', fmt.format(a.campo14), larguraCampo),
+                _campoIva('15', 'Soma Dedutível', fmt.format(a.campo15), larguraCampo),
+                _campoIva('16', 'Soma IVA Apurado', fmt.format(a.campo16), larguraCampo),
+                _campoIva('17', 'IVA a pagar', fmt.format(a.campo17), larguraCampo),
+                _campoIva('18', 'IVA a recuperar', fmt.format(a.campo18), larguraCampo),
+                _campoIvaManual19(larguraCampo),
+                _campoIva('20', '', fmt.format(a.campo20), larguraCampo),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _campoIva(
+  String numero,
+  String label,
+  String valor,
+  double largura,
+) {
+  return SizedBox(
+    width: largura,
+    child: TextFormField(
+      initialValue: valor == '0,00' ? '-' : valor,
+      readOnly: true,
+      enabled: false,
+      decoration: InputDecoration(
+labelText: label.trim().isEmpty ? 'Campo $numero' : '$numero — $label',
+        labelStyle: const TextStyle(fontSize: 10),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.75),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
-    );
-  }
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: _kAzul,
+      ),
+      textAlign: TextAlign.right,
+    ),
+  );
+}
+
+Widget _campoIvaManual19(double largura) {
+  return SizedBox(
+    width: largura,
+    child: TextField(
+      controller: _campo19Ctrl,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (_) => _recalcularCampo19(),
+      decoration: InputDecoration(
+        labelText: '19 — Excesso anterior',
+        labelStyle: const TextStyle(fontSize: 10),
+        filled: true,
+        fillColor: Colors.white,
+        suffixIcon: const Icon(
+          Icons.edit_outlined,
+          size: 16,
+          color: _kVermelho,
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: _kVermelho,
+      ),
+      textAlign: TextAlign.right,
+    ),
+  );
+}
 
   // ── Botão exportar ────────────────────────────────────────────────────────
 

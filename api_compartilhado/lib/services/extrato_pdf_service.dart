@@ -798,23 +798,8 @@ final estiloHeader = pw.TextStyle(
 
     final prestacaoFactura = extrato.somaTotal;
     final prestacaoLiquido = _valorSemIva(prestacaoFactura);
-    final prestacaoIva = prestacaoFactura - prestacaoLiquido;
-
-    final bens = _totalTipo(extrato, 'Bens e Serviços');
-    final imobilizado = _totalTipo(extrato, 'Imobilizado');
-    final existencias = _totalTipo(extrato, 'Existências');
-    final importacao = _totalTipo(extrato, 'Importação');
-
-    final bensIva = bens - _valorSemIva(bens);
-    final imobilizadoIva = imobilizado - _valorSemIva(imobilizado);
-    final existenciasIva = existencias - _valorSemIva(existencias);
-    final importacaoIva = importacao - _valorSemIva(importacao);
-
-    final totalIvaDedutivel =
-        bensIva + imobilizadoIva + existenciasIva + importacaoIva;
-
-    final ivaAPagarOuRecuperar = prestacaoIva - totalIvaDedutivel;
-    final resultadoLiquido = extrato.somaTotal - extrato.somaDespesas;
+final apuramento = extrato.apuramentoIva ??
+    SimulacaoApuramentoIvaModel.fromExtrato(extrato);
 
     return pw.Align(
       alignment: pw.Alignment.center,
@@ -843,81 +828,32 @@ final estiloHeader = pw.TextStyle(
             ),
             pw.SizedBox(height: 6),
 
-            _linhaResumo(
-              'Prestação de Serviços - Base Tributável',
-              _fmtNumero(prestacaoLiquido),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'IVA Apurado',
-              _fmtNumero(prestacaoIva),
-              estilo,
-              estiloBold,
-            ),
+_linhaResumo('Campo 1 — Base Tributável', _fmtNumero(apuramento.campo1), estilo, estiloBold),
+_linhaResumo('Campo 2 — IVA Apurado', _fmtNumero(apuramento.campo2), estilo, estiloBold),
+_linhaResumo('Campo 3 — Base 5%', _fmtNumero(apuramento.campo3), estilo, estiloBold),
+_linhaResumo('Campo 4 — IVA 5%', _fmtNumero(apuramento.campo4), estilo, estiloBold),
+_linhaResumo('Campo 5 — Isentas', _fmtNumero(apuramento.campo5), estilo, estiloBold),
+_linhaResumo('Campo 6 — Sem direito à dedução', _fmtNumero(apuramento.campo6), estilo, estiloBold),
+_linhaResumo('Campo 7 — Outras operações', _fmtNumero(apuramento.campo7), estilo, estiloBold),
 
-            pw.Divider(color: PdfColors.grey400, thickness: 0.4),
+pw.Divider(color: PdfColors.grey400, thickness: 0.4),
 
-            _linhaResumo(
-              'Bens e Serviços - IVA dedutível',
-              _fmtNumero(bensIva),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'Imobilizado - IVA dedutível',
-              _fmtNumero(imobilizadoIva),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'Existências - IVA dedutível',
-              _fmtNumero(existenciasIva),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'Importação - IVA dedutível',
-              _fmtNumero(importacaoIva),
-              estilo,
-              estiloBold,
-            ),
+_linhaResumo('Campo 8 — Imobilizado', _fmtNumero(apuramento.campo8), estilo, estiloBold),
+_linhaResumo('Campo 9 — Existências', _fmtNumero(apuramento.campo9), estilo, estiloBold),
+_linhaResumo('Campo 10 — Outros bens e serviços', _fmtNumero(apuramento.campo10), estilo, estiloBold),
+_linhaResumo('Campo 11 — Importação', _fmtNumero(apuramento.campo11), estilo, estiloBold),
+_linhaResumo('Campo 12 — Regularizações sujeito passivo', _fmtNumero(apuramento.campo12), estilo, estiloBold),
+_linhaResumo('Campo 13 — Regularizações Estado', _fmtNumero(apuramento.campo13), estilo, estiloBold),
 
-            pw.Divider(color: PdfColors.grey400, thickness: 0.4),
+pw.Divider(color: PdfColors.grey400, thickness: 0.4),
 
-            _linhaResumo(
-              'Total IVA dedutível',
-              _fmtNumero(totalIvaDedutivel),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'IVA a pagar / recuperar',
-              _fmtNumero(ivaAPagarOuRecuperar),
-              estilo,
-              estiloBold,
-            ),
-
-            pw.Divider(color: PdfColors.grey400, thickness: 0.4),
-
-            _linhaResumo(
-              'Total facturado',
-              _fmtNumero(extrato.somaTotal),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'Total gasto',
-              _fmtNumero(extrato.somaDespesas),
-              estilo,
-              estiloBold,
-            ),
-            _linhaResumo(
-              'Resultado líquido',
-              _fmtNumero(resultadoLiquido),
-              estilo,
-              estiloBold,
-            ),
+_linhaResumo('Campo 14 — Soma Base Tributável', _fmtNumero(apuramento.campo14), estilo, estiloBold),
+_linhaResumo('Campo 15 — Soma IVA Dedutível', _fmtNumero(apuramento.campo15), estilo, estiloBold),
+_linhaResumo('Campo 16 — Soma IVA Apurado', _fmtNumero(apuramento.campo16), estilo, estiloBold),
+_linhaResumo('Campo 17 — IVA a pagar', _fmtNumero(apuramento.campo17), estilo, estiloBold),
+_linhaResumo('Campo 18 — IVA a recuperar', _fmtNumero(apuramento.campo18), estilo, estiloBold),
+_linhaResumo('Campo 19 — Excesso período anterior', _fmtNumero(apuramento.campo19), estilo, estiloBold),
+_linhaResumo('Campo 20', _fmtNumero(apuramento.campo20), estilo, estiloBold),
           ],
         ),
       ),
