@@ -66,6 +66,7 @@ class DespesaModel {
   final String descricao;
   final double valorGasto;
   final DateTime? dataDespesa;
+  final String? motivoExclusao;
   final int? idTipoDespesa;
 final String? nomeTipoDespesa;
   final bool deleted;
@@ -80,6 +81,7 @@ final String? nomeTipoDespesa;
     required this.descricao,
     required this.valorGasto,
     this.dataDespesa,
+    this.motivoExclusao,
     this.idTipoDespesa,
 this.nomeTipoDespesa,
     this.deleted = false,
@@ -96,6 +98,9 @@ this.nomeTipoDespesa,
       descricao: json['descricao']?.toString() ?? '',
       valorGasto: _parseDouble(json['valorGasto']),
       dataDespesa: _parseDateOpt(json['dataDespesa']),
+      motivoExclusao: _parseStringOpt(
+  json['motivoExclusao'] ?? json['motivo_exclusao'],
+),
 idTipoDespesa: _parseIntOpt(json['idTipoDespesa']),
 nomeTipoDespesa: _parseStringOpt(json['nomeTipoDespesa']),
       deleted: _parseBool(json['deleted']),
@@ -122,6 +127,7 @@ Map<String, dynamic> toJson() {
       'descricao': descricao.trim(),
       'valor_gasto': valorGasto,
       'data_despesa': dataDespesa?.toIso8601String(),
+      'motivo_exclusao': motivoExclusao,
       'id_tipo_despesa': idTipoDespesa,
 'nome_tipo_despesa': nomeTipoDespesa,
       'deleted': deleted ? 1 : 0,
@@ -138,6 +144,7 @@ Map<String, dynamic> toJson() {
     String? descricao,
     double? valorGasto,
     DateTime? dataDespesa,
+    String? motivoExclusao,
     int? idTipoDespesa,
 String? nomeTipoDespesa,
     bool? deleted,
@@ -152,6 +159,7 @@ String? nomeTipoDespesa,
       descricao: descricao ?? this.descricao,
       valorGasto: valorGasto ?? this.valorGasto,
       dataDespesa: dataDespesa ?? this.dataDespesa,
+      motivoExclusao: motivoExclusao ?? this.motivoExclusao,
       idTipoDespesa: idTipoDespesa ?? this.idTipoDespesa,
 nomeTipoDespesa: nomeTipoDespesa ?? this.nomeTipoDespesa,
       deleted: deleted ?? this.deleted,

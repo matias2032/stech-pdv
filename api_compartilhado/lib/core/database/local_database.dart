@@ -25,14 +25,26 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 1,       
+  version: 2,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
 );
   }
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+ if (oldVersion < 2) {
+    final columns = await db.rawQuery('PRAGMA table_info(despesa)');
 
+    final existe = columns.any(
+      (col) => col['name'] == 'motivo_exclusao',
+    );
+
+    if (!existe) {
+      await db.execute('''
+        ALTER TABLE despesa
+        ADD COLUMN motivo_exclusao TEXT
+      ''');
+    }}
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -157,20 +169,21 @@ await txn.insert(
 
 
 await txn.execute('''
-  CREATE TABLE IF NOT EXISTS despesa (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_fornecedor INTEGER,
-    nome_fornecedor TEXT,
-    nuit_fornecedor TEXT,
-    id_tipo_despesa INTEGER,
-    nome_tipo_despesa TEXT,
-    descricao TEXT NOT NULL,
-    valor_gasto REAL NOT NULL DEFAULT 0,
-    data_despesa TEXT NOT NULL,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    sync_status TEXT NOT NULL DEFAULT 'synced',
-    updated_at TEXT
-  )
+CREATE TABLE despesa (
+  id INTEGER PRIMARY KEY,
+  id_fornecedor INTEGER,
+  nome_fornecedor TEXT,
+  nuit_fornecedor TEXT,
+  descricao TEXT NOT NULL,
+  valor_gasto REAL NOT NULL,
+  data_despesa TEXT,
+  motivo_exclusao TEXT,
+  id_tipo_despesa INTEGER,
+  nome_tipo_despesa TEXT,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  sync_status TEXT DEFAULT 'synced',
+  updated_at TEXT
+)
 ''');
 
       // ── produto ───────────────────────────────────────────────────

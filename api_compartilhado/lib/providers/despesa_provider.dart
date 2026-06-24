@@ -196,31 +196,52 @@ return true;
     }
   }
 
-  Future<bool> excluirDespesa(int id) async {
-    _setSalvando(true);
-    _limparErro();
+Future<bool> excluirDespesa(
+  int id, {
+  String? motivoExclusao,
+}) async {
+  _setSalvando(true);
+  _limparErro();
 
-    try {
-      await _repository.excluir(id);
+  try {
+    await _repository.excluir(
+      id,
+      motivoExclusao: motivoExclusao,
+    );
 
-      _despesas = _despesas
-          .where((despesa) => despesa.idDespesa != id)
-          .toList();
+    _despesas = _despesas
+        .where((despesa) => despesa.idDespesa != id)
+        .toList();
 
-      if (_despesaSelecionada?.idDespesa == id) {
-        _despesaSelecionada = null;
-      }
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _erro = e.toString();
-      notifyListeners();
-      return false;
-    } finally {
-      _setSalvando(false);
+    if (_despesaSelecionada?.idDespesa == id) {
+      _despesaSelecionada = null;
     }
+
+    notifyListeners();
+    return true;
+  } catch (e) {
+    _erro = e.toString();
+    notifyListeners();
+    return false;
+  } finally {
+    _setSalvando(false);
   }
+}
+
+  Future<void> carregarExcluidas() async {
+  _setCarregando(true);
+  _limparErro();
+
+  try {
+    _despesas = await _repository.listarExcluidas();
+  } catch (e) {
+    _erro = e.toString();
+  } finally {
+    _setCarregando(false);
+  }
+}
+
+
 
 void inserirOuAtualizarNaLista(DespesaModel despesa) {
   if (_idTipoDespesaFiltro != null &&

@@ -32,6 +32,27 @@ class DespesaService {
         .toList();
   }
 
+// ── GET /api/despesas/excluidas ───────────────────────────────────
+
+Future<List<DespesaModel>> listarExcluidas() async {
+  final uri = Uri.parse('${ApiConfig.despesasUrl}/excluidas');
+
+  final response = await _client
+      .get(uri, headers: ApiConfig.defaultHeaders)
+      .timeout(ApiConfig.timeout);
+
+  _validarResposta(response);
+
+  final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+  if (data is! List) {
+    throw Exception('Resposta inválida ao listar despesas excluídas.');
+  }
+
+  return data
+      .map((item) => DespesaModel.fromJson(item as Map<String, dynamic>))
+      .toList();
+}
   // ── GET /api/despesas/{id} ────────────────────────────────────────
 
   Future<DespesaModel> buscarPorId(int id) async {
@@ -171,6 +192,27 @@ class DespesaService {
 
     _validarResposta(response, aceitarSemConteudo: true);
   }
+
+  // ── PATCH /api/despesas/{id}/excluir ───────────────────────────────
+
+Future<void> excluirComMotivo({
+  required int id,
+  required String? motivoExclusao,
+}) async {
+  final uri = Uri.parse('${ApiConfig.despesasUrl}/$id/excluir');
+
+  final response = await _client
+      .patch(
+        uri,
+        headers: ApiConfig.defaultHeaders,
+        body: jsonEncode({
+          'motivoExclusao': motivoExclusao?.trim(),
+        }),
+      )
+      .timeout(ApiConfig.timeout);
+
+  _validarResposta(response, aceitarSemConteudo: true);
+}
 
   // ── Helpers ───────────────────────────────────────────────────────
 

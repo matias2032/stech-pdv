@@ -282,8 +282,8 @@ ChangeNotifierProvider(
           '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
            '/pedidos_credito'      : (_) => const PedidosCreditoScreen(),  
            '/gerenciar_despesas': (_) => const DespesaListScreen(),
-          '/cadastrar_despesas': (_) => const DespesaFormScreen(),
-       
+        
+       '/despesas_excluidas': (_) => const DespesasExcluidasScreen(),
            
         },
 
@@ -312,6 +312,17 @@ ChangeNotifierProvider(
   return MaterialPageRoute(
     builder: (_) => FornecedorFormScreen(
       fornecedor: fornecedor,
+    ),
+    settings: settings,
+  );
+}
+
+  if (settings.name == '/cadastrar_despesas') {
+  final despesa = settings.arguments as DespesaModel?;
+
+  return MaterialPageRoute(
+    builder: (_) => DespesaFormScreen(
+      despesa: despesa,
     ),
     settings: settings,
   );

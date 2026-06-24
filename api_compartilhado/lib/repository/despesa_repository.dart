@@ -229,49 +229,75 @@ final payload = {
     return despesaLocal;
   }
 
-  Future<void> excluir(int id) async {
-    final online = _connectivityService.isOnline;
+Future<void> excluir(
+  int id, {
+  String? motivoExclusao,
+}) async {
+  final online = _connectivityService.isOnline;
 
-    if (online) {
-      try {
-        await _service.excluir(id);
-        await _dao.excluir(id);
-        return;
-      } catch (e, s) {
-        debugPrint('⚠️ DespesaRepository — API excluir falhou: $e');
-        debugPrint('$s');
+  if (online) {
+    try {
+      await _service.excluirComMotivo(
+        id: id,
+        motivoExclusao: motivoExclusao,
+      );
 
-        await _excluirOffline(id, tentarFlush: true);
-        return;
-      }
-    }
+      await _dao.marcarExcluida(
+        id: id,
+        motivoExclusao: motivoExclusao,
+        syncStatus: 'synced',
+      );
 
-    await _excluirOffline(id, tentarFlush: false);
-  }
+      return;
+    } catch (e, s) {
+      debugPrint('⚠️ DespesaRepository — API excluir falhou: $e');
+      debugPrint('$s');
 
-  Future<void> _excluirOffline(
-    int id, {
-    required bool tentarFlush,
-  }) async {
-    await _dao.excluir(id);
-
-    final payload = {
-      'id': id,
-      'localId': id.toString(),
-    };
-
-    await _syncQueueDao.enqueue(
-      'despesa',
-      'DELETE',
-      payload,
-    );
-
-    debugPrint('🗑️ DespesaRepository — despesa excluída offline id=$id');
-
-    if (tentarFlush && _connectivityService.isOnline) {
-      Future.microtask(() => SyncScheduler.instance.flushQueue());
+      await _excluirOffline(
+        id,
+        motivoExclusao: motivoExclusao,
+        tentarFlush: true,
+      );
+      return;
     }
   }
+
+  await _excluirOffline(
+    id,
+    motivoExclusao: motivoExclusao,
+    tentarFlush: false,
+  );
+}
+
+Future<void> _excluirOffline(
+  int id, {
+  required bool tentarFlush,
+  String? motivoExclusao,
+}) async {
+  await _dao.marcarExcluida(
+    id: id,
+    motivoExclusao: motivoExclusao,
+    syncStatus: 'pending_delete',
+  );
+
+  final payload = {
+    'id': id,
+    'localId': id.toString(),
+    'motivoExclusao': motivoExclusao?.trim(),
+  };
+
+  await _syncQueueDao.enqueue(
+    'despesa',
+    'DELETE',
+    payload,
+  );
+
+  debugPrint('🗑️ DespesaRepository — despesa excluída offline id=$id');
+
+  if (tentarFlush && _connectivityService.isOnline) {
+    Future.microtask(() => SyncScheduler.instance.flushQueue());
+  }
+}
 
   void _validarDespesa(DespesaModel despesa) {
   if (despesa.descricao.trim().isEmpty) {
@@ -301,6 +327,22 @@ final payload = {
   }
 
   return _dao.listarTiposDespesa();
+}
+
+Future<List<DespesaModel>> listarExcluidas() async {
+  final online = _connectivityService.isOnline;
+
+  if (online) {
+    try {
+      final remotas = await _service.listarExcluidas();
+      await _dao.inserirTodos(remotas);
+      return remotas;
+    } catch (_) {
+      return _dao.listarExcluidas();
+    }
+  }
+
+  return _dao.listarExcluidas();
 }
 
 Future<List<DespesaModel>> listarPorPeriodoETipo({

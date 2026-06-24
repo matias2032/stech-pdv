@@ -198,17 +198,22 @@ List<_MenuGroup> _grupos(
     ],
   ),
 
-  _MenuGroup(
-    icon: Icons.payments_rounded,
-    title: 'Despesas',
-    items: [
-      _MenuItem(
-        icon: Icons.request_quote_rounded,
-        title: 'Ver Despesas',
-        route: '/gerenciar_despesas',
-      ),
-    ],
-  ),
+_MenuGroup(
+  icon: Icons.payments_rounded,
+  title: 'Despesas',
+  items: [
+    _MenuItem(
+      icon: Icons.request_quote_rounded,
+      title: 'Ver Despesas',
+      route: '/gerenciar_despesas',
+    ),
+    _MenuItem(
+      icon: Icons.delete_sweep_rounded,
+      title: 'Despesas Excluídas',
+      route: '/despesas_excluidas',
+    ),
+  ],
+),
 
 _MenuGroup(
   icon: Icons.assignment_rounded,

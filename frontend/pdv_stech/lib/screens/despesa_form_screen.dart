@@ -275,82 +275,114 @@ setState(() {
     );
   }
 
-  Widget _buildCardFornecedor() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Consumer<FornecedorProvider>(
-          builder: (_, provider, __) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _TituloSecao(
-                  icon: Icons.local_shipping_rounded,
-                  label: 'Fornecedor',
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<int?>(
-  value: _idFornecedorSelecionado,
-  isExpanded: true,
-  decoration: _inputDecoration(
-    label: 'Fornecedor associado',
-    icon: Icons.business_outlined,
-  ),
-  items: [
-    const DropdownMenuItem<int?>(
-      value: null,
-      child: Text('Sem fornecedor'),
+Widget _buildCardFornecedor() {
+  return Card(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: Colors.grey.shade200),
     ),
-    ...provider.fornecedores.map(
-      (f) => DropdownMenuItem<int?>(
-        value: f.id,
-        child: Text(_nomeFornecedor(f)),
-      ),
-    ),
-  ],
-  onChanged: provider.salvando
-      ? null
-      : (value) {
-          final fornecedor = provider.fornecedores
-              .where((f) => f.id == value)
-              .cast<FornecedorModel?>()
-              .firstWhere(
-                (f) => f != null,
-                orElse: () => null,
-              );
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Consumer<FornecedorProvider>(
+        builder: (_, provider, __) {
+          final fornecedoresUnicos = <int, FornecedorModel>{};
 
-          setState(() {
-            _idFornecedorSelecionado = value;
-            _fornecedorSelecionadoCache = fornecedor;
-          });
-        },
-),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _abrirCadastroRapidoFornecedor,
-                  icon: const Icon(Icons.add_business_rounded),
-                  label: const Text('Cadastrar fornecedor rapidamente'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _kAzul,
-                    side: const BorderSide(color: _kAzul),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
+          for (final fornecedor in provider.fornecedores) {
+            final id = fornecedor.id;
+
+            if (id != null && id > 0) {
+              fornecedoresUnicos[id] = fornecedor;
+            }
+          }
+
+          final fornecedores = fornecedoresUnicos.values.toList()
+            ..sort((a, b) {
+              final nomeA = (a.nome ?? a.contacto).toLowerCase();
+              final nomeB = (b.nome ?? b.contacto).toLowerCase();
+              return nomeA.compareTo(nomeB);
+            });
+
+          final fornecedorSelecionadoExiste =
+              _idFornecedorSelecionado == null ||
+              fornecedores.any((f) => f.id == _idFornecedorSelecionado);
+
+          final idFornecedorSeguro = fornecedorSelecionadoExiste
+              ? _idFornecedorSelecionado
+              : null;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _TituloSecao(
+                icon: Icons.local_shipping_rounded,
+                label: 'Fornecedor',
+              ),
+              const SizedBox(height: 16),
+
+              DropdownButtonFormField<int?>(
+                value: idFornecedorSeguro,
+                isExpanded: true,
+                decoration: _inputDecoration(
+                  label: 'Fornecedor',
+                  icon: Icons.local_shipping_outlined,
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Sem fornecedor'),
+                  ),
+                  ...fornecedores.map(
+                    (fornecedor) => DropdownMenuItem<int?>(
+                      value: fornecedor.id,
+                      child: Text(
+                        _nomeFornecedor(fornecedor),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
+                ],
+                onChanged: provider.salvando
+                    ? null
+                    : (valor) {
+                        FornecedorModel? fornecedor;
+
+                        for (final item in fornecedores) {
+                          if (item.id == valor) {
+                            fornecedor = item;
+                            break;
+                          }
+                        }
+
+                        setState(() {
+                          _idFornecedorSelecionado = valor;
+                          _fornecedorSelecionadoCache = fornecedor;
+                        });
+                      },
+              ),
+
+              const SizedBox(height: 12),
+
+              OutlinedButton.icon(
+                onPressed: _abrirCadastroRapidoFornecedor,
+                icon: const Icon(Icons.add_business_rounded),
+                label: const Text('Cadastrar fornecedor rapidamente'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kAzul,
+                  side: const BorderSide(color: _kAzul),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                 ),
-              ],
-            );
-          },
-        ),
+              ),
+            ],
+          );
+        },
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCardDespesa() {
     return Card(

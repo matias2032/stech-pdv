@@ -111,45 +111,49 @@ Future<void> _abrirFormulario({DespesaModel? despesa}) async {
     );
   }
 
-  /*
   Future<void> _confirmarExclusao(BuildContext ctx, DespesaModel despesa) async {
-    final confirma = await showDialog<bool>(
-      context: ctx,
-      builder: (_) => _DialogoConfirmacao(
-        titulo: 'Remover despesa',
-        mensagem:
-            'Deseja remover esta despesa? Esta acção não pode ser desfeita.',
-        corBotao: _kVermelho,
-        labelBotao: 'Remover',
-      ),
-    );
+  final id = despesa.idDespesa;
 
-    if (confirma == true && ctx.mounted) {
-      final id = despesa.idDespesa;
-
-      if (id == null) {
-        _mostrarSnack(ctx, 'Despesa sem ID válido.', erro: true);
-        return;
-      }
-
-      final provider = ctx.read<DespesaProvider>();
-      final sucesso = await provider.excluirDespesa(id);
-
-      if (!ctx.mounted) return;
-
-      if (sucesso) {
-        _mostrarSnack(ctx, 'Despesa removida com sucesso.');
-      } else {
-        _mostrarSnack(
-          ctx,
-          provider.erro ?? 'Erro ao remover despesa.',
-          erro: true,
-        );
-        provider.limparErro();
-      }
-    }
+  if (id == null) {
+    _mostrarSnack(ctx, 'Despesa sem ID válido.', erro: true);
+    return;
   }
-  */
+
+  final motivo = await showDialog<String>(
+    context: ctx,
+    barrierDismissible: false,
+    builder: (_) => _DialogoMotivoExclusao(despesa: despesa),
+  );
+
+  if (motivo == null) return;
+
+  if (motivo.trim().isEmpty) {
+    _mostrarSnack(ctx, 'Informe o motivo da exclusão.', erro: true);
+    return;
+  }
+
+  if (!ctx.mounted) return;
+
+  final provider = ctx.read<DespesaProvider>();
+
+  final sucesso = await provider.excluirDespesa(
+    id,
+    motivoExclusao: motivo.trim(),
+  );
+
+  if (!ctx.mounted) return;
+
+  if (sucesso) {
+    _mostrarSnack(ctx, 'Despesa excluída com sucesso.');
+  } else {
+    _mostrarSnack(
+      ctx,
+      provider.erro ?? 'Erro ao excluir despesa.',
+      erro: true,
+    );
+    provider.limparErro();
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -172,14 +176,12 @@ onTipoChanged: (novoTipo) async {
 },
 ),
           const Divider(height: 1),
-          Expanded(
-            child: _ListagemDespesas(
-              /*
-              onEditar: (d) => _abrirFormulario(despesa: d),
-              onExcluir: (d) => _confirmarExclusao(context, d),
-              */
-            ),
-          ),
+    Expanded(
+  child: _ListagemDespesas(
+    onEditar: (d) => _abrirFormulario(despesa: d),
+    onExcluir: (d) => _confirmarExclusao(context, d),
+  ),
+),
         ],
       ),
     );
@@ -212,20 +214,20 @@ onTipoChanged: (novoTipo) async {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.add_card_rounded),
-          tooltip: 'Nova Despesa',
-          onPressed: () => _abrirFormulario(),
-        ),
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded),
-          tooltip: 'Recarregar',
-onPressed: () async {
-  await _carregarPorPeriodo();
-},
-        ),
-        const SizedBox(width: 8),
-      ],
+  IconButton(
+    icon: const Icon(Icons.add_card_rounded),
+    tooltip: 'Nova Despesa',
+    onPressed: () => _abrirFormulario(),
+  ),
+  IconButton(
+    icon: const Icon(Icons.refresh_rounded),
+    tooltip: 'Recarregar',
+    onPressed: () async {
+      await _carregarPorPeriodo();
+    },
+  ),
+  const SizedBox(width: 8),
+],
     );
   }
 }
@@ -328,7 +330,6 @@ DropdownButton<int?>(
 }
 
 class _ListagemDespesas extends StatelessWidget {
-  /*
   final void Function(DespesaModel) onEditar;
   final Future<void> Function(DespesaModel) onExcluir;
 
@@ -336,9 +337,6 @@ class _ListagemDespesas extends StatelessWidget {
     required this.onEditar,
     required this.onExcluir,
   });
-  */
-
-  const _ListagemDespesas();
 
   @override
   Widget build(BuildContext context) {
@@ -389,13 +387,13 @@ class _ListagemDespesas extends StatelessWidget {
             children: [
               SizedBox(width: 44),
               SizedBox(width: 14),
-             Expanded(flex: 3, child: _HeaderText('Descrição')),
-Expanded(flex: 2, child: _HeaderText('Tipo')),
-Expanded(flex: 2, child: _HeaderText('Fornecedor')),
-Expanded(flex: 2, child: _HeaderText('NUIT')),
-Expanded(flex: 2, child: _HeaderText('Valor')),
-Expanded(flex: 2, child: _HeaderText('Data')),
-              // SizedBox(width: 90), // editar/eliminar futuramente
+              Expanded(flex: 3, child: _HeaderText('Descrição')),
+              Expanded(flex: 2, child: _HeaderText('Tipo')),
+              Expanded(flex: 2, child: _HeaderText('Fornecedor')),
+              Expanded(flex: 2, child: _HeaderText('NUIT')),
+              Expanded(flex: 2, child: _HeaderText('Valor')),
+              Expanded(flex: 2, child: _HeaderText('Data')),
+              SizedBox(width: 90),
             ],
           ),
         ),
@@ -406,10 +404,8 @@ Expanded(flex: 2, child: _HeaderText('Data')),
             itemBuilder: (_, i) => _LinhaDespesa(
               despesa: lista[i],
               isAlternate: i.isOdd,
-              /*
               onEditar: onEditar,
               onExcluir: onExcluir,
-              */
             ),
           ),
         ),
@@ -439,19 +435,14 @@ class _HeaderText extends StatelessWidget {
 class _LinhaDespesa extends StatelessWidget {
   final DespesaModel despesa;
   final bool isAlternate;
-
-  /*
   final void Function(DespesaModel) onEditar;
   final Future<void> Function(DespesaModel) onExcluir;
-  */
 
   const _LinhaDespesa({
     required this.despesa,
     required this.isAlternate,
-    /*
     required this.onEditar,
     required this.onExcluir,
-    */
   });
 
   @override
@@ -494,20 +485,20 @@ class _LinhaDespesa extends StatelessWidget {
               ),
             ),
             Expanded(
-  flex: 2,
-  child: Text(
-    despesa.nomeTipoDespesa?.isNotEmpty == true
-        ? despesa.nomeTipoDespesa!
-        : 'Sem tipo',
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    style: const TextStyle(
-      fontSize: 12,
-      color: _kCinzaTexto,
-      fontWeight: FontWeight.w600,
-    ),
-  ),
-),
+              flex: 2,
+              child: Text(
+                despesa.nomeTipoDespesa?.isNotEmpty == true
+                    ? despesa.nomeTipoDespesa!
+                    : 'Sem tipo',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: _kCinzaTexto,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             Expanded(
               flex: 2,
               child: Text(
@@ -546,29 +537,162 @@ class _LinhaDespesa extends StatelessWidget {
                 style: const TextStyle(fontSize: 12, color: _kCinzaTexto),
               ),
             ),
-
-            /*
             SizedBox(
               width: 90,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   InkWell(
+                    borderRadius: BorderRadius.circular(20),
                     onTap: () => onEditar(despesa),
-                    child: const Icon(Icons.edit_rounded, color: _kAzul),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.edit_rounded, color: _kAzul, size: 20),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   InkWell(
+                    borderRadius: BorderRadius.circular(20),
                     onTap: () => onExcluir(despesa),
-                    child: const Icon(Icons.delete_outline_rounded, color: _kVermelho),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        color: _kVermelho,
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            */
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DialogoMotivoExclusao extends StatefulWidget {
+  final DespesaModel despesa;
+
+  const _DialogoMotivoExclusao({
+    required this.despesa,
+  });
+
+  @override
+  State<_DialogoMotivoExclusao> createState() => _DialogoMotivoExclusaoState();
+}
+
+class _DialogoMotivoExclusaoState extends State<_DialogoMotivoExclusao> {
+  final _controller = TextEditingController();
+  String? _erro;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _confirmar() {
+    final motivo = _controller.text.trim();
+
+    if (motivo.isEmpty) {
+      setState(() => _erro = 'Informe o motivo da exclusão.');
+      return;
+    }
+
+    if (motivo.length > 500) {
+      setState(() => _erro = 'O motivo deve ter no máximo 500 caracteres.');
+      return;
+    }
+
+    Navigator.of(context).pop(motivo);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: const Row(
+        children: [
+          Icon(Icons.delete_outline_rounded, color: _kVermelho),
+          SizedBox(width: 10),
+          Text('Excluir despesa'),
+        ],
+      ),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.despesa.descricao,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _kAzul,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${widget.despesa.valorGasto.toStringAsFixed(2)} MZN',
+                style: const TextStyle(
+                  color: _kCinzaTexto,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: InputDecoration(
+                labelText: 'Motivo da exclusão',
+                hintText: 'Ex.: Lançamento duplicado, valor incorrecto...',
+                errorText: _erro,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onChanged: (_) {
+                if (_erro != null) setState(() => _erro = null);
+              },
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'A despesa será removida da lista principal, mas continuará disponível em Despesas Excluídas.',
+              style: TextStyle(
+                color: _kCinzaTexto,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _confirmar,
+          icon: const Icon(Icons.delete_outline_rounded),
+          label: const Text('Excluir'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _kVermelho,
+            foregroundColor: _kBranco,
+          ),
+        ),
+      ],
     );
   }
 }

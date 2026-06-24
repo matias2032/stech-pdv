@@ -535,11 +535,20 @@ Future<void> _processarDespesa(
 
       await dao.salvarOuAtualizar(atualizada);
 
-    case 'DELETE':
-      final id = payload['id'] as int;
+case 'DELETE':
+  final id = payload['id'] as int;
+  final motivoExclusao = payload['motivoExclusao'] as String?;
 
-      await service.excluir(id);
-      await dao.excluir(id);
+  await service.excluirComMotivo(
+    id: id,
+    motivoExclusao: motivoExclusao,
+  );
+
+  await dao.marcarExcluida(
+    id: id,
+    motivoExclusao: motivoExclusao,
+    syncStatus: 'synced',
+  );
 
     default:
       throw Exception('Operação desconhecida para despesa: $operacao');
@@ -1164,7 +1173,7 @@ case 'fornecedor':
 
   
 
-  case 'despesa':
+case 'despesa':
   if (operacao == 'CREATE' && localId != null && idReal != null) {
     await _despesaDao!.deleteByLocalId(localId);
 
@@ -1173,6 +1182,17 @@ case 'fornecedor':
       await _despesaDao!.salvarOuAtualizar(despesaReal);
     } catch (e) {
       debugPrint('⚠️ SyncScheduler — pull despesa $idReal falhou: $e');
+    }
+  } else if (operacao == 'DELETE') {
+    final id = payload['id'] as int?;
+    final motivoExclusao = payload['motivoExclusao'] as String?;
+
+    if (id != null) {
+      await _despesaDao!.marcarExcluida(
+        id: id,
+        motivoExclusao: motivoExclusao,
+        syncStatus: 'synced',
+      );
     }
   }
 

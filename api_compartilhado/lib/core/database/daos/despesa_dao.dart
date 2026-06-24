@@ -131,17 +131,13 @@ class DespesaDao {
     );
   }
 
-  Future<void> excluir(int id) async {
-    await _db.update(
-      table,
-      {
-        'deleted': 1,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
+Future<void> excluir(int id) async {
+  await marcarExcluida(
+    id: id,
+    motivoExclusao: null,
+    syncStatus: 'pending_delete',
+  );
+}
 
   Future<void> deleteByLocalId(String localId) async {
     final id = int.tryParse(localId);
@@ -173,6 +169,7 @@ class DespesaDao {
       'valor_gasto': despesa.valorGasto,
       'data_despesa':
           despesa.dataDespesa?.toIso8601String() ?? now,
+          'motivo_exclusao': despesa.motivoExclusao,
           'id_tipo_despesa': despesa.idTipoDespesa,
 'nome_tipo_despesa': despesa.nomeTipoDespesa,
       'deleted': despesa.deleted ? 1 : 0,
@@ -192,6 +189,7 @@ class DespesaDao {
       descricao: map['descricao']?.toString() ?? '',
       valorGasto: _parseDouble(map['valor_gasto']),
       dataDespesa: _parseDateOpt(map['data_despesa']),
+      motivoExclusao: _parseStringOpt(map['motivo_exclusao']),
       idTipoDespesa: _parseIntOpt(map['id_tipo_despesa']),
 nomeTipoDespesa: _parseStringOpt(map['nome_tipo_despesa']),
       deleted: _parseBool(map['deleted']),
@@ -276,6 +274,35 @@ Future<List<DespesaModel>> listarPorPeriodoETipo({
   );
 
   return rows.map(_fromMap).toList();
+}
+
+Future<List<DespesaModel>> listarExcluidas() async {
+  final rows = await _db.query(
+    table,
+    where: 'deleted = ?',
+    whereArgs: [1],
+    orderBy: 'datetime(data_despesa) DESC',
+  );
+
+  return rows.map(_fromMap).toList();
+}
+
+Future<void> marcarExcluida({
+  required int id,
+  String? motivoExclusao,
+  String syncStatus = 'pending_delete',
+}) async {
+  await _db.update(
+    table,
+    {
+      'deleted': 1,
+      'motivo_exclusao': motivoExclusao?.trim(),
+      'sync_status': syncStatus,
+      'updated_at': DateTime.now().toIso8601String(),
+    },
+    where: 'id = ?',
+    whereArgs: [id],
+  );
 }
 
 
