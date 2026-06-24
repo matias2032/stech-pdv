@@ -333,7 +333,10 @@ _MenuGroup(
 final grupos = usuario.isAdmin
     ? gruposBase
     : gruposBase
-        .where((g) => g.title == 'Vendas')
+        .where((g) =>
+            g.title == 'Vendas' ||
+            g.title == 'Cotações' ||
+            g.title == 'Despesas')
         .toList();
 
     return Drawer(
