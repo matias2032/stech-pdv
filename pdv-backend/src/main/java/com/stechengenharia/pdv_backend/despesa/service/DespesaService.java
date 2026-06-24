@@ -31,13 +31,21 @@ public class DespesaService {
     // DESPESAS
     // ══════════════════════════════════════════════════════════════════════
 
-    @Transactional(readOnly = true)
-    public List<DespesaResponseDTO> listarTodas() {
-        return despesaRepository.findByDeletedFalseOrderByDataDespesaDesc()
-                .stream()
-                .map(DespesaResponseDTO::from)
-                .toList();
-    }
+@Transactional(readOnly = true)
+public List<DespesaResponseDTO> listarTodas() {
+    return despesaRepository.findByDeletedFalseOrderByDataDespesaDesc()
+            .stream()
+            .map(DespesaResponseDTO::from)
+            .toList();
+}
+
+@Transactional(readOnly = true)
+public List<DespesaResponseDTO> listarExcluidas() {
+    return despesaRepository.findByDeletedTrueOrderByDataDespesaDesc()
+            .stream()
+            .map(DespesaResponseDTO::from)
+            .toList();
+}
 
     @Transactional(readOnly = true)
     public DespesaResponseDTO buscarPorId(Long id) {

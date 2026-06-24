@@ -22,4 +22,5 @@ List<Despesa> findByFornecedor_IdAndDeletedFalseOrderByDataDespesaDesc(
     );
 
     List<Despesa> findBySyncStatusIn(List<String> statuses);
+    List<Despesa> findByDeletedTrueOrderByDataDespesaDesc();
 }

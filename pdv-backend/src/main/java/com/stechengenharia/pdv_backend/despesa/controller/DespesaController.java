@@ -69,37 +69,42 @@ public class DespesaController {
     // DESPESAS
     // ══════════════════════════════════════════════════════════════════════
 
-    @GetMapping
-    public ResponseEntity<List<DespesaResponseDTO>> listarTodas() {
-        return ResponseEntity.ok(despesaService.listarTodas());
-    }
+@GetMapping
+public ResponseEntity<List<DespesaResponseDTO>> listarTodas() {
+    return ResponseEntity.ok(despesaService.listarTodas());
+}
 
-    @GetMapping("/{id}")
-    public ResponseEntity<DespesaResponseDTO> buscarPorId(
-            @PathVariable Long id
-    ) {
-        return ResponseEntity.ok(despesaService.buscarPorId(id));
-    }
+@GetMapping("/excluidas")
+public ResponseEntity<List<DespesaResponseDTO>> listarExcluidas() {
+    return ResponseEntity.ok(despesaService.listarExcluidas());
+}
 
-    @GetMapping("/fornecedor/{idFornecedor}")
-    public ResponseEntity<List<DespesaResponseDTO>> listarPorFornecedor(
-            @PathVariable Long idFornecedor
-    ) {
-        return ResponseEntity.ok(despesaService.listarPorFornecedor(idFornecedor));
-    }
+@GetMapping("/fornecedor/{idFornecedor}")
+public ResponseEntity<List<DespesaResponseDTO>> listarPorFornecedor(
+        @PathVariable Long idFornecedor
+) {
+    return ResponseEntity.ok(despesaService.listarPorFornecedor(idFornecedor));
+}
 
-    @GetMapping("/periodo")
-    public ResponseEntity<List<DespesaResponseDTO>> listarPorPeriodo(
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-            OffsetDateTime inicio,
+@GetMapping("/periodo")
+public ResponseEntity<List<DespesaResponseDTO>> listarPorPeriodo(
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        OffsetDateTime inicio,
 
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-            OffsetDateTime fim
-    ) {
-        return ResponseEntity.ok(despesaService.listarPorPeriodo(inicio, fim));
-    }
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        OffsetDateTime fim
+) {
+    return ResponseEntity.ok(despesaService.listarPorPeriodo(inicio, fim));
+}
+
+@GetMapping("/{id}")
+public ResponseEntity<DespesaResponseDTO> buscarPorId(
+        @PathVariable Long id
+) {
+    return ResponseEntity.ok(despesaService.buscarPorId(id));
+}
 
     @PostMapping
     public ResponseEntity<DespesaResponseDTO> criar(
@@ -133,4 +138,6 @@ public ResponseEntity<Void> excluirComMotivo(
     return ResponseEntity.noContent().build();
 }
 }
+
+
 
