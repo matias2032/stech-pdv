@@ -344,6 +344,8 @@ class _BarraFiltros extends StatelessWidget {
     (codigo: 'FAT', label: 'Factura'),
     (codigo: 'REC', label: 'Recibo'),
     (codigo: 'VD', label: 'Venda a Dinheiro'),
+        (codigo: 'NCO', label: 'Nota de compra'),
+            (codigo: 'NE', label: 'Nota de Entrega'),
   ];
 
   @override
@@ -717,6 +719,7 @@ class _CardDocumento extends StatelessWidget {
       'REC' => Icons.payments_rounded,
       'NCO' => Icons.note_alt_rounded,
       'VD' => Icons.attach_money_rounded,
+      'NE' => Icons.attach_money_rounded,
       _ => Icons.description_rounded,
     };
   }

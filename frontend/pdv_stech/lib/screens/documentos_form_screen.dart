@@ -651,6 +651,7 @@ onTap: () {
         'REC' => Icons.payments_rounded,
         'NCO' => Icons.note_alt_rounded,
         'VD' => Icons.attach_money_rounded,
+        'NE' => Icons.attach_money_rounded,
         _ => Icons.description_rounded,
       };
 

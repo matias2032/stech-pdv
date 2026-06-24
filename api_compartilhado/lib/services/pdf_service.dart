@@ -22,7 +22,7 @@ const double kTaxaIva = 0.16;
 // ENUM — tipos de documento fiscal (para uso local no PDF)
 // ═══════════════════════════════════════════════════════════════════
 
-enum TipoDocumentoPdf { factura,recibo, notaDeCompra,vendaADinheiro }
+enum TipoDocumentoPdf { factura,recibo, notaDeCompra,vendaADinheiro,notaDeEntrega }
 
 extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   String get titulo => switch (this) {
@@ -31,6 +31,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         TipoDocumentoPdf.recibo => 'RECIBO',
         TipoDocumentoPdf.notaDeCompra => 'NOTA DE COMPRA',
           TipoDocumentoPdf.vendaADinheiro => 'VENDA A DINHEIRO',
+          TipoDocumentoPdf.notaDeEntrega => 'NOTA DE ENTREGA',
       };
 
   String get prefixo => switch (this) {
@@ -39,6 +40,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         TipoDocumentoPdf.recibo => 'REC',
         TipoDocumentoPdf.notaDeCompra => 'NCO',
         TipoDocumentoPdf.vendaADinheiro => 'VD',
+        TipoDocumentoPdf.notaDeEntrega => 'NOTA DE ENTREGA',
       };
 
   String get labelReferencia => switch (this) {
@@ -46,6 +48,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         TipoDocumentoPdf.recibo => 'Recibo Nº',
         TipoDocumentoPdf.notaDeCompra => 'N. Compra Nº',
         TipoDocumentoPdf.vendaADinheiro => 'Venda a Dinheiro Nº',
+        TipoDocumentoPdf.notaDeEntrega => 'N. Entrega Nº',
       };
 
   /// Converte o prefixo da BD para o enum local de PDF.
@@ -54,6 +57,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         'REC' => TipoDocumentoPdf.recibo,
         'NCO' => TipoDocumentoPdf.notaDeCompra,
         'VD' => TipoDocumentoPdf.vendaADinheiro,
+        'NE' => TipoDocumentoPdf.notaDeEntrega,
         _ => TipoDocumentoPdf.factura,
       };
 }
