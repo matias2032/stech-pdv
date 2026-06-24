@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 
 import '../api_config.dart';
 import '../models/pedido_model.dart';
-import '../models/pedido_request.dart';
 import '../models/api_response.dart';
 
 // ─── DTOs locais (inline) ────────────────────────────────────────────────────

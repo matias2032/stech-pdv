@@ -134,6 +134,15 @@ class ClienteListaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<ClienteModel?> buscarPorId(int id) async {
+  // Primeiro tenta em memória
+  try {
+    return _clientes.firstWhere((c) => c.id == id);
+  } catch (_) {}
+  // Se não estiver em cache, vai ao repositório
+  return _repository.buscarPorId(id);
+}
+
   // ── Helper ────────────────────────────────────────────────────────
 
   void _setStatus(ClienteListaStatus s) {
@@ -168,6 +177,8 @@ class ClienteFormProvider extends ChangeNotifier {
   bool              get salvando => _status == ClienteFormStatus.salvando;
   bool              get temErro  => _status == ClienteFormStatus.erro;
   bool              get sucesso  => _status == ClienteFormStatus.sucesso;
+
+
 
   // ── CRIAR ─────────────────────────────────────────────────────────
 

@@ -824,28 +824,37 @@ class _BotaoPdfCotacao extends StatefulWidget {
 class _BotaoPdfCotacaoState extends State<_BotaoPdfCotacao> {
   bool _gerando = false;
 
-  Future<void> _gerarPdf() async {
-    if (_gerando) return;
-    setState(() => _gerando = true);
-    try {
-      final file = await CotacaoPdfService.instance.gerarCotacao(widget.cotacao);
-      if (!mounted) return;
-      await CotacaoPdfService.instance.abrirPdf(file);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao gerar PDF: $e'),
-          backgroundColor: _kVermelho,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _gerando = false);
+Future<void> _gerarPdf() async {
+  if (_gerando) return;
+  setState(() => _gerando = true);
+  try {
+    ClienteModel? cliente;
+    if (widget.cotacao.idCliente != null) {
+      cliente = await context
+          .read<ClienteListaProvider>()
+          .buscarPorId(widget.cotacao.idCliente!);
     }
-  }
 
+    final file = await CotacaoPdfService.instance.gerarCotacao(
+      widget.cotacao,
+      cliente: cliente,
+    );
+    if (!mounted) return;
+    await CotacaoPdfService.instance.abrirPdf(file);
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erro ao gerar PDF: $e'),
+        backgroundColor: _kVermelho,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  } finally {
+    if (mounted) setState(() => _gerando = false);
+  }
+}
 
 
   @override

@@ -80,18 +80,19 @@ class CotacaoPdfService {
   // PÚBLICO: Gerar PDF da cotação
   // ─────────────────────────────────────────────────────────────────
 
-  Future<File> gerarCotacao(CotacaoModel cotacao) async {
-    final pdf = await _buildCotacao(cotacao);
-    return _savePdfWithName(pdf, _nomeArquivo(cotacao));
-  }
+Future<File> gerarCotacao(CotacaoModel cotacao, {ClienteModel? cliente}) async {
+  final pdf = await _buildCotacao(cotacao, cliente: cliente);
+  return _savePdfWithName(pdf, _nomeArquivo(cotacao));
+}
 
-  Future<void> imprimirCotacaoViaSumatra({
-    required CotacaoModel cotacao,
-    required String impressoraNome,
-  }) async {
-    _assertWindows();
-    final sumatra = _sumatraPath();
-    final pdf = await _buildCotacao(cotacao);
+Future<void> imprimirCotacaoViaSumatra({
+  required CotacaoModel cotacao,
+  required String impressoraNome,
+  ClienteModel? cliente,
+}) async {
+  _assertWindows();
+  final sumatra = _sumatraPath();
+  final pdf = await _buildCotacao(cotacao, cliente: cliente);
     final file = await _savePdfWithName(pdf, _nomeArquivo(cotacao));
     final result = await Process.run(sumatra, [
       '-print-to', impressoraNome,
@@ -104,12 +105,13 @@ class CotacaoPdfService {
     }
   }
 
-  Future<void> imprimirCotacaoComDialogo({
-    required CotacaoModel cotacao,
-  }) async {
-    _assertWindows();
-    final sumatra = _sumatraPath();
-    final pdf = await _buildCotacao(cotacao);
+Future<void> imprimirCotacaoComDialogo({
+  required CotacaoModel cotacao,
+  ClienteModel? cliente,
+}) async {
+  _assertWindows();
+  final sumatra = _sumatraPath();
+  final pdf = await _buildCotacao(cotacao, cliente: cliente);
     final file = await _savePdfWithName(pdf, _nomeArquivo(cotacao));
     await Process.run(sumatra, ['-print-dialog', file.path]);
   }
@@ -135,7 +137,7 @@ class CotacaoPdfService {
   // BUILD — COTAÇÃO
   // ═════════════════════════════════════════════════════════════════
 
-  Future<pw.Document> _buildCotacao(CotacaoModel cotacao) async {
+Future<pw.Document> _buildCotacao(CotacaoModel cotacao, {ClienteModel? cliente}) async {
     final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
     final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
 
@@ -153,7 +155,7 @@ class CotacaoPdfService {
         build: (ctx) => [
           _cabecalho(cotacao, iconImage),
           pw.SizedBox(height: 6),
-          _emissorCliente(cotacao),
+_emissorCliente(cotacao, cliente: cliente),
           pw.SizedBox(height: 6),
           pw.Divider(color: PdfColors.grey400, thickness: 0.5),
           pw.SizedBox(height: 4),
@@ -217,7 +219,7 @@ class CotacaoPdfService {
 
   // ─── 2. Emissor | Cliente ──────────────────────────────────────
 
-pw.Widget _emissorCliente(CotacaoModel cotacao) {
+pw.Widget _emissorCliente(CotacaoModel cotacao, {ClienteModel? cliente}) {
   final nomeCliente = _nomeClienteCotacao(cotacao);
   final ehSingular = _cotacaoEhSingular(cotacao);
   final temCliente = nomeCliente != 'Sem cliente associado';
@@ -248,25 +250,23 @@ pw.Widget _emissorCliente(CotacaoModel cotacao) {
             pw.SizedBox(height: 2),
 
             if (temCliente)
-              _t(
-                'Nome:  $nomeCliente',
-                bold: true,
-                size: 8.5,
-              ),
+              _t('Nome:  $nomeCliente', bold: true, size: 8.5),
+
+            if (cliente != null && cliente.nuit != null && cliente.nuit!.isNotEmpty)
+              _t('NUIT:  ${cliente.nuit}', size: 8),
+
+            if (cliente != null && cliente.morada != null && cliente.morada!.isNotEmpty)
+              _t('Endereço:  ${cliente.morada}', size: 8),
+
+            if (cliente != null && cliente.contacto != null && cliente.contacto!.isNotEmpty)
+              _t('Tel:  ${cliente.contacto}', size: 8),
 
             if (ehSingular)
-              _t(
-                'Tipo:  Cliente singular',
-                size: 8,
-                color: PdfColors.grey700,
-              ),
+              _t('Tipo:  Cliente singular', size: 8, color: PdfColors.grey700),
 
             if (cotacao.nomeUsuario != null &&
                 cotacao.nomeUsuario!.trim().isNotEmpty)
-              _t(
-                'Atendido por:  ${cotacao.nomeUsuario!.trim()}',
-                size: 8,
-              ),
+              _t('Atendido por:  ${cotacao.nomeUsuario!.trim()}', size: 8),
           ],
         ),
       ),

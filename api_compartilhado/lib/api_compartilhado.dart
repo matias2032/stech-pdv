@@ -14,7 +14,6 @@ export 'models/servico_model.dart';
 export 'models/preco_produto_model.dart';
 export 'models/estoque_model.dart';
 export 'models/movimento_estoque_model.dart';
-export 'models/pedido_request.dart';
 export 'models/pedido_model.dart';
 export 'models/categoria_model.dart';
 export 'models/marca_model.dart';
