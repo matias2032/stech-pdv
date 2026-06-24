@@ -59,33 +59,36 @@ public class CotacaoService {
     // a) CRIAR COTAÇÃO
     // ════════════════════════════════════════════════════════════════════
 
-    @Transactional
-    public CotacaoResponseDTO.Detalhe criarCotacao(CotacaoRequestDTO.Criar dto) {
-        log.info("Criando cotação para utilizador {}", dto.idUsuario());
+@Transactional
+public CotacaoResponseDTO.Detalhe criarCotacao(CotacaoRequestDTO.Criar dto) {
+    log.info("Criando cotação para utilizador {}", dto.idUsuario());
 
-        Usuario usuario = encontrarUsuarioOuLancar(dto.idUsuario());
-        Cliente cliente = dto.idCliente() != null
-                ? encontrarClienteOuLancar(dto.idCliente())
-                : null;
+    Usuario usuario = encontrarUsuarioOuLancar(dto.idUsuario());
+    Cliente cliente = dto.idCliente() != null
+            ? encontrarClienteOuLancar(dto.idCliente())
+            : null;
 
-Cotacao cotacao = Cotacao.builder()
-        .referencia(gerarReferencia())
-        .usuario(usuario)
-        .cliente(cliente)
-        .nomeClienteSingular(cliente == null ? normalizarTexto(dto.nomeClienteSingular()) : null)
-        .apelidoClienteSingular(cliente == null ? normalizarTexto(dto.apelidoClienteSingular()) : null)
-        .statusCotacao("ABERTA")
-        .total(BigDecimal.ZERO)
-        .validadeAte(dto.validadeAte())
-        .observacoes(dto.observacoes())
-        .syncStatus("PENDING_CREATE")
-        .build();
+    Cotacao cotacao = Cotacao.builder()
+            .referencia("COT-TEMP")          // ← temporário
+            .usuario(usuario)
+            .cliente(cliente)
+            .nomeClienteSingular(cliente == null ? normalizarTexto(dto.nomeClienteSingular()) : null)
+            .apelidoClienteSingular(cliente == null ? normalizarTexto(dto.apelidoClienteSingular()) : null)
+            .statusCotacao("ABERTA")
+            .total(BigDecimal.ZERO)
+            .validadeAte(dto.validadeAte())
+            .observacoes(dto.observacoes())
+            .syncStatus("PENDING_CREATE")
+            .build();
 
-        cotacaoRepository.save(cotacao);
+    cotacaoRepository.save(cotacao);          // ← gera o id_cotacao
 
-        log.info("Cotação {} criada", cotacao.getReferencia());
-        return toDetalhe(cotacao);
-    }
+    cotacao.setReferencia("COT-" + cotacao.getId());  // ← usa o ID real
+    cotacaoRepository.save(cotacao);
+
+    log.info("Cotação {} criada", cotacao.getReferencia());
+    return toDetalhe(cotacao);
+}
 
     private String normalizarTexto(String valor) {
     return valor != null && !valor.isBlank()
@@ -584,9 +587,7 @@ private void validarTransicaoManual(String statusActual, String novoStatus) {
     }
 }
 
-    private String gerarReferencia() {
-        return "COT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-    }
+
 
     // ── Mapeamento entity → DTO ───────────────────────────────────────
 
