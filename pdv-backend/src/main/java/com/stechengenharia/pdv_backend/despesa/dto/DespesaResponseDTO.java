@@ -19,6 +19,7 @@ public record DespesaResponseDTO(
         String descricao,
         BigDecimal valorGasto,
         OffsetDateTime dataDespesa,
+        String motivoExclusao,
 
         boolean deleted,
         String syncStatus,
@@ -42,6 +43,7 @@ public record DespesaResponseDTO(
                 despesa.getDescricao(),
                 despesa.getValorGasto(),
                 despesa.getDataDespesa(),
+                despesa.getMotivoExclusao(),
 
                 despesa.isDeleted(),
                 despesa.getSyncStatus(),

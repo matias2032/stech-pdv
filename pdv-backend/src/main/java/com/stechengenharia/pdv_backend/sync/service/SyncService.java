@@ -31,6 +31,7 @@ import com.stechengenharia.pdv_backend.fornecedor.dto.FornecedorRequestDTO;
 import com.stechengenharia.pdv_backend.fornecedor.service.FornecedorService;
 import com.stechengenharia.pdv_backend.despesa.dto.DespesaRequestDTO;
 import com.stechengenharia.pdv_backend.despesa.service.DespesaService;
+import com.stechengenharia.pdv_backend.despesa.dto.DespesaExclusaoRequestDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -436,23 +437,34 @@ private SyncResultadoDTO processarFornecedor(SyncOperacaoDTO op) {
 // ══════════════════════════════════════════════════════════════════════
 
 private SyncResultadoDTO processarDespesa(SyncOperacaoDTO op) {
-    DespesaRequestDTO dto =
-            converter(op.getPayload(), DespesaRequestDTO.class);
-
     return switch (op.getOperacao().toUpperCase()) {
 
         case "CREATE" -> {
+            DespesaRequestDTO dto =
+                    converter(op.getPayload(), DespesaRequestDTO.class);
+
             var response = despesaService.criar(dto);
+
             yield sucesso(op, response.idDespesa());
         }
 
         case "UPDATE" -> {
+            DespesaRequestDTO dto =
+                    converter(op.getPayload(), DespesaRequestDTO.class);
+
             var response = despesaService.editar(op.getId(), dto);
+
             yield sucesso(op, response.idDespesa());
         }
 
         case "DELETE" -> {
-            despesaService.excluir(op.getId());
+            DespesaExclusaoRequestDTO dto =
+                    op.getPayload() == null || op.getPayload().isEmpty()
+                            ? null
+                            : converter(op.getPayload(), DespesaExclusaoRequestDTO.class);
+
+            despesaService.excluir(op.getId(), dto);
+
             yield sucesso(op, op.getId());
         }
 

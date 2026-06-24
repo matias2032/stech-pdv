@@ -104,6 +104,7 @@ public class DespesaSyncService {
         despesa.setDescricao(dto.descricao());
         despesa.setValorGasto(dto.valorGasto());
         despesa.setDataDespesa(dto.dataDespesa());
+        despesa.setMotivoExclusao(dto.motivoExclusao());
         despesa.setDeleted(dto.deleted());
         despesa.setSyncStatus("SYNCED");
 
@@ -133,6 +134,7 @@ private DespesaSyncDTO toDTO(Despesa d) {
             d.getDescricao(),
             d.getValorGasto(),
             d.getDataDespesa(),
+            d.getMotivoExclusao(),
             d.getSyncStatus(),
             d.isDeleted(),
             d.getVersion(),

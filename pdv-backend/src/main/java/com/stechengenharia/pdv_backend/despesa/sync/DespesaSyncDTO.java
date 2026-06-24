@@ -11,6 +11,7 @@ public record DespesaSyncDTO(
         String descricao,
         BigDecimal valorGasto,
         OffsetDateTime dataDespesa,
+        String motivoExclusao,
         String syncStatus,
         boolean deleted,
         Long version,

@@ -11,6 +11,7 @@ import com.stechengenharia.pdv_backend.despesa.repository.DespesaRepository;
 import com.stechengenharia.pdv_backend.despesa.repository.TipoDespesaRepository;
 import com.stechengenharia.pdv_backend.fornecedor.entity.Fornecedor;
 import com.stechengenharia.pdv_backend.fornecedor.repository.FornecedorRepository;
+import com.stechengenharia.pdv_backend.despesa.dto.DespesaExclusaoRequestDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,15 +105,31 @@ public class DespesaService {
         return DespesaResponseDTO.from(atualizada);
     }
 
-    @Transactional
-    public void excluir(Long id) {
-        Despesa despesa = buscarEntidadePorId(id);
+@Transactional
+public void excluir(Long id) {
+    excluir(id, null);
+}
 
-        despesa.setDeleted(true);
-        despesa.setSyncStatus("PENDING_DELETE");
+@Transactional
+public void excluir(Long id, DespesaExclusaoRequestDTO dto) {
+    Despesa despesa = buscarEntidadePorId(id);
 
-        despesaRepository.save(despesa);
-    }
+    despesa.setDeleted(true);
+    despesa.setMotivoExclusao(
+            dto != null &&
+            dto.motivoExclusao() != null &&
+            !dto.motivoExclusao().isBlank()
+                    ? dto.motivoExclusao().trim()
+                    : null
+    );
+
+    despesa.setSyncStatus("PENDING_DELETE");
+
+    Long versaoAtual = despesa.getVersion() == null ? 0L : despesa.getVersion();
+    despesa.setVersion(versaoAtual + 1);
+
+    despesaRepository.save(despesa);
+}
 
     // ══════════════════════════════════════════════════════════════════════
     // TIPOS DE DESPESA

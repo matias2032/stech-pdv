@@ -35,6 +35,9 @@ private Long idTipoDespesa;
     @Column(name = "data_despesa", nullable = false)
     private OffsetDateTime dataDespesa;
 
+    @Column(name = "motivo_exclusao", length = 500)
+private String motivoExclusao;
+
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;
 

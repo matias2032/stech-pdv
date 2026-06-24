@@ -32,6 +32,7 @@ public class DespesaSyncCloudService {
             cloud.setDescricao(dto.descricao());
             cloud.setValorGasto(dto.valorGasto());
             cloud.setDataDespesa(dto.dataDespesa());
+            cloud.setMotivoExclusao(dto.motivoExclusao());
             cloud.setDeleted(dto.deleted());
             cloud.setSyncStatus("SYNCED");
             cloud.setVersion(dto.version());
@@ -52,6 +53,7 @@ public class DespesaSyncCloudService {
         d.getDescricao(),
         d.getValorGasto(),
         d.getDataDespesa(),
+        d.getMotivoExclusao(),
         d.getSyncStatus(),
         d.isDeleted(),
         d.getVersion(),

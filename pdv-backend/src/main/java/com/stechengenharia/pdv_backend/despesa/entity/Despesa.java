@@ -39,6 +39,9 @@ private TipoDespesa tipoDespesa;
     @Column(name = "data_despesa", nullable = false)
     private OffsetDateTime dataDespesa;
 
+    @Column(name = "motivo_exclusao", length = 500)
+     private String motivoExclusao;
+
     @PrePersist
     protected void onCreate() {
         if (dataDespesa == null) {

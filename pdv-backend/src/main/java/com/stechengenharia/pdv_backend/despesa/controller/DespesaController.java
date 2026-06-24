@@ -5,6 +5,7 @@ import com.stechengenharia.pdv_backend.despesa.dto.DespesaResponseDTO;
 import com.stechengenharia.pdv_backend.despesa.dto.TipoDespesaRequestDTO;
 import com.stechengenharia.pdv_backend.despesa.dto.TipoDespesaResponseDTO;
 import com.stechengenharia.pdv_backend.despesa.service.DespesaService;
+import com.stechengenharia.pdv_backend.despesa.dto.DespesaExclusaoRequestDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -117,9 +118,19 @@ public class DespesaController {
         return ResponseEntity.ok(despesaService.editar(id, dto));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> excluir(@PathVariable Long id) {
-        despesaService.excluir(id);
-        return ResponseEntity.noContent().build();
-    }
+@DeleteMapping("/{id}")
+public ResponseEntity<Void> excluir(@PathVariable Long id) {
+    despesaService.excluir(id);
+    return ResponseEntity.noContent().build();
 }
+
+@PatchMapping("/{id}/excluir")
+public ResponseEntity<Void> excluirComMotivo(
+        @PathVariable Long id,
+        @Valid @RequestBody DespesaExclusaoRequestDTO dto
+) {
+    despesaService.excluir(id, dto);
+    return ResponseEntity.noContent().build();
+}
+}
+
