@@ -496,22 +496,22 @@ Widget _campoIvaManual19(double largura) {
       controller: _campo19Ctrl,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (_) => _recalcularCampo19(),
-      decoration: InputDecoration(
-labelText: 'Campo 19 - Excesso anterior',
-        labelStyle: const TextStyle(fontSize: 10),
-        filled: true,
-        fillColor: Colors.white,
-        suffixIcon: const Icon(
-          Icons.edit_outlined,
-          size: 16,
-          color: _kVermelho,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
+decoration: InputDecoration(
+  labelText: 'Campo 19 - Excesso anterior',
+  labelStyle: const TextStyle(fontSize: 10),
+  filled: true,
+  fillColor: Colors.white,
+  suffixIcon: const Icon(
+    Icons.edit_outlined,
+    size: 16,
+    color: _kVermelho,
+  ),
+  contentPadding:
+      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+  ),
+),
       style: const TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,

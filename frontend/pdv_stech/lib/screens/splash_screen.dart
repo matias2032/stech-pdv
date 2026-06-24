@@ -318,24 +318,37 @@ Future<void> _sincronizarCompleto() async {
       debugPrint('⚠️ Splash sync clientes: $e');
     }
 
-        // ── fornecedores ──────────────────────────────────────────────────
-    _setStep('A sincronizar fornecedores…', 0.95);
-    try {
-      final resp = await client
-          .get(Uri.parse('$url/api/fornecedores'),
-               headers: ApiConfig.defaultHeaders)
-          .timeout(const Duration(seconds: 10));
-      if (resp.statusCode == 200) {
-        final lista = (jsonDecode(resp.body) as List<dynamic>)
-            .map((e) => ClienteModel.fromJson(e as Map<String, dynamic>))
-            .toList();
-        final dao = ClienteDao();
-        await dao.upsertAll(lista.map((c) => c.toLocalDb()).toList());
-        debugPrint('✅ Splash sync — ${lista.length} fornecedores');
-      }
-    } catch (e) {
-      debugPrint('⚠️ Splash sync fornecedores: $e');
-    }
+// ── Fornecedores ──────────────────────────────────────────────────
+_setStep('A sincronizar fornecedores…', 0.95);
+
+try {
+  final resp = await client
+      .get(
+        Uri.parse('$url/api/fornecedores'),
+        headers: ApiConfig.defaultHeaders,
+      )
+      .timeout(const Duration(seconds: 10));
+
+  if (resp.statusCode == 200) {
+    final lista = (jsonDecode(utf8.decode(resp.bodyBytes)) as List<dynamic>)
+        .map((e) => FornecedorModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    final dao = FornecedorDao();
+
+    await dao.limpar();
+    await dao.inserirTodos(lista);
+
+    debugPrint('✅ Splash sync — ${lista.length} fornecedores');
+  } else {
+    debugPrint(
+      '⚠️ Splash sync fornecedores HTTP ${resp.statusCode}: ${resp.body}',
+    );
+  }
+} catch (e, s) {
+  debugPrint('⚠️ Splash sync fornecedores: $e');
+  debugPrint('$s');
+}
 
             // ── despesas ──────────────────────────────────────────────────
     _setStep('A sincronizar despesas…', 0.95);

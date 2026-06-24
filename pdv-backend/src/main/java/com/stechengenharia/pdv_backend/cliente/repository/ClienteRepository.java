@@ -46,8 +46,10 @@ List<Cliente> findByPerfilId(@Param("idPerfil") Long idPerfil);
     List<Cliente> pesquisar(@Param("termo") String termo);
 
     // ── Sincronização ─────────────────────────────────────────────────
+// Para sincronização: inclui também deleted=true
 List<Cliente> findBySyncStatusIn(List<String> statuses);
 
     @Query("SELECT c FROM Cliente c WHERE c.updatedAt > :desde")
     List<Cliente> findAtualizadosDepoisDe(@Param("desde") Instant desde);
 }
+

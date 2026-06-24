@@ -58,6 +58,7 @@ final marcaService     = MarcaService();
   final docFiscalService = DocumentoFiscalService();
   final cotacaoService = CotacaoService();
 final despesaService = DespesaService();
+final fornecedorService = FornecedorService();
 
   // ── Repositórios ──────────────────────────────────────────────────
   final clienteRepository = ClienteRepository(
@@ -134,16 +135,23 @@ final despesaRepository = DespesaRepository(
   connectivityService: connectivity,
 );
 
+final fornecedorRepository = FornecedorRepository(
+  service: fornecedorService,
+  dao: FornecedorDao(),
+  syncQueueDao: SyncQueueDao(),
+  connectivityService: connectivity,
+);
+
 
 SyncScheduler.instance.init(
   connectivity:           connectivity,
   syncQueueDao:           SyncQueueDao(),
   clienteDao:             ClienteDao(),
   clienteService:         clienteService,
-   fornecedorDao: FornecedorDao(),
    despesaDao: DespesaDao(),
 despesaService: despesaService,
-  fornecedorService: FornecedorService(),
+fornecedorDao: FornecedorDao(),
+fornecedorService: fornecedorService,
   marcaDao:               MarcaDao(),
   marcaService:           marcaService,
   categoriaDao:           CategoriaDao(),
@@ -180,8 +188,8 @@ despesaService: despesaService,
       ChangeNotifierProvider(
         create: (_) => ClienteExclusaoProvider(repository: clienteRepository),
       ),
-      ChangeNotifierProvider(
-  create: (_) => FornecedorProvider(),
+ChangeNotifierProvider(
+  create: (_) => FornecedorProvider(repository: fornecedorRepository),
 ),
 
       // ── Marca ─────────────────────────────────────────────────────
@@ -264,7 +272,7 @@ despesaService: despesaService,
           '/splash'                   : (_) => const SplashScreen(),
           '/gerenciar_clientes'       : (_) => const ClienteListScreen(),
            '/gerenciar_fornecedores'       : (_) => const FornecedorListScreen(),
-            '/cadastrar_fornecedores'     : (_) => const FornecedorFormScreen(),
+           
           '/gerenciar_documentos'     : (_) => const DocumentosListScreen(),
           '/cadastrar_documentos'     : (_) => const DocumentosFormScreen(),
           '/gerenciar_extractos'      : (_) => const ExtratosListScreen(),
@@ -297,6 +305,17 @@ despesaService: despesaService,
       settings: settings,
     );
   }
+
+  if (settings.name == '/cadastrar_fornecedores') {
+  final fornecedor = settings.arguments as FornecedorModel?;
+
+  return MaterialPageRoute(
+    builder: (_) => FornecedorFormScreen(
+      fornecedor: fornecedor,
+    ),
+    settings: settings,
+  );
+}
 
   if (settings.name == '/detalhes_cliente') {
   final cliente = settings.arguments as ClienteModel;
