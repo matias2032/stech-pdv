@@ -557,12 +557,14 @@ double _calcularIva(double valorComIva) {
           pw.SizedBox(height: 6),
           _docFiscalTabelaItens(doc),
           pw.SizedBox(height: 10),
-          _docFiscalAssinatura(),
+          _docFiscalAssinatura(doc),
           pw.SizedBox(height: 8),
           _docFiscalTermos(doc),
           pw.SizedBox(height: 8),
-          _docFiscalDadosBancarios(),
-          pw.SizedBox(height: 6),
+          if (doc.tipo != TipoDocumentoPdf.notaDeEntrega) ...[
+            _docFiscalDadosBancarios(),
+            pw.SizedBox(height: 6),
+          ],
           _docFiscalCodigoAT(doc.codigoAT),
         ],
       ),
@@ -1154,29 +1156,19 @@ for (final s in pedido.itensServico)
 
   // ─── 5. Assinatura ────────────────────────────────────────────
 
-  pw.Widget _docFiscalAssinatura() {
+pw.Widget _docFiscalAssinatura(DocumentoPdfModel doc) {
+  if (doc.tipo == TipoDocumentoPdf.notaDeEntrega) {
     return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
         pw.SizedBox(height: 4),
+        pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+        pw.SizedBox(height: 16),
         pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
           children: [
-            pw.Expanded(
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _t('Aprovado por: ___________________________', size: 8),
-                  pw.SizedBox(height: 12),
-                  _t('Assinatura: _____________________________', size: 8),
-                ],
-              ),
-            ),
-            pw.Expanded(
-              child: pw.Align(
-                alignment: pw.Alignment.centerRight,
-                child: _t('Data: _______ / _______ / ___________', size: 8),
-              ),
-            ),
+            _t('Assinatura: _____________________________', size: 8),
+            _t('Data: _______ / _______ / ___________', size: 8),
           ],
         ),
         pw.SizedBox(height: 6),
@@ -1185,10 +1177,42 @@ for (final s in pedido.itensServico)
     );
   }
 
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.SizedBox(height: 4),
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _t('Aprovado por: ___________________________', size: 8),
+                pw.SizedBox(height: 12),
+                _t('Assinatura: _____________________________', size: 8),
+              ],
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: _t('Data: _______ / _______ / ___________', size: 8),
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 6),
+      pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+    ],
+  );
+}
+
   // ─── 6. Termos e condições ────────────────────────────────────
 
-  pw.Widget _docFiscalTermos(DocumentoPdfModel doc) {
-const tituloTermos = 'Termos e Condições de Pagamento';
+pw.Widget _docFiscalTermos(DocumentoPdfModel doc) {
+  if (doc.tipo == TipoDocumentoPdf.notaDeEntrega) return pw.SizedBox.shrink();
+
+  const tituloTermos = 'Termos e Condições de Pagamento';
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
