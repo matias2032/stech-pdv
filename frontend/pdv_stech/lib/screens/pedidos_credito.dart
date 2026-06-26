@@ -86,6 +86,18 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
     }
   }
 
+  Future<void> _editarPedidoCredito(PedidoModel pedido) async {
+  PedidoAtivoController.instance.definirEdicaoCredito(pedido);
+
+  await Navigator.of(context).pushNamed('/catalogo');
+
+  if (!mounted) return;
+
+  await _carregar();
+}
+
+
+
   List<PedidoModel> _filtrar(List<PedidoModel> pedidos) {
     var lista = pedidos.where((p) => p.ehCredito).toList();
 
@@ -163,14 +175,15 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
             child: RefreshIndicator(
               color: _kAzul,
               onRefresh: _carregar,
-              child: _ListagemDividas(
-                pedidos: pedidos,
-                carregando: provider.isLoading,
-                erro: _erroLocal,
-                currencyFmt: _currencyFmt,
-                onRecarregar: _carregar,
-                onDetalhes: _abrirDetalhes,
-              ),
+              child:_ListagemDividas(
+  pedidos: pedidos,
+  carregando: provider.isLoading,
+  erro: _erroLocal,
+  currencyFmt: _currencyFmt,
+  onRecarregar: _carregar,
+  onDetalhes: _abrirDetalhes,
+  onEditar: _editarPedidoCredito,
+),
             ),
           ),
         ],
@@ -509,15 +522,17 @@ class _ListagemDividas extends StatelessWidget {
   final NumberFormat currencyFmt;
   final Future<void> Function() onRecarregar;
   final Future<void> Function(PedidoModel) onDetalhes;
+  final Future<void> Function(PedidoModel) onEditar;
 
-  const _ListagemDividas({
-    required this.pedidos,
-    required this.carregando,
-    required this.erro,
-    required this.currencyFmt,
-    required this.onRecarregar,
-    required this.onDetalhes,
-  });
+const _ListagemDividas({
+  required this.pedidos,
+  required this.carregando,
+  required this.erro,
+  required this.currencyFmt,
+  required this.onRecarregar,
+  required this.onDetalhes,
+  required this.onEditar,
+});
 
   @override
   Widget build(BuildContext context) {
@@ -649,7 +664,7 @@ class _ListagemDividas extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(width: 92),
+SizedBox(width: 130),
             ],
           ),
         ),
@@ -657,12 +672,13 @@ class _ListagemDividas extends StatelessWidget {
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
             itemCount: pedidos.length,
-            itemBuilder: (_, i) => _LinhaDivida(
-              pedido: pedidos[i],
-              isAlternate: i.isOdd,
-              currencyFmt: currencyFmt,
-              onDetalhes: onDetalhes,
-            ),
+      itemBuilder: (_, i) => _LinhaDivida(
+  pedido: pedidos[i],
+  isAlternate: i.isOdd,
+  currencyFmt: currencyFmt,
+  onDetalhes: onDetalhes,
+  onEditar: onEditar,
+),
           ),
         ),
       ],
@@ -679,13 +695,15 @@ class _LinhaDivida extends StatefulWidget {
   final bool isAlternate;
   final NumberFormat currencyFmt;
   final Future<void> Function(PedidoModel) onDetalhes;
+  final Future<void> Function(PedidoModel) onEditar;
 
-  const _LinhaDivida({
-    required this.pedido,
-    required this.isAlternate,
-    required this.currencyFmt,
-    required this.onDetalhes,
-  });
+const _LinhaDivida({
+  required this.pedido,
+  required this.isAlternate,
+  required this.currencyFmt,
+  required this.onDetalhes,
+  required this.onEditar,
+});
 
   @override
   State<_LinhaDivida> createState() => _LinhaDividaState();
@@ -894,30 +912,52 @@ class _LinhaDividaState extends State<_LinhaDivida> {
             ),
 
             SizedBox(
-              width: 92,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Tooltip(
-                  message: 'Ver detalhes da dívida',
-                  child: InkWell(
-                    onTap: () => widget.onDetalhes(p),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: _kAzul.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(
-                        Icons.visibility_outlined,
-                        size: 17,
-                        color: _kAzul,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+  width: 130,
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      Tooltip(
+        message: 'Editar pedido a crédito',
+        child: InkWell(
+          onTap: () => widget.onEditar(p),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(6),
             ),
+            child: const Icon(
+              Icons.edit_outlined,
+              size: 17,
+              color: Colors.orange,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Tooltip(
+        message: 'Ver detalhes da dívida',
+        child: InkWell(
+          onTap: () => widget.onDetalhes(p),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: _kAzul.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(
+              Icons.visibility_outlined,
+              size: 17,
+              color: _kAzul,
+            ),
+          ),
+        ),
+      ),
+    ],
+  ),
+),
           ],
         ),
       ),

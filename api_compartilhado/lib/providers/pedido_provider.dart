@@ -293,6 +293,11 @@ Future<bool> cancelarPedido(
   // UTILITÁRIOS
   // ════════════════════════════════════════════════════════════════════════
 
+void definirPedidoActual(PedidoModel pedido) {
+  _pedidoActual = pedido;
+  notifyListeners();
+}
+
   void limparPedidoActual() {
     _pedidoActual = null;
     notifyListeners();
