@@ -685,16 +685,28 @@ class DeclararCreditoRequestModel {
     this.observacoesCredito,
   });
 
-  Map<String, dynamic> toJson() => {
-        'modalidadeCredito': modalidadeCredito,
-        'idUsuario': idUsuario,
-        if (idCliente != null) 'idCliente': idCliente,  // ← NOVO
-        if (codigoAt != null) 'codigoAt': codigoAt,
-        if (dataVencimento != null)
-          'dataVencimento': dataVencimento!.toIso8601String().split('T').first,
-        if (observacoesCredito != null)
-          'observacoesCredito': observacoesCredito,
-      };
+Map<String, dynamic> toJson() => {
+      'modalidadeCredito': modalidadeCredito,
+      'idUsuario': idUsuario,
+
+      if (idCliente != null)
+        'idCliente': idCliente,
+
+      if (nomeClienteSingular != null && nomeClienteSingular!.trim().isNotEmpty)
+        'nomeClienteSingular': nomeClienteSingular!.trim(),
+
+      if (apelidoClienteSingular != null && apelidoClienteSingular!.trim().isNotEmpty)
+        'apelidoClienteSingular': apelidoClienteSingular!.trim(),
+
+      if (codigoAt != null)
+        'codigoAt': codigoAt,
+
+      if (dataVencimento != null)
+        'dataVencimento': dataVencimento!.toIso8601String().split('T').first,
+
+      if (observacoesCredito != null)
+        'observacoesCredito': observacoesCredito,
+    };
 }
 
 class CriarParcelaItemRequestModel {

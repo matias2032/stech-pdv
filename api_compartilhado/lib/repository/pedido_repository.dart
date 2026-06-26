@@ -447,77 +447,109 @@ class PedidoRepository {
   // EDITAR / ELIMINAR ITENS
   // ══════════════════════════════════════════════════════════════════
 
-  Future<PedidoModel> editarQuantidadeItemProduto(
-    int idPedido,
-    int idItemPedido,
-    EditarItemRequestDTO dto,
-  ) async {
-    if (_connectivity.isOnline) {
-      final m = await _service.editarQuantidadeItemProduto(idPedido, idItemPedido, dto);
-      await _upsertPedidoComItens(m);
-      return m;
-    }
-    await _syncQueueDao.enqueue('pedido', 'EDIT_ITEM_PRODUTO', {
-      'idPedido':       idPedido,
-      'idItemPedido':   idItemPedido,
-      'novaQuantidade': dto.novaQuantidade,
-    });
-    final row = await _dao.getById(idPedido);
-    return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
-  }
+  Future<void> _bloquearAlteracaoItemSeCredito(int idPedido) async {
+  final row = await _dao.getById(idPedido);
+  if (row == null) return;
 
-  Future<PedidoModel> editarQuantidadeItemServico(
-    int idPedido,
-    int idItemServico,
-    EditarItemRequestDTO dto,
-  ) async {
-    if (_connectivity.isOnline) {
-      final m = await _service.editarQuantidadeItemServico(idPedido, idItemServico, dto);
-      await _upsertPedidoComItens(m);
-      return m;
-    }
-    await _syncQueueDao.enqueue('pedido', 'EDIT_ITEM_SERVICO', {
-      'idPedido':       idPedido,
-      'idItemServico':  idItemServico,
-      'novaQuantidade': dto.novaQuantidade,
-    });
-    final row = await _dao.getById(idPedido);
-    return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
-  }
+  final pedido = await _pedidoComItensDoCache(row);
 
-  Future<PedidoModel> eliminarItemProduto(int idPedido, int idItemPedido) async {
-    if (_connectivity.isOnline) {
-      final m = await _service.eliminarItemProduto(idPedido, idItemPedido);
-      await _upsertPedidoComItens(m);
-      return m;
-    }
-    // ← CORRIGIDO: apaga pelo idItemPedido, não pelo idPedido
-    await _db.delete('item_pedido', where: 'id = ?', whereArgs: [idItemPedido]);
-    await _syncQueueDao.enqueue('pedido', 'REMOVE_ITEM_PRODUTO', {
-      'idPedido':     idPedido,
-      'idItemPedido': idItemPedido,
-    });
-    final row = await _dao.getById(idPedido);
-    return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
-  }
-
-  Future<PedidoModel> eliminarItemServico(int idPedido, int idItemServico) async {
-    if (_connectivity.isOnline) {
-      final m = await _service.eliminarItemServico(idPedido, idItemServico);
-      await _upsertPedidoComItens(m);
-      return m;
-    }
-    await _db.delete(
-      'item_pedido_servico', where: 'id = ?', whereArgs: [idItemServico],
+  if (pedido.ehCredito || pedido.estaEmDivida) {
+    throw Exception(
+      'Este pedido já foi confirmado como venda a crédito. '
+      'Só é permitido adicionar novos itens.',
     );
-    await _syncQueueDao.enqueue('pedido', 'REMOVE_ITEM_SERVICO', {
-      'idPedido':      idPedido,
-      'idItemServico': idItemServico,
-    });
-    final row = await _dao.getById(idPedido);
-    return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
+  }
+}
+
+Future<PedidoModel> editarQuantidadeItemProduto(
+  int idPedido,
+  int idItemPedido,
+  EditarItemRequestDTO dto,
+) async {
+  await _bloquearAlteracaoItemSeCredito(idPedido);
+
+  if (_connectivity.isOnline) {
+    final m = await _service.editarQuantidadeItemProduto(idPedido, idItemPedido, dto);
+    await _upsertPedidoComItens(m);
+    return m;
   }
 
+  await _syncQueueDao.enqueue('pedido', 'EDIT_ITEM_PRODUTO', {
+    'idPedido': idPedido,
+    'idItemPedido': idItemPedido,
+    'novaQuantidade': dto.novaQuantidade,
+  });
+
+  final row = await _dao.getById(idPedido);
+  return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
+}
+
+Future<PedidoModel> editarQuantidadeItemServico(
+  int idPedido,
+  int idItemServico,
+  EditarItemRequestDTO dto,
+) async {
+  await _bloquearAlteracaoItemSeCredito(idPedido);
+
+  if (_connectivity.isOnline) {
+    final m = await _service.editarQuantidadeItemServico(idPedido, idItemServico, dto);
+    await _upsertPedidoComItens(m);
+    return m;
+  }
+
+  await _syncQueueDao.enqueue('pedido', 'EDIT_ITEM_SERVICO', {
+    'idPedido': idPedido,
+    'idItemServico': idItemServico,
+    'novaQuantidade': dto.novaQuantidade,
+  });
+
+  final row = await _dao.getById(idPedido);
+  return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
+}
+
+Future<PedidoModel> eliminarItemProduto(int idPedido, int idItemPedido) async {
+  await _bloquearAlteracaoItemSeCredito(idPedido);
+
+  if (_connectivity.isOnline) {
+    final m = await _service.eliminarItemProduto(idPedido, idItemPedido);
+    await _upsertPedidoComItens(m);
+    return m;
+  }
+
+  await _db.delete('item_pedido', where: 'id = ?', whereArgs: [idItemPedido]);
+
+  await _syncQueueDao.enqueue('pedido', 'REMOVE_ITEM_PRODUTO', {
+    'idPedido': idPedido,
+    'idItemPedido': idItemPedido,
+  });
+
+  final row = await _dao.getById(idPedido);
+  return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
+}
+
+Future<PedidoModel> eliminarItemServico(int idPedido, int idItemServico) async {
+  await _bloquearAlteracaoItemSeCredito(idPedido);
+
+  if (_connectivity.isOnline) {
+    final m = await _service.eliminarItemServico(idPedido, idItemServico);
+    await _upsertPedidoComItens(m);
+    return m;
+  }
+
+  await _db.delete(
+    'item_pedido_servico',
+    where: 'id = ?',
+    whereArgs: [idItemServico],
+  );
+
+  await _syncQueueDao.enqueue('pedido', 'REMOVE_ITEM_SERVICO', {
+    'idPedido': idPedido,
+    'idItemServico': idItemServico,
+  });
+
+  final row = await _dao.getById(idPedido);
+  return row != null ? await _pedidoComItensDoCache(row) : _pedidoVazio(idPedido);
+}
   // ══════════════════════════════════════════════════════════════════
   // FINALIZAR / CANCELAR
   // ══════════════════════════════════════════════════════════════════
@@ -715,18 +747,20 @@ Future<PedidoModel> declararCredito(
     payload: payload,
   );
 
-  await _db.update(
-    'pedido',
-    {
-      'tipo_venda': 'CREDITO',
-      'modalidade_credito': dto.modalidadeCredito,
-      'status_pedido': 'em dívida',
-      'status_pagamento': 'PENDENTE',
-      'id_cliente': dto.idCliente,
-      'data_abertura_credito': DateTime.now().toIso8601String(),
-      'data_vencimento_credito':
-          dto.dataVencimento?.toIso8601String().split('T').first,
-      'observacoes_credito': dto.observacoesCredito,
+await _db.update(
+  'pedido',
+  {
+    'tipo_venda': 'CREDITO',
+    'modalidade_credito': dto.modalidadeCredito,
+    'status_pedido': 'em dívida',
+    'status_pagamento': 'PENDENTE',
+    'id_cliente': dto.idCliente,
+    'nome_cliente_singular': dto.nomeClienteSingular,
+    'apelido_cliente_singular': dto.apelidoClienteSingular,
+    'data_abertura_credito': DateTime.now().toIso8601String(),
+    'data_vencimento_credito':
+        dto.dataVencimento?.toIso8601String().split('T').first,
+    'observacoes_credito': dto.observacoesCredito,
       'sync_status': 'pending_update',
       'updated_at': DateTime.now().toIso8601String(),
     },

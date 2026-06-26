@@ -71,20 +71,27 @@ double get _saldoCredito {
 }
 
 int? get _idClienteFinal {
-  if (_clienteBloqueado) return widget.pedido.idCliente;
-  return _empresaSelecionada?.id;
+  // Pedido já confirmado a crédito: o cliente nunca pode mudar.
+  if (widget.pedido.ehCredito || widget.pedido.estaEmDivida) {
+    return widget.pedido.idCliente;
+  }
+
+  if (_clienteBloqueado) {
+    return widget.pedido.idCliente;
+  }
+
+  return _tipoCliente == 'empresa' ? _empresaSelecionada?.id : null;
 }
+
 
 bool get _podeFinalizar {
   if (_modoCredito) {
-    // Crédito exige cliente cadastrado.
-    if (_idClienteFinal == null) return false;
-
-    // Entrada inicial é opcional, mas não pode exceder o total.
-    if (_valorPago < 0) return false;
     if (_valorPago > widget.pedido.total) return false;
 
-    // Se houver entrada, precisa de método de pagamento.
+    // Venda a crédito exige cliente cadastrado.
+    if (_idClienteFinal == null) return false;
+
+    // Se houver entrada inicial, precisa escolher método de pagamento.
     if (_temEntradaInicial && _idTipoPagamento == null) return false;
 
     return true;
@@ -129,52 +136,74 @@ Future<void> _carregar() async {
 
   if (!mounted) return;
 
-  final pedidoProvider  = context.read<PedidoProvider>();
+  final pedidoProvider = context.read<PedidoProvider>();
   final clienteProvider = context.read<ClienteListaProvider>();
 
   ClienteModel? clienteDoPedido;
+
   if (widget.pedido.idCliente != null) {
     try {
-      clienteDoPedido = clienteProvider.clientes
-          .firstWhere((c) => c.id == widget.pedido.idCliente);
-    } catch (_) {}
+      clienteDoPedido = clienteProvider.clientes.firstWhere(
+        (c) => c.id == widget.pedido.idCliente,
+      );
+    } catch (_) {
+      clienteDoPedido = null;
+    }
   }
 
   setState(() {
-    _tiposPagamento       = pedidoProvider.tiposPagamento;
-    _empresas             = clienteProvider.clientes;
+    _tiposPagamento = pedidoProvider.tiposPagamento;
+    _empresas = clienteProvider.clientes;
+
     _idTipoPagamento = _tiposPagamento.isNotEmpty
-    ? _tiposPagamento.first.idTipoPagamento
-    : null;
+        ? _tiposPagamento.first.idTipoPagamento
+        : null;
 
-if (_modoCredito) {
-  _tipoCliente = 'empresa';
-  _valorPagoCtrl.text = '0.00';
-} else if (!_ehDinheiro && _idTipoPagamento != null) {
-  _valorPagoCtrl.text = widget.pedido.total.toStringAsFixed(2);
-}
-final nomeSingular = widget.pedido.nomeClienteSingular?.trim();
-final apelidoSingular = widget.pedido.apelidoClienteSingular?.trim();
+    final pedidoJaCredito =
+        widget.pedido.ehCredito || widget.pedido.estaEmDivida;
 
-final temClienteSingular = widget.pedido.idCliente == null &&
-    ((nomeSingular != null && nomeSingular.isNotEmpty) ||
-     (apelidoSingular != null && apelidoSingular.isNotEmpty));
+    if (_modoCredito) {
+      _tipoCliente = 'empresa';
+      _valorPagoCtrl.text = '0.00';
 
-_clienteBloqueado = widget.pedido.idCliente != null;
-_clienteSingularBloqueado = temClienteSingular;
+      if (pedidoJaCredito) {
+        _clienteBloqueado = true;
 
-_nomeClienteBloqueado = clienteDoPedido?.nomeCompleto
-    ?? (widget.pedido.idCliente != null
-        ? 'Cliente #${widget.pedido.idCliente}'
-        : null);
+        if (clienteDoPedido != null) {
+          _empresaSelecionada = clienteDoPedido;
+          _nomeClienteBloqueado = clienteDoPedido.nomeCompleto;
+        } else if (widget.pedido.idCliente != null) {
+          _nomeClienteBloqueado = 'Cliente #${widget.pedido.idCliente}';
+        }
+      }
+    } else if (!_ehDinheiro && _idTipoPagamento != null) {
+      _valorPagoCtrl.text = widget.pedido.total.toStringAsFixed(2);
+    }
 
-if (temClienteSingular) {
-  _tipoCliente = 'singular';
-  _nomeCtrl.text = nomeSingular ?? '';
-  _apelidoCtrl.text = apelidoSingular ?? '';
-}
+    final nomeSingular = widget.pedido.nomeClienteSingular?.trim();
+    final apelidoSingular = widget.pedido.apelidoClienteSingular?.trim();
 
-_carregando = false;
+    final temClienteSingular = widget.pedido.idCliente == null &&
+        ((nomeSingular != null && nomeSingular.isNotEmpty) ||
+            (apelidoSingular != null && apelidoSingular.isNotEmpty));
+
+    if (!_modoCredito) {
+      _clienteBloqueado = widget.pedido.idCliente != null;
+      _clienteSingularBloqueado = temClienteSingular;
+
+      _nomeClienteBloqueado = clienteDoPedido?.nomeCompleto ??
+          (widget.pedido.idCliente != null
+              ? 'Cliente #${widget.pedido.idCliente}'
+              : null);
+
+      if (temClienteSingular) {
+        _tipoCliente = 'singular';
+        _nomeCtrl.text = nomeSingular ?? '';
+        _apelidoCtrl.text = apelidoSingular ?? '';
+      }
+    }
+
+    _carregando = false;
   });
 }
 
@@ -344,18 +373,20 @@ Future<void> _finalizarCredito() async {
     PedidoModel? pedidoCredito;
 
     // Se o pedido já é crédito (retry após falha parcial), não declarar de novo
-    if (widget.pedido.ehCredito) {
-      pedidoCredito = widget.pedido;
-    } else {
+if (widget.pedido.ehCredito || widget.pedido.estaEmDivida) {
+  pedidoCredito = widget.pedido;
+} else {
       pedidoCredito = await provider.declararCredito(
         widget.pedido.idPedido,
-        DeclararCreditoRequestModel(
-          modalidadeCredito: 'SEM_PARCELAS',
-          idUsuario: SessaoService.instance.idUsuario,
-          idCliente: _idClienteFinal,
-          dataVencimento: null,
-          observacoesCredito: null,
-        ),
+DeclararCreditoRequestModel(
+  modalidadeCredito: 'SEM_PARCELAS',
+  idUsuario: SessaoService.instance.idUsuario,
+  idCliente: _idClienteFinal,
+  nomeClienteSingular: null,
+  apelidoClienteSingular: null,
+  dataVencimento: null,
+  observacoesCredito: null,
+),
       );
     }
 
@@ -379,9 +410,15 @@ Future<void> _finalizarCredito() async {
       }
     }
 
- if (!mounted) return;
-PedidoAtivoController.instance.limpar();
-context.read<PedidoProvider>().limparPedidoActual();
+if (!mounted) return;
+
+// Mantém o pedido activo para permitir adicionar novos itens depois da venda a crédito.
+final pedidoParaEditar = pedidoCredito ?? widget.pedido;
+
+PedidoAtivoController.instance.definirEdicaoCredito(pedidoParaEditar);
+
+context.read<PedidoProvider>().buscarPorId(pedidoParaEditar.idPedido);
+
 Navigator.pop(context, true);
   } catch (e) {
     if (mounted) _snack('Erro ao finalizar a crédito: $e', _kAccent);
@@ -550,23 +587,25 @@ Text(_modoCredito ? 'Finalizar a Crédito' : 'Finalizar Pedido',
 
 Widget _buildClienteCard() {
   if (_modoCredito && !_clienteBloqueado) {
-  return _card(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _secLabel(Icons.person_outline, 'Cliente cadastrado'),
-        const SizedBox(height: 10),
-        _buildEmpresaSelector(),
-        const SizedBox(height: 8),
-        _infoBox(
-          icon: Icons.info_outline,
-          texto: 'Venda a crédito exige cliente cadastrado para permitir extracto, pagamentos e cobranças.',
-          cor: _kPrimary,
-        ),
-      ],
-    ),
-  );
-}
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _secLabel(Icons.person_outline, 'Cliente cadastrado'),
+          const SizedBox(height: 10),
+          _buildEmpresaSelector(),
+          const SizedBox(height: 8),
+          _infoBox(
+            icon: Icons.info_outline,
+            texto:
+                'Venda a crédito exige cliente cadastrado para permitir extracto, pagamentos e cobranças.',
+            cor: _kPrimary,
+          ),
+        ],
+      ),
+    );
+  }
+
   if (_clienteBloqueado) {
     return _card(
       child: Column(
@@ -574,33 +613,45 @@ Widget _buildClienteCard() {
         children: [
           _secLabel(Icons.person_outline, 'Cliente'),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: _kPrimary.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _kPrimary.withOpacity(0.15)),
-                ),
-                child: Text(
-                  _nomeClienteBloqueado ?? '—',
-                  style: const TextStyle(
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _kPrimary.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _kPrimary.withOpacity(0.15)),
+                  ),
+                  child: Text(
+                    _nomeClienteBloqueado ?? '—',
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: _kPrimary),
+                      color: _kPrimary,
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () => setState(() => _clienteBloqueado = false),
-              icon: const Icon(Icons.edit_outlined, size: 15),
-              label: const Text('Alterar', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(foregroundColor: _kPrimary),
-            ),
-          ]),
+              const SizedBox(width: 8),
+
+              if (!_modoCredito &&
+                  !widget.pedido.ehCredito &&
+                  !widget.pedido.estaEmDivida)
+                TextButton.icon(
+                  onPressed: () => setState(() => _clienteBloqueado = false),
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  label: const Text(
+                    'Alterar',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(foregroundColor: _kPrimary),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -612,17 +663,22 @@ Widget _buildClienteCard() {
       children: [
         _secLabel(Icons.person_outline, 'Cliente'),
         const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-              child: _toggleBtn('singular', Icons.person_outline, 'Singular')),
-          const SizedBox(width: 8),
-          Expanded(child: _toggleBtn('empresa', Icons.business, 'Empresa')),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: _toggleBtn('singular', Icons.person_outline, 'Singular'),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _toggleBtn('empresa', Icons.business, 'Empresa'),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
-if (_tipoCliente == 'empresa')
-  _buildEmpresaSelector()
-else
-  _buildSingularFields(),
+        if (_tipoCliente == 'empresa')
+          _buildEmpresaSelector()
+        else
+          _buildSingularFields(),
       ],
     ),
   );

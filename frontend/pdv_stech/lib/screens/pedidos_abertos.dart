@@ -485,10 +485,25 @@ Widget _buildCard(PedidoModel pedido) {
       fontSize: 13, fontWeight: FontWeight.w500, color: _kPrimary),
 ),
 const SizedBox(width: 6),
-IconButton(
-  visualDensity: VisualDensity.compact,
-  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-  onPressed: () => _eliminarItemProduto(item),
+Builder(
+  builder: (_) {
+    final bloqueado = PedidoAtivoController.instance.produtoEstaBloqueado(
+      item.idItemPedido,
+    );
+
+    if (bloqueado) {
+      return const Tooltip(
+        message: 'Item já confirmado no crédito',
+        child: Icon(Icons.lock_outline, color: Colors.grey, size: 18),
+      );
+    }
+
+    return IconButton(
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+      onPressed: () => _eliminarItemProduto(item),
+    );
+  },
 ),
       ]),
     );
@@ -533,10 +548,25 @@ IconButton(
       fontSize: 13, fontWeight: FontWeight.w500, color: _kPrimary),
 ),
 const SizedBox(width: 6),
-IconButton(
-  visualDensity: VisualDensity.compact,
-  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-  onPressed: () => _eliminarItemServico(item),
+Builder(
+  builder: (_) {
+    final bloqueado = PedidoAtivoController.instance.servicoEstaBloqueado(
+      item.idItemServico,
+    );
+
+    if (bloqueado) {
+      return const Tooltip(
+        message: 'Item já confirmado no crédito',
+        child: Icon(Icons.lock_outline, color: Colors.grey, size: 18),
+      );
+    }
+
+    return IconButton(
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+      onPressed: () => _eliminarItemServico(item),
+    );
+  },
 ),
       ]),
     );
@@ -631,10 +661,12 @@ IconButton(
             ? null
             : () => _abrirCredito(pedido),
         icon: const Icon(Icons.credit_score_outlined, size: 17),
-        label: const Text(
-          'Vender a crédito',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+      label: Text(
+  pedido.ehCredito || pedido.estaEmDivida
+      ? 'Confirmar crédito'
+      : 'Vender a crédito',
+  style: const TextStyle(fontWeight: FontWeight.bold),
+),
         style: OutlinedButton.styleFrom(
           foregroundColor: _kPrimary,
           side: const BorderSide(color: _kPrimary),
@@ -651,13 +683,22 @@ IconButton(
   }
 
 Future<void> _editarPedido(PedidoModel pedido) async {
-  PedidoAtivoController.instance.definir(pedido);
+  if (pedido.ehCredito || pedido.estaEmDivida) {
+    PedidoAtivoController.instance.definirEdicaoCredito(pedido);
+  } else {
+    PedidoAtivoController.instance.definir(pedido);
+  }
 
   await Navigator.pushNamed(context, '/catalogo');
 
   if (!mounted) return;
 
-PedidoAtivoController.instance.limpar();
+  // Só limpa automaticamente pedidos normais.
+  // Pedido a crédito continua activo para permitir adicionar itens.
+  if (!pedido.ehCredito && !pedido.estaEmDivida) {
+    PedidoAtivoController.instance.limpar();
+  }
+
   await _carregar();
 }
 Future<void> _eliminarItemProduto(ItemPedidoModel item) async {

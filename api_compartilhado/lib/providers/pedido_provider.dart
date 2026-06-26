@@ -320,10 +320,15 @@ Future<PedidoModel?> declararCredito(
   final result = await _run(() => _repository.declararCredito(idPedido, dto));
 
   if (result != null) {
-    _pedidoActual = null; // pedido em dívida não é mais "activo"
+    _pedidoActual = result;
+
     _pedidos.removeWhere((p) => p.idPedido == result.idPedido);
     _pedidosEmDivida.removeWhere((p) => p.idPedido == result.idPedido);
     _pedidosEmDivida.insert(0, result);
+
+    // Mantém o pedido activo para permitir adicionar novos itens.
+    PedidoAtivoController.instance.definirEdicaoCredito(result);
+
     notifyListeners();
   }
 

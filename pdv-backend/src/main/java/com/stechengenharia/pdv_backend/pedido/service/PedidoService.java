@@ -50,8 +50,8 @@ private final DocumentoFiscalService            documentoFiscalService;
     private final ServicoService servicoService;
 
     // ─── Constantes ──────────────────────────────────────────────────────────
-    private static final List<String> STATUS_EDITAVEIS = List.of("aberto");
-
+private static final List<String> STATUS_EDITAVEIS = List.of("aberto");
+private static final List<String> STATUS_PERMITE_ADICIONAR_ITEM = List.of("aberto", "em dívida");
     // ════════════════════════════════════════════════════════════════════════
     // a) CRIAÇÃO DO PEDIDO
     // ════════════════════════════════════════════════════════════════════════
@@ -126,7 +126,7 @@ pedido = pedidoRepository.save(pedido);
     @Transactional
     public PedidoResponseDTO adicionarItemProduto(Integer idPedido, ItemPedidoRequestDTO dto) {
         Pedido pedido = buscarPedidoComItens(idPedido);
-        validarStatusEditavel(pedido, "adição de item de produto");
+validarPodeAdicionarItem(pedido, "adição de item de produto");
 
         adicionarItemProdutoInterno(pedido, dto.idProduto, dto.quantidade);
         pedido.recalcularTotal();
@@ -143,7 +143,7 @@ pedido = pedidoRepository.save(pedido);
     @Transactional
     public PedidoResponseDTO adicionarItemServico(Integer idPedido, ItemServicoRequestDTO dto) {
         Pedido pedido = buscarPedidoComItens(idPedido);
-        validarStatusEditavel(pedido, "adição de item de serviço");
+validarPodeAdicionarItem(pedido, "adição de item de serviço");
 
         adicionarItemServicoInterno(pedido, dto);
         pedido.recalcularTotal();
@@ -164,7 +164,7 @@ pedido = pedidoRepository.save(pedido);
             EditarItemRequestDTO dto) {
 
         Pedido pedido = buscarPedidoComItens(idPedido);
-        validarStatusEditavel(pedido, "edição de item de produto");
+validarPodeEditarOuRemoverItem(pedido, "editar item de produto");
 
         ItemPedido item = itemPedidoRepository
                 .findByIdItemPedidoAndPedidoIdPedido(idItemPedido, idPedido)
@@ -205,7 +205,7 @@ pedido = pedidoRepository.save(pedido);
             EditarItemRequestDTO dto) {
 
         Pedido pedido = buscarPedidoComItens(idPedido);
-        validarStatusEditavel(pedido, "edição de item de serviço");
+validarPodeEditarOuRemoverItem(pedido, "editar item de serviço");
 
         ItemPedidoServico item = itemPedidoServicoRepository
                 .findByIdItemServicoAndPedido_IdPedido(idItemServico, idPedido)
@@ -231,7 +231,7 @@ pedido = pedidoRepository.save(pedido);
     @Transactional
     public PedidoResponseDTO eliminarItemProduto(Integer idPedido, Integer idItemPedido) {
         Pedido pedido = buscarPedidoComItens(idPedido);
-        validarStatusEditavel(pedido, "eliminação de item de produto");
+validarPodeEditarOuRemoverItem(pedido, "remover item de produto");
 
         ItemPedido item = itemPedidoRepository
                 .findByIdItemPedidoAndPedidoIdPedido(idItemPedido, idPedido)
@@ -269,7 +269,7 @@ public void eliminar(Integer idPedido) {
     @Transactional
     public PedidoResponseDTO eliminarItemServico(Integer idPedido, Integer idItemServico) {
         Pedido pedido = buscarPedidoComItens(idPedido);
-        validarStatusEditavel(pedido, "eliminação de item de serviço");
+validarPodeEditarOuRemoverItem(pedido, "remover item de serviço");
 
         ItemPedidoServico item = itemPedidoServicoRepository
                 .findByIdItemServicoAndPedido_IdPedido(idItemServico, idPedido)
@@ -449,31 +449,46 @@ public List<PedidoResponseDTO> listarPorUsuario(Integer idUsuario) {
 public PedidoResponseDTO declararCredito(Integer idPedido, DeclararCreditoRequestDTO dto) {
     Pedido pedido = buscarPedidoComItens(idPedido);
 
-    // ── NOVO: associar cliente recebido no DTO antes de qualquer validação ──
-    if (dto.idCliente() != null) {
-        clienteRepository.findById(dto.idCliente())
-            .orElseThrow(() -> new IllegalStateException(
-                "Cliente não encontrado: " + dto.idCliente()));
-        pedido.setIdCliente(dto.idCliente());
+    validarClienteCreditoNaoFoiAlterado(pedido, dto);
+
+    // Se já é crédito, não troca cliente, não reemite factura e não lança erro.
+    // Apenas retorna o pedido actual para o Flutter continuar o fluxo.
+    if (pedidoJaConfirmadoComoCredito(pedido)) {
+        log.info("Pedido {} já estava declarado como crédito. Retornando sem reemitir factura.", idPedido);
+        return toResponseDTO(pedido);
     }
 
-    // Agora a validação passa, pois o cliente já foi associado
-    if (pedido.getIdCliente() == null)
+    if (!"aberto".equalsIgnoreCase(pedido.getStatusPedido())) {
+        throw new StatusPedidoInvalidoException(
+            pedido.getStatusPedido(),
+            "declaração de crédito"
+        );
+    }
+
+    if (!List.of("SEM_PARCELAS", "PARCELADO").contains(dto.modalidadeCredito())) {
+        throw new IllegalArgumentException(
+            "modalidadeCredito deve ser SEM_PARCELAS ou PARCELADO"
+        );
+    }
+
+    associarClienteCreditoSePrimeiraDeclaracao(pedido, dto);
+
+    boolean temClienteCadastrado = pedido.getIdCliente() != null;
+    boolean temClienteSingular =
+            pedido.getNomeClienteSingular() != null
+         || pedido.getApelidoClienteSingular() != null;
+
+    if (!temClienteCadastrado && !temClienteSingular) {
         throw new IllegalStateException(
-            "O pedido deve ter um cliente associado antes de ser declarado a crédito.");
-
-    if ("CREDITO".equals(pedido.getTipoVenda()))
-        throw new CreditoJaDeclaradoException(idPedido);
-
-    if (!"aberto".equalsIgnoreCase(pedido.getStatusPedido()))
-        throw new StatusPedidoInvalidoException(pedido.getStatusPedido(), "declaração de crédito");
-
-    if (!List.of("SEM_PARCELAS", "PARCELADO").contains(dto.modalidadeCredito()))
-        throw new IllegalArgumentException("modalidadeCredito deve ser SEM_PARCELAS ou PARCELADO");
+            "O pedido deve ter um cliente associado antes de ser declarado a crédito."
+        );
+    }
 
     DocumentoResponse factura = documentoFiscalService.emitir(
         new EmitirDocumentoRequest(
-            idPedido, "FAT", dto.idUsuario(),
+            idPedido,
+            "FAT",
+            dto.idUsuario(),
             dto.codigoAt() != null ? dto.codigoAt() : "STECH-MZ-CREDITO"
         )
     );
@@ -486,11 +501,20 @@ public PedidoResponseDTO declararCredito(Integer idPedido, DeclararCreditoReques
     pedido.setDataAberturaCredito(OffsetDateTime.now());
     pedido.setDataVencimentoCredito(dto.dataVencimento());
     pedido.setObservacoesCredito(dto.observacoesCredito());
+    pedido.setValorPago(BigDecimal.ZERO);
     pedido.setSyncStatus("PENDING_UPDATE");
-    pedidoRepository.save(pedido);
 
-    log.info("Pedido {} declarado como crédito | cliente {} | factura {}",
-        idPedido, pedido.getIdCliente(), factura.referencia());
+    pedido = pedidoRepository.save(pedido);
+
+    log.info(
+        "Pedido {} declarado como crédito | idCliente={} | nomeSingular='{}' | apelidoSingular='{}' | factura {}",
+        idPedido,
+        pedido.getIdCliente(),
+        pedido.getNomeClienteSingular(),
+        pedido.getApelidoClienteSingular(),
+        factura.referencia()
+    );
+
     return toResponseDTO(pedido);
 }
 
@@ -748,6 +772,93 @@ private void adicionarItemServicoInterno(Pedido pedido, ItemServicoRequestDTO dt
                     quantidadeSolicitada);
         }
     }
+
+    private boolean pedidoJaConfirmadoComoCredito(Pedido pedido) {
+    return "CREDITO".equalsIgnoreCase(pedido.getTipoVenda())
+        || "em dívida".equalsIgnoreCase(pedido.getStatusPedido());
+}
+
+private void validarPodeAdicionarItem(Pedido pedido, String operacao) {
+    if (!STATUS_PERMITE_ADICIONAR_ITEM.contains(pedido.getStatusPedido())) {
+        throw new StatusPedidoInvalidoException(pedido.getStatusPedido(), operacao);
+    }
+
+    if ("PAGO".equalsIgnoreCase(pedido.getStatusPagamento())) {
+        throw new IllegalStateException(
+            "Este pedido a crédito já está liquidado. Não é possível adicionar novos itens."
+        );
+    }
+}
+
+private void validarPodeEditarOuRemoverItem(Pedido pedido, String operacao) {
+    if (pedidoJaConfirmadoComoCredito(pedido)) {
+        throw new IllegalStateException(
+            "Pedido a crédito já confirmado. Não é permitido " + operacao
+            + "; apenas adicionar novos itens."
+        );
+    }
+
+    validarStatusEditavel(pedido, operacao);
+}
+
+private void validarClienteCreditoNaoFoiAlterado(Pedido pedido, DeclararCreditoRequestDTO dto) {
+    if (!pedidoJaConfirmadoComoCredito(pedido)) {
+        return;
+    }
+
+    if (pedido.getIdCliente() != null) {
+        if (dto.idCliente() != null && !dto.idCliente().equals(pedido.getIdCliente())) {
+            throw new IllegalStateException(
+                "Este pedido já foi confirmado a crédito. O cliente não pode ser alterado."
+            );
+        }
+
+        return;
+    }
+
+    String nomeActual = normalizarTexto(pedido.getNomeClienteSingular());
+    String apelidoActual = normalizarTexto(pedido.getApelidoClienteSingular());
+
+    String nomeNovo = normalizarTexto(dto.nomeClienteSingular());
+    String apelidoNovo = normalizarTexto(dto.apelidoClienteSingular());
+
+    boolean tentouAlterarNome =
+            nomeNovo != null
+         && nomeActual != null
+         && !nomeNovo.equalsIgnoreCase(nomeActual);
+
+    boolean tentouAlterarApelido =
+            apelidoNovo != null
+         && apelidoActual != null
+         && !apelidoNovo.equalsIgnoreCase(apelidoActual);
+
+    if (tentouAlterarNome || tentouAlterarApelido || dto.idCliente() != null) {
+        throw new IllegalStateException(
+            "Este pedido já foi confirmado a crédito. O cliente não pode ser alterado."
+        );
+    }
+}
+
+private void associarClienteCreditoSePrimeiraDeclaracao(
+        Pedido pedido,
+        DeclararCreditoRequestDTO dto
+) {
+    if (dto.idCliente() != null) {
+        clienteRepository.findById(dto.idCliente())
+            .orElseThrow(() -> new IllegalStateException(
+                "Cliente não encontrado: " + dto.idCliente()
+            ));
+
+        pedido.setIdCliente(dto.idCliente());
+        pedido.setNomeClienteSingular(null);
+        pedido.setApelidoClienteSingular(null);
+        return;
+    }
+
+    pedido.setIdCliente(null);
+    pedido.setNomeClienteSingular(normalizarTexto(dto.nomeClienteSingular()));
+    pedido.setApelidoClienteSingular(normalizarTexto(dto.apelidoClienteSingular()));
+}
 
     private void validarStatusEditavel(Pedido pedido, String operacao) {
         if (!STATUS_EDITAVEIS.contains(pedido.getStatusPedido())) {
