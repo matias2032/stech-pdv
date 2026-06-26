@@ -327,10 +327,17 @@ double _calcularIva(double valorComIva) {
   // PÚBLICO: Gerar documento fiscal
   // ─────────────────────────────────────────────────────────────────
 
-  Future<File> gerarDocumentoFiscal(DocumentoPdfModel doc) async {
-    final pdf = await _buildDocumentoFiscal(doc);
-    return _savePdfWithName(pdf, _nomeArquivo(doc));
-  }
+Future<File> gerarDocumentoFiscal(
+  DocumentoPdfModel doc, {
+  DocumentoFiscalModel? documentoFiscal,
+}) async {
+  final pdf = await _buildDocumentoFiscal(
+    doc,
+    documentoFiscal: documentoFiscal,
+  );
+
+  return _savePdfWithName(pdf, _nomeArquivo(doc));
+}
 
   Future<File> gerarReciboCredito(ReciboCreditoPdfModel doc) async {
   final pdf = await _buildReciboCredito(doc);
@@ -521,7 +528,10 @@ double _calcularIva(double valorComIva) {
   // BUILD — DOCUMENTO FISCAL
   // ═════════════════════════════════════════════════════════════════
 
-  Future<pw.Document> _buildDocumentoFiscal(DocumentoPdfModel doc) async {
+Future<pw.Document> _buildDocumentoFiscal(
+  DocumentoPdfModel doc, {
+  DocumentoFiscalModel? documentoFiscal,
+}) async {
     final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
     final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
 
@@ -543,9 +553,15 @@ double _calcularIva(double valorComIva) {
           pw.SizedBox(height: 6),
           pw.Divider(color: PdfColors.grey400, thickness: 0.5),
           pw.SizedBox(height: 4),
-          _docFiscalMetadados(doc),
-          pw.SizedBox(height: 6),
-          _docFiscalTabelaItens(doc),
+         _docFiscalMetadados(doc),
+
+if (documentoFiscal?.anulado == true) ...[
+  pw.SizedBox(height: 6),
+  _docFiscalBlocoAnulacao(documentoFiscal!),
+],
+
+pw.SizedBox(height: 6),
+_docFiscalTabelaItens(doc),
           pw.SizedBox(height: 10),
           _docFiscalAssinatura(doc),
           pw.SizedBox(height: 8),
@@ -1024,6 +1040,47 @@ _metaRow('Gerado em:', DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now()))
       ],
     );
   }
+
+
+  pw.Widget _docFiscalBlocoAnulacao(DocumentoFiscalModel documentoFiscal) {
+  final motivo = documentoFiscal.motivoAnulacao?.trim();
+
+  return pw.Container(
+    width: double.infinity,
+    padding: const pw.EdgeInsets.all(8),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.red50,
+      border: pw.Border.all(
+        color: _kVermelho,
+        width: 0.6,
+      ),
+      borderRadius: pw.BorderRadius.circular(4),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'DOCUMENTO ANULADO',
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: _kVermelho,
+          ),
+        ),
+        if (motivo != null && motivo.isNotEmpty) ...[
+          pw.SizedBox(height: 3),
+          pw.Text(
+            'Motivo da anulação: $motivo',
+            style: const pw.TextStyle(
+              fontSize: 8,
+              color: PdfColors.red900,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
 
   pw.Widget _metaRow(String label, String valor) {
     return pw.Padding(

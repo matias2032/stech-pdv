@@ -168,7 +168,10 @@ Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
       tipoPagamento: nomeTipoPag,
     );
 
-    final arquivo = await pdfService.gerarDocumentoFiscal(pdfDoc);
+final arquivo = await pdfService.gerarDocumentoFiscal(
+  pdfDoc,
+  documentoFiscal: doc,
+);
     if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
     await pdfService.abrirPdf(arquivo);
 
@@ -205,7 +208,10 @@ Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
               id: doc.id,
               motivoAnulacao: motivo,
             );
-        if (mounted) _mostrarSnack('Documento ${doc.referencia} anulado.');
+if (mounted) {
+  _mostrarSnack('Documento ${doc.referencia} anulado.');
+  await context.read<DocumentoFiscalProvider>().carregarTodos();
+}
       } catch (_) {
         if (mounted) {
           _mostrarSnack(
@@ -685,15 +691,15 @@ class _CardDocumento extends StatelessWidget {
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Tooltip(
-                    message: 'Gerar PDF',
-                    child: IconButton(
-                      icon: const Icon(Icons.picture_as_pdf_rounded),
-                      color: _kAzul,
-                      iconSize: 22,
-                      onPressed: anulado ? null : () => onGerarPdf(doc),
-                    ),
-                  ),
+                 Tooltip(
+  message: anulado ? 'Gerar PDF anulado' : 'Gerar PDF',
+  child: IconButton(
+    icon: const Icon(Icons.picture_as_pdf_rounded),
+    color: _kAzul,
+    iconSize: 22,
+    onPressed: () => onGerarPdf(doc),
+  ),
+),
                   if (!anulado)
                     Tooltip(
                       message: 'Anular documento',
