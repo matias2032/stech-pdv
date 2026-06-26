@@ -649,9 +649,9 @@ onTap: () {
   IconData _iconeTipo(String codigo) => switch (codigo) {
         'FAT' => Icons.receipt_rounded,
         'REC' => Icons.payments_rounded,
-        'NCO' => Icons.note_alt_rounded,
+        // 'NCO' => Icons.note_alt_rounded,
         'VD' => Icons.attach_money_rounded,
-        'NE' => Icons.attach_money_rounded,
+        'NE' => Icons.note_alt_rounded,
         _ => Icons.description_rounded,
       };
 

@@ -22,14 +22,14 @@ const double kTaxaIva = 0.16;
 // ENUM — tipos de documento fiscal (para uso local no PDF)
 // ═══════════════════════════════════════════════════════════════════
 
-enum TipoDocumentoPdf { factura,recibo, notaDeCompra,vendaADinheiro,notaDeEntrega }
+enum TipoDocumentoPdf { factura,recibo, /*notaDeCompra,*/vendaADinheiro,notaDeEntrega }
 
 extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   String get titulo => switch (this) {
         TipoDocumentoPdf.factura => 'FACTURA',
 
         TipoDocumentoPdf.recibo => 'RECIBO',
-        TipoDocumentoPdf.notaDeCompra => 'NOTA DE COMPRA',
+        // TipoDocumentoPdf.notaDeCompra => 'NOTA DE COMPRA',
           TipoDocumentoPdf.vendaADinheiro => 'VENDA A DINHEIRO',
           TipoDocumentoPdf.notaDeEntrega => 'NOTA DE ENTREGA',
       };
@@ -38,7 +38,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         TipoDocumentoPdf.factura => 'FAT',
 
         TipoDocumentoPdf.recibo => 'REC',
-        TipoDocumentoPdf.notaDeCompra => 'NCO',
+        // TipoDocumentoPdf.notaDeCompra => 'NCO',
         TipoDocumentoPdf.vendaADinheiro => 'VD',
         TipoDocumentoPdf.notaDeEntrega => 'NOTA DE ENTREGA',
       };
@@ -46,7 +46,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   String get labelReferencia => switch (this) {
         TipoDocumentoPdf.factura => 'Factura Nº',
         TipoDocumentoPdf.recibo => 'Recibo Nº',
-        TipoDocumentoPdf.notaDeCompra => 'N. Compra Nº',
+        // TipoDocumentoPdf.notaDeCompra => 'N. Compra Nº',
         TipoDocumentoPdf.vendaADinheiro => 'Venda a Dinheiro Nº',
         TipoDocumentoPdf.notaDeEntrega => 'N. Entrega Nº',
       };
@@ -55,7 +55,7 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   static TipoDocumentoPdf dePrefixo(String prefixo) => switch (prefixo.toUpperCase()) {
         'FAT' => TipoDocumentoPdf.factura,
         'REC' => TipoDocumentoPdf.recibo,
-        'NCO' => TipoDocumentoPdf.notaDeCompra,
+        // 'NCO' => TipoDocumentoPdf.notaDeCompra,
         'VD' => TipoDocumentoPdf.vendaADinheiro,
         'NE' => TipoDocumentoPdf.notaDeEntrega,
         _ => TipoDocumentoPdf.factura,

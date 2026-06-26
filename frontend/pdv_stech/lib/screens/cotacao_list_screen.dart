@@ -152,36 +152,47 @@ return referencia.contains(_termoPesquisa) ||
 
   // ── Diálogo de exclusão ───────────────────────────────────────────────────
 
-  Future<void> _confirmarExclusao(BuildContext ctx, CotacaoModel cotacao) async {
-    final confirma = await showDialog<bool>(
-      context: ctx,
-      builder: (_) => _DialogoConfirmacao(
-        titulo: 'Remover cotação',
-        mensagem:
-            'Deseja remover a cotação "${cotacao.referencia}"? Esta acção não pode ser desfeita.',
-        corBotao: _kVermelho,
-        labelBotao: 'Remover',
-      ),
+Future<void> _confirmarCancelamento(BuildContext ctx, CotacaoModel cotacao) async {
+  final confirma = await showDialog<bool>(
+    context: ctx,
+    builder: (_) => _DialogoConfirmacao(
+      titulo: 'Cancelar cotação',
+      mensagem:
+          'Deseja cancelar a cotação "${cotacao.referencia}"? Ela ficará marcada como CANCELADA e não poderá ser convertida.',
+      corBotao: _kVermelho,
+      labelBotao: 'Cancelar Cotação',
+    ),
+  );
+
+  if (confirma != true || !ctx.mounted) return;
+
+  final provider = ctx.read<CotacaoProvider>();
+
+  final sucesso = await provider.atualizarCotacao(
+    cotacao.idCotacao,
+    AtualizarCotacaoRequestModel(
+      statusCotacao: 'CANCELADA',
+    ),
+  );
+
+  if (!ctx.mounted) return;
+
+  if (sucesso != null) {
+    _mostrarSnack(
+      ctx,
+      'Cotação ${cotacao.referencia} cancelada com sucesso.',
     );
 
-    if (confirma == true && ctx.mounted) {
-      final provider = ctx.read<CotacaoProvider>();
-      final sucesso = await provider.excluirCotacao(cotacao.idCotacao);
-
-      if (!ctx.mounted) return;
-
-      if (sucesso) {
-        _mostrarSnack(ctx, 'Cotação ${cotacao.referencia} removida com sucesso.');
-      } else {
-        _mostrarSnack(
-          ctx,
-          provider.errorMessage ?? 'Erro ao remover cotação.',
-          erro: true,
-        );
-        provider.limparErro();
-      }
-    }
+    await _recarregar();
+  } else {
+    _mostrarSnack(
+      ctx,
+      provider.errorMessage ?? 'Erro ao cancelar cotação.',
+      erro: true,
+    );
+    provider.limparErro();
   }
+}
 
   void _mostrarSnack(BuildContext ctx, String mensagem, {bool erro = false}) {
     ScaffoldMessenger.of(ctx).showSnackBar(
@@ -231,14 +242,14 @@ void _abrirDetalhe(CotacaoModel cotacao) {
           ),
      
           const Divider(height: 1),
-          Expanded(
-            child: _Listagem(
-              aplicarFiltroLocal: _aplicarFiltroLocal,
-              onRecarregar: _recarregar,
-              onAbrirDetalhe: _abrirDetalhe,
-              onExcluir: (c) => _confirmarExclusao(context, c),
-            ),
-          ),
+       Expanded(
+  child: _Listagem(
+    aplicarFiltroLocal: _aplicarFiltroLocal,
+    onRecarregar: _recarregar,
+    onAbrirDetalhe: _abrirDetalhe,
+    onCancelar: (c) => _confirmarCancelamento(context, c),
+  ),
+),
         ],
       ),
     );
@@ -406,13 +417,13 @@ class _Listagem extends StatelessWidget {
   final List<CotacaoModel> Function(List<CotacaoModel>) aplicarFiltroLocal;
   final Future<void> Function() onRecarregar;
   final void Function(CotacaoModel) onAbrirDetalhe;
-  final Future<void> Function(CotacaoModel) onExcluir;
+  final Future<void> Function(CotacaoModel) onCancelar;
 
   const _Listagem({
     required this.aplicarFiltroLocal,
     required this.onRecarregar,
     required this.onAbrirDetalhe,
-    required this.onExcluir,
+    required this.onCancelar,
   });
 
   @override
@@ -516,11 +527,11 @@ class _Listagem extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
               itemCount: lista.length,
               itemBuilder: (_, i) => _LinhaCotacao(
-                cotacao: lista[i],
-                isAlternate: i.isOdd,
-                onAbrirDetalhe: onAbrirDetalhe,
-                onExcluir: onExcluir,
-              ),
+  cotacao: lista[i],
+  isAlternate: i.isOdd,
+  onAbrirDetalhe: onAbrirDetalhe,
+  onCancelar: onCancelar,
+),
             ),
           ),
         ],
@@ -622,13 +633,13 @@ class _LinhaCotacao extends StatelessWidget {
     required this.cotacao,
     required this.isAlternate,
     required this.onAbrirDetalhe,
-    required this.onExcluir,
+    required this.onCancelar,
   });
 
   final CotacaoModel cotacao;
   final bool isAlternate;
   final void Function(CotacaoModel) onAbrirDetalhe;
-  final Future<void> Function(CotacaoModel) onExcluir;
+  final Future<void> Function(CotacaoModel) onCancelar;
 
   @override
   Widget build(BuildContext context) {
@@ -750,7 +761,7 @@ final nomeCliente = _nomeClienteCotacao(cotacao);
               // Ações
               // Ações
 SizedBox(
-  width: 120,
+  width: 128,
   child: Row(
     mainAxisAlignment: MainAxisAlignment.end,
     children: [
@@ -778,26 +789,30 @@ SizedBox(
         ),
       ),
       // ── Remover ──
-      if (!['CONVERTIDA', 'CANCELADA', 'EXPIRADA']
-          .contains(cotacao.statusCotacao)) ...[
-        const SizedBox(width: 6),
-        Tooltip(
-          message: 'Remover',
-          child: InkWell(
-            onTap: () => onExcluir(cotacao),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: _kVermelho.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.delete_outline_rounded,
-                  size: 16, color: _kVermelho),
-            ),
-          ),
+// ── Cancelar ──
+if (!['CONVERTIDA', 'CANCELADA', 'EXPIRADA']
+    .contains(cotacao.statusCotacao)) ...[
+  const SizedBox(width: 6),
+  Tooltip(
+    message: 'Cancelar cotação',
+    child: InkWell(
+      onTap: () => onCancelar(cotacao),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: _kVermelho.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(6),
         ),
-      ],
+        child: const Icon(
+          Icons.cancel_outlined,
+          size: 16,
+          color: _kVermelho,
+        ),
+      ),
+    ),
+  ),
+],
     ],
   ),
 ),
