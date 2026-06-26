@@ -7,6 +7,7 @@ class LinhaExtrato {
   final String nomeEmpresa;
   final String? nuit;
   final double valorTotal;
+  final String estado;
 
   const LinhaExtrato({
     required this.dataEmissao,
@@ -14,6 +15,7 @@ class LinhaExtrato {
     required this.nomeEmpresa,
     this.nuit,
     required this.valorTotal,
+    this.estado = '-',
   });
 }
 

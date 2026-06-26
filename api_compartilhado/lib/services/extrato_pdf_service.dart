@@ -33,10 +33,26 @@ class ExtratoPdfService {
   // 6. Tabela final de apuramento
   // ══════════════════════════════════════════════════════════════════════
 
-  Future<File> gerar(ExtratoModel extrato) async {
-    final pdf = await _build(extrato);
-    return _salvar(pdf, extrato);
-  }
+  bool _linhaAnulada(LinhaExtrato linha) {
+  return linha.estado.trim().toUpperCase() == 'ANULADO';
+}
+
+List<LinhaExtrato> _linhasNaoAnuladas(ExtratoModel extrato) {
+  return extrato.linhas.where((linha) => !_linhaAnulada(linha)).toList();
+}
+
+ExtratoModel _extratoSemDocumentosAnulados(ExtratoModel extrato) {
+  return extrato.copyWith(
+    linhas: _linhasNaoAnuladas(extrato),
+  );
+}
+
+Future<File> gerar(ExtratoModel extrato) async {
+  final extratoLimpo = _extratoSemDocumentosAnulados(extrato);
+
+  final pdf = await _build(extratoLimpo);
+  return _salvar(pdf, extratoLimpo);
+}
 
   Future<void> abrirPdf(File file) async {
     final result = await OpenFilex.open(file.path);
@@ -47,6 +63,7 @@ class ExtratoPdfService {
   }
 
   Future<pw.Document> _build(ExtratoModel extrato) async {
+    final extratoValido = _extratoSemDocumentosAnulados(extrato);
     final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
     final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
 

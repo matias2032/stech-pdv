@@ -32,12 +32,12 @@ class ExtratoService {
     final todos = await docService.listarTodos();
 
     // 2. Filtrar por tipo e período (não anulados)
-    final filtrados = todos.where((d) {
-      if (d.anulado) return false;
-      if (!_tiposPermitidos.contains(d.tipoDocumento.codigo)) return false;
-      final dt = d.emitidoEm;
-      return !dt.isBefore(dataInicio) && !dt.isAfter(dataFim);
-    }).toList();
+final filtrados = todos.where((d) {
+  if (!_tiposPermitidos.contains(d.tipoDocumento.codigo)) return false;
+
+  final dt = d.emitidoEm;
+  return !dt.isBefore(dataInicio) && !dt.isAfter(dataFim);
+}).toList();
 
     // 3. Montar linhas com dados de pedido + cliente
     final linhas = <LinhaExtrato>[];
@@ -71,13 +71,14 @@ if (nomeSingular.isNotEmpty) {
   }
 }
 
-        linhas.add(LinhaExtrato(
-          dataEmissao:     doc.emitidoEm,
-          numeroDocumento: doc.referencia,
-          nomeEmpresa:     nomeEmpresa,
-          nuit:            nuit,
-          valorTotal:      pedido.total,
-        ));
+linhas.add(LinhaExtrato(
+  dataEmissao:     doc.emitidoEm,
+  numeroDocumento: doc.referencia,
+  nomeEmpresa:     nomeEmpresa,
+  nuit:            nuit,
+  valorTotal:      pedido.total,
+  estado:          doc.anulado ? 'ANULADO' : '-',
+));
       } catch (_) {
         // documento sem pedido acessível — ignorar
       }

@@ -21,6 +21,11 @@ enum _Periodo {
   ultimoAno,
 }
 
+enum _TipoExtractoPdf {
+  geral,
+  interno,
+}
+
 extension _PeriodoExt on _Periodo {
   String get label => switch (this) {
         _Periodo.hoje          => 'Hoje',
@@ -66,6 +71,7 @@ class _ExtratosFormScreenState extends State<ExtratosFormScreen> {
   _Periodo _periodoSelecionado = _Periodo.ultimoMes;
   bool     _gerando            = false;
   ExtratoModel? _previa;
+  _TipoExtractoPdf? _tipoSelecionado;
 final _campo19Ctrl = TextEditingController();
 SimulacaoApuramentoIvaModel? _apuramentoIva;
 
@@ -80,51 +86,139 @@ void dispose() {
   _campo19Ctrl.dispose();
   super.dispose();
 }
-  Future<void> _gerarPrevia() async {
-    setState(() { _gerando = true; _previa = null; });
 
-    try {
-      final (inicio, fim) = _periodoSelecionado.intervalo();
-      final extrato = await ExtratoService.instance.gerar(
-        dataInicio:   inicio,
-        dataFim:      fim,
-        labelPeriodo: _periodoSelecionado.label,
-      );
-final apuramento = SimulacaoApuramentoIvaModel.fromExtrato(
-  extrato,
-  campo19: _parseNumero(_campo19Ctrl.text),
-);
+Future<void> _gerarPrevia() async {
+  final tipo = await _escolherTipoExtracto();
 
-if (mounted) {
+  if (tipo == null) return;
+
   setState(() {
-    _apuramentoIva = apuramento;
-    _previa = extrato.copyWith(apuramentoIva: apuramento);
+    _gerando = true;
+    _previa = null;
+    _apuramentoIva = null;
+    _tipoSelecionado = tipo;
   });
-}
-    } catch (e) {
-      if (mounted) _snack('Erro ao gerar extracto: $e', erro: true);
-    } finally {
-      if (mounted) setState(() => _gerando = false);
+
+  try {
+    final (inicio, fim) = _periodoSelecionado.intervalo();
+
+    final extrato = await ExtratoService.instance.gerar(
+      dataInicio: inicio,
+      dataFim: fim,
+      labelPeriodo: _periodoSelecionado.label,
+    );
+
+    if (!mounted) return;
+
+    if (tipo == _TipoExtractoPdf.geral) {
+      final apuramento = SimulacaoApuramentoIvaModel.fromExtrato(
+        extrato,
+        campo19: _parseNumero(_campo19Ctrl.text),
+      );
+
+      setState(() {
+        _apuramentoIva = apuramento;
+        _previa = extrato.copyWith(apuramentoIva: apuramento);
+      });
+    } else {
+      setState(() {
+        _apuramentoIva = null;
+        _previa = extrato;
+      });
+    }
+  } catch (e) {
+    if (mounted) {
+      _snack('Erro ao gerar extracto: $e', erro: true);
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _gerando = false);
     }
   }
+}
+
+  Future<_TipoExtractoPdf?> _escolherTipoExtracto() {
+  return showDialog<_TipoExtractoPdf>(
+    context: context,
+    builder: (_) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: const Text(
+        'Tipo de extracto',
+        style: TextStyle(
+          color: _kAzul,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+   content: const Text(
+  'Escolha o tipo de extracto antes de gerar a pré-visualização.\n\n'
+  'Extracto Geral: inclui simulação do apuramento do IVA.\n'
+  'Extracto Interno: lista documentos fiscais com o estado.',
+  style: TextStyle(color: _kCinzaTexto),
+),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancelar'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () =>
+              Navigator.of(context).pop(_TipoExtractoPdf.geral),
+          icon: const Icon(Icons.analytics_outlined),
+          label: const Text('Extracto Geral'),
+        ),
+        ElevatedButton.icon(
+          onPressed: () =>
+              Navigator.of(context).pop(_TipoExtractoPdf.interno),
+          icon: const Icon(Icons.receipt_long_rounded),
+          label: const Text('Extracto Interno'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _kAzul,
+            foregroundColor: _kBranco,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   // ── Exportar PDF ─────────────────────────────────────────────────────────
 
 Future<void> _exportar() async {
-  if (_previa == null) return;
+  if (_previa == null || _tipoSelecionado == null) return;
+
   setState(() => _gerando = true);
 
   try {
-final extratoFinal = _previa!.copyWith(
-  apuramentoIva: _apuramentoIva,
-);
+    final extratoFinal = _previa!.copyWith(
+      apuramentoIva: _tipoSelecionado == _TipoExtractoPdf.geral
+          ? _apuramentoIva
+          : null,
+    );
 
-final file = await ExtratoPdfService.instance.gerar(extratoFinal);
+    final file = switch (_tipoSelecionado!) {
+      _TipoExtractoPdf.geral =>
+        await ExtratoPdfService.instance.gerar(extratoFinal),
+
+      _TipoExtractoPdf.interno =>
+        await ExtratoPdfInternoService.instance.gerar(extratoFinal),
+    };
+
+    if (!mounted) return;
+
+    setState(() => _gerando = false);
+
+    switch (_tipoSelecionado!) {
+      case _TipoExtractoPdf.geral:
+        await ExtratoPdfService.instance.abrirPdf(file);
+        break;
+
+      case _TipoExtractoPdf.interno:
+        await ExtratoPdfInternoService.instance.abrirPdf(file);
+        break;
+    }
+
     if (mounted) {
-      setState(() => _gerando = false);
-      await ExtratoPdfService.instance.abrirPdf(file);
-      // Devolve o extracto para a list_screen registar no histórico
-if (mounted) Navigator.pop(context, extratoFinal);
+      Navigator.pop(context, extratoFinal);
     }
   } catch (e) {
     if (mounted) {
@@ -181,6 +275,39 @@ if (mounted) Navigator.pop(context, extratoFinal);
   return double.tryParse(normalizado) ?? 0.0;
 }
 
+bool _linhaAnulada(LinhaExtrato linha) {
+  return linha.estado.trim().toUpperCase() == 'ANULADO';
+}
+
+List<LinhaExtrato> _linhasValidasParaResumo(ExtratoModel extrato) {
+  if (_tipoSelecionado != _TipoExtractoPdf.interno) {
+    return extrato.linhas;
+  }
+
+  return extrato.linhas.where((linha) => !_linhaAnulada(linha)).toList();
+}
+
+int _totalDocumentosResumo(ExtratoModel extrato) {
+  if (_tipoSelecionado != _TipoExtractoPdf.interno) {
+    return extrato.totalDocumentos;
+  }
+
+  return _linhasValidasParaResumo(extrato).length;
+}
+
+double _somaTotalResumo(ExtratoModel extrato) {
+  if (_tipoSelecionado != _TipoExtractoPdf.interno) {
+    return extrato.somaTotal;
+  }
+
+  return _linhasValidasParaResumo(extrato).fold<double>(
+    0.0,
+    (soma, linha) => soma + linha.valorTotal,
+  );
+}
+
+
+
 void _recalcularCampo19() {
   if (_apuramentoIva == null) return;
 
@@ -228,10 +355,12 @@ void _recalcularCampo19() {
         children: _Periodo.values.map((p) {
           final activo = _periodoSelecionado == p;
           return GestureDetector(
-            onTap: () => setState(() {
-              _periodoSelecionado = p;
-              _previa = null;
-            }),
+         onTap: () => setState(() {
+  _periodoSelecionado = p;
+  _previa = null;
+  _apuramentoIva = null;
+  _tipoSelecionado = null;
+}),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
@@ -274,7 +403,7 @@ void _recalcularCampo19() {
               width: 18, height: 18,
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: _kBranco))
-          : const Icon(Icons.search_rounded),
+          : const Icon(Icons.receipt_long_rounded),
       label: Text(_gerando ? 'A processar...' : 'GERAR EXTRACTO',
           style: const TextStyle(fontSize: 15, letterSpacing: 0.4)),
       style: ElevatedButton.styleFrom(
@@ -291,10 +420,14 @@ void _recalcularCampo19() {
 
 Widget _cardPrevia() {
   final e = _previa!;
+  final totalDocumentosResumo = _totalDocumentosResumo(e);
+final somaTotalResumo = _somaTotalResumo(e);
 
   return _CardSecao(
     icon: Icons.preview_rounded,
-    titulo: 'Prévia do Extracto',
+  titulo: _tipoSelecionado == _TipoExtractoPdf.interno
+    ? 'Prévia do Extracto Interno'
+    : 'Prévia do Extracto Geral',
     subtitulo: '${_fmtData.format(e.dataInicio)} → '
         '${_fmtData.format(e.dataFim)}  ·  '
         '${e.labelPeriodo}',
@@ -313,31 +446,31 @@ Widget _cardPrevia() {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _ResumoItem(
-                label: 'Documentos',
-                valor: '${e.totalDocumentos}',
-                cor: _kAzul,
-              ),
+            _ResumoItem(
+  label: 'Documentos',
+  valor: '$totalDocumentosResumo',
+  cor: _kAzul,
+),
               Container(
                 width: 1,
                 height: 36,
                 color: Colors.grey.shade300,
               ),
-              _ResumoItem(
-                label: 'Total',
-                valor: _fmtMoeda.format(e.somaTotal),
-                cor: _kVermelho,
-              ),
+           _ResumoItem(
+  label: 'Total',
+  valor: _fmtMoeda.format(somaTotalResumo),
+  cor: _kVermelho,
+),
             ],
           ),
         ),
 
         // Simulação do apuramento do IVA
-        if (_apuramentoIva != null) ...[
-          _cardSimulacaoApuramentoIva(),
-          const SizedBox(height: 12),
-        ],
-
+      if (_tipoSelecionado == _TipoExtractoPdf.geral &&
+    _apuramentoIva != null) ...[
+  _cardSimulacaoApuramentoIva(),
+  const SizedBox(height: 12),
+],
         // Cabeçalho da tabela
         if (e.linhas.isNotEmpty)
           _CabecalhoTabela(),
@@ -524,30 +657,49 @@ decoration: InputDecoration(
 
   // ── Botão exportar ────────────────────────────────────────────────────────
 
-  Widget _botaoExportar() {
-final temDados =
-    ((_previa?.totalDocumentos ?? 0) > 0) ||
-    ((_previa?.totalDespesasRegistadas ?? 0) > 0);
-    return ElevatedButton.icon(
-      onPressed: (_gerando || !temDados) ? null : _exportar,
-      icon: _gerando
-          ? const SizedBox(
-              width: 18, height: 18,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: _kBranco))
-          : const Icon(Icons.picture_as_pdf_rounded),
-      label: Text(_gerando ? 'A exportar...' : 'EXPORTAR PDF',
-          style: const TextStyle(fontSize: 15, letterSpacing: 0.4)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _kVermelho,
-        foregroundColor: _kBranco,
-        disabledBackgroundColor: _kVermelho.withOpacity(0.4),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
+Widget _botaoExportar() {
+  final temDados =
+      ((_previa?.totalDocumentos ?? 0) > 0) ||
+      ((_previa?.totalDespesasRegistadas ?? 0) > 0);
+
+  final interno = _tipoSelecionado == _TipoExtractoPdf.interno;
+
+  return ElevatedButton.icon(
+    onPressed: (_gerando || !temDados) ? null : _exportar,
+    icon: _gerando
+        ? const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _kBranco,
+            ),
+          )
+        : Icon(
+            interno
+                ? Icons.picture_as_pdf_rounded
+                : Icons.upload_file_rounded,
+          ),
+    label: Text(
+      _gerando
+          ? 'A exportar...'
+          : interno
+              ? 'GERAR PDF'
+              : 'EXPORTAR PDF',
+      style: const TextStyle(fontSize: 15, letterSpacing: 0.4),
+    ),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: interno ? _kAzul : _kVermelho,
+      foregroundColor: _kBranco,
+      disabledBackgroundColor:
+          (interno ? _kAzul : _kVermelho).withOpacity(0.4),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─── Widgets auxiliares ───────────────────────────────────────────────────────

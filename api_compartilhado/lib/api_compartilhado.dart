@@ -48,6 +48,7 @@ export 'services/extrato_pdf_service.dart';
 export 'services/cotacao_pdf_service.dart'; 
 export 'services/fornecedor_service.dart';
 export 'services/despesa_service.dart';
+export 'services/extrato_pdf_interno_service.dart';
 
 
 
