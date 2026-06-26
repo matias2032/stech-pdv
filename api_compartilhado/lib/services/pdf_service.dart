@@ -278,17 +278,7 @@ abstract final class _Empresa {
     ),
   ];
 
-  static const List<String> termos = [
 
-    'Preços: Incluem apenas os itens descritos; extras serão cobrados à parte.',
-    'Pagamento: Pode exigir adiantamento. Atrasos podem suspender os serviços.',
-    'Prazos: Contam após confirmação e pagamento. Podem variar por factores externos.',
-    'Garantia: Serviços com padrão técnico; equipamentos conforme fabricante. Não cobre mau uso.',
-    'Alterações/Cancelamentos: Podem gerar custos adicionais.',
-    'Responsabilidade do Cliente: Fornecer dados correctos e garantir acesso/condições ao local.',
-    'Responsabilidade: A Stech Engenharia não responde por danos indirectos ou externos ao serviço.',
-    'Aceitação: Aprovar o documento significa aceitar estes termos.',
-  ];
 }
 
 class _Banco {
@@ -1157,50 +1147,11 @@ for (final s in pedido.itensServico)
   // ─── 5. Assinatura ────────────────────────────────────────────
 
 pw.Widget _docFiscalAssinatura(DocumentoPdfModel doc) {
-  if (doc.tipo == TipoDocumentoPdf.notaDeEntrega) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.center,
-      children: [
-        pw.SizedBox(height: 4),
-        pw.Divider(color: PdfColors.grey400, thickness: 0.5),
-        pw.SizedBox(height: 16),
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-          children: [
-            _t('Assinatura: _____________________________', size: 8),
-            _t('Data: _______ / _______ / ___________', size: 8),
-          ],
-        ),
-        pw.SizedBox(height: 6),
-        pw.Divider(color: PdfColors.grey400, thickness: 0.5),
-      ],
-    );
-  }
-
   return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    crossAxisAlignment: pw.CrossAxisAlignment.end,
     children: [
       pw.SizedBox(height: 4),
-      pw.Row(
-        children: [
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _t('Aprovado por: ___________________________', size: 8),
-                pw.SizedBox(height: 12),
-                _t('Assinatura: _____________________________', size: 8),
-              ],
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: _t('Data: _______ / _______ / ___________', size: 8),
-            ),
-          ),
-        ],
-      ),
+      _t('Assinatura: _____________________________', size: 8),
       pw.SizedBox(height: 6),
       pw.Divider(color: PdfColors.grey400, thickness: 0.5),
     ],
@@ -1210,25 +1161,8 @@ pw.Widget _docFiscalAssinatura(DocumentoPdfModel doc) {
   // ─── 6. Termos e condições ────────────────────────────────────
 
 pw.Widget _docFiscalTermos(DocumentoPdfModel doc) {
-  if (doc.tipo == TipoDocumentoPdf.notaDeEntrega) return pw.SizedBox.shrink();
-
-  const tituloTermos = 'Termos e Condições de Pagamento';
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _t(tituloTermos, bold: true, size: 8),
-        pw.SizedBox(height: 3),
-        ..._Empresa.termos.asMap().entries.map(
-          (e) => pw.Padding(
-            padding: const pw.EdgeInsets.only(bottom: 1.5),
-            child: pw.Text('${e.key + 1}. ${e.value}',
-                style: const pw.TextStyle(fontSize: 7)),
-          ),
-        ),
-      ],
-    );
-  }
+  return pw.SizedBox.shrink();
+}
 
   // ─── 7. Dados bancários ───────────────────────────────────────
 
