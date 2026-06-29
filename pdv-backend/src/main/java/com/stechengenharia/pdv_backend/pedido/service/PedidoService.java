@@ -123,35 +123,41 @@ pedido = pedidoRepository.save(pedido);
     // b) ADICIONAR ITEM DE PRODUTO
     // ════════════════════════════════════════════════════════════════════════
 
-    @Transactional
-    public PedidoResponseDTO adicionarItemProduto(Integer idPedido, ItemPedidoRequestDTO dto) {
-        Pedido pedido = buscarPedidoComItens(idPedido);
-validarPodeAdicionarItem(pedido, "adição de item de produto");
+@Transactional
+public PedidoResponseDTO adicionarItemProduto(Integer idPedido, ItemPedidoRequestDTO dto) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
+    validarPodeAdicionarItem(pedido, "adição de item de produto");
 
-        adicionarItemProdutoInterno(pedido, dto.idProduto, dto.quantidade);
-        pedido.recalcularTotal();
-        pedidoRepository.save(pedido);
+    adicionarItemProdutoInterno(pedido, dto.idProduto, dto.quantidade);
 
-        log.info("Produto {} adicionado ao pedido {}", dto.idProduto, idPedido);
-        return toResponseDTO(pedido);
-    }
+    pedido.recalcularTotal();
+    pedido.setSyncStatus("PENDING_UPDATE");
+    pedidoRepository.saveAndFlush(pedido);
+
+    log.info("Produto {} adicionado ao pedido {}", dto.idProduto, idPedido);
+
+    return responderPedidoAtualizado(idPedido);
+}
 
     // ════════════════════════════════════════════════════════════════════════
     // c) ADICIONAR ITEM DE SERVIÇO
     // ════════════════════════════════════════════════════════════════════════
 
-    @Transactional
-    public PedidoResponseDTO adicionarItemServico(Integer idPedido, ItemServicoRequestDTO dto) {
-        Pedido pedido = buscarPedidoComItens(idPedido);
-validarPodeAdicionarItem(pedido, "adição de item de serviço");
+@Transactional
+public PedidoResponseDTO adicionarItemServico(Integer idPedido, ItemServicoRequestDTO dto) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
+    validarPodeAdicionarItem(pedido, "adição de item de serviço");
 
-        adicionarItemServicoInterno(pedido, dto);
-        pedido.recalcularTotal();
-        pedidoRepository.save(pedido);
+    adicionarItemServicoInterno(pedido, dto);
 
-        log.info("Serviço {} adicionado ao pedido {}", dto.idServico, idPedido);
-        return toResponseDTO(pedido);
-    }
+    pedido.recalcularTotal();
+    pedido.setSyncStatus("PENDING_UPDATE");
+    pedidoRepository.saveAndFlush(pedido);
+
+    log.info("Serviço {} adicionado ao pedido {}", dto.idServico, idPedido);
+
+    return responderPedidoAtualizado(idPedido);
+}
 
     // ════════════════════════════════════════════════════════════════════════
     // d) EDITAR QUANTIDADE DE ITEM DE PRODUTO
@@ -229,28 +235,39 @@ validarPodeEditarOuRemoverItem(pedido, "editar item de serviço");
     // ════════════════════════════════════════════════════════════════════════
 
     @Transactional
-    public PedidoResponseDTO eliminarItemProduto(Integer idPedido, Integer idItemPedido) {
-        Pedido pedido = buscarPedidoComItens(idPedido);
-validarPodeEditarOuRemoverItem(pedido, "remover item de produto");
+public PedidoResponseDTO eliminarItemProduto(Integer idPedido, Integer idItemPedido) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
 
-        ItemPedido item = itemPedidoRepository
-                .findByIdItemPedidoAndPedidoIdPedido(idItemPedido, idPedido)
-                .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(idItemPedido, idPedido));
+    ItemPedido item = itemPedidoRepository
+            .findByIdItemPedidoAndPedidoIdPedido(idItemPedido, idPedido)
+            .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(idItemPedido, idPedido));
 
-        Produto produto = item.getProduto();
-        ajustarEstoqueSemMovimento(produto, item.getQuantidade());
-
-        pedido.getItensProduto().remove(item);
-        itemPedidoRepository.delete(item);
-
-        pedido.recalcularTotal();
-        pedidoRepository.save(pedido);
-
-        log.info("Item produto {} eliminado do pedido {}. Estoque produto {} restaurado em {}",
-                idItemPedido, idPedido, produto.getIdProduto(), item.getQuantidade());
-
-        return toResponseDTO(pedido);
+    if (pedidoJaConfirmadoComoCredito(pedido)
+            && Boolean.TRUE.equals(item.getConfirmadoCredito())) {
+        throw new IllegalStateException(
+                "Este item já pertence à versão confirmada do crédito e não pode ser removido."
+        );
     }
+
+    if (!pedidoJaConfirmadoComoCredito(pedido)) {
+        validarStatusEditavel(pedido, "remoção de item de produto");
+    }
+
+    Produto produto = item.getProduto();
+    ajustarEstoqueSemMovimento(produto, item.getQuantidade());
+
+    pedido.getItensProduto().remove(item);
+    itemPedidoRepository.delete(item);
+
+ pedido.recalcularTotal();
+pedido.setSyncStatus("PENDING_UPDATE");
+pedidoRepository.saveAndFlush(pedido);
+
+log.info("Item produto {} eliminado do pedido {}. Estoque produto {} restaurado em {}",
+        idItemPedido, idPedido, produto.getIdProduto(), item.getQuantidade());
+
+return responderPedidoAtualizado(idPedido);
+}
 
     @Transactional
 public void eliminar(Integer idPedido) {
@@ -266,24 +283,36 @@ public void eliminar(Integer idPedido) {
     // g) ELIMINAR ITEM DE SERVIÇO
     // ════════════════════════════════════════════════════════════════════════
 
-    @Transactional
-    public PedidoResponseDTO eliminarItemServico(Integer idPedido, Integer idItemServico) {
-        Pedido pedido = buscarPedidoComItens(idPedido);
-validarPodeEditarOuRemoverItem(pedido, "remover item de serviço");
+@Transactional
+public PedidoResponseDTO eliminarItemServico(Integer idPedido, Integer idItemServico) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
 
-        ItemPedidoServico item = itemPedidoServicoRepository
-                .findByIdItemServicoAndPedido_IdPedido(idItemServico, idPedido)
-                .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(idItemServico, idPedido));
+    ItemPedidoServico item = itemPedidoServicoRepository
+            .findByIdItemServicoAndPedido_IdPedido(idItemServico, idPedido)
+            .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(idItemServico, idPedido));
 
-        pedido.getItensServico().remove(item);
-        itemPedidoServicoRepository.delete(item);
-
-        pedido.recalcularTotal();
-        pedidoRepository.save(pedido);
-
-        log.info("Item serviço {} eliminado do pedido {}", idItemServico, idPedido);
-        return toResponseDTO(pedido);
+    if (pedidoJaConfirmadoComoCredito(pedido)
+            && Boolean.TRUE.equals(item.getConfirmadoCredito())) {
+        throw new IllegalStateException(
+                "Este item já pertence à versão confirmada do crédito e não pode ser removido."
+        );
     }
+
+    if (!pedidoJaConfirmadoComoCredito(pedido)) {
+        validarStatusEditavel(pedido, "remoção de item de serviço");
+    }
+
+    pedido.getItensServico().remove(item);
+    itemPedidoServicoRepository.delete(item);
+
+ pedido.recalcularTotal();
+pedido.setSyncStatus("PENDING_UPDATE");
+pedidoRepository.saveAndFlush(pedido);
+
+log.info("Item serviço {} eliminado do pedido {}", idItemServico, idPedido);
+
+return responderPedidoAtualizado(idPedido);
+}
 
     // ════════════════════════════════════════════════════════════════════════
     // h) FINALIZAR PEDIDO
@@ -493,6 +522,8 @@ public PedidoResponseDTO declararCredito(Integer idPedido, DeclararCreditoReques
         )
     );
 
+marcarItensComoConfirmadosNoCredito(pedido);
+
     pedido.setTipoVenda("CREDITO");
     pedido.setModalidadeCredito(dto.modalidadeCredito());
     pedido.setStatusPedido("em dívida");
@@ -700,30 +731,31 @@ private void validarPedidoCredito(Pedido pedido, String operacao) {
     // MÉTODOS PRIVADOS
     // ════════════════════════════════════════════════════════════════════════
 
-    private void adicionarItemProdutoInterno(Pedido pedido, Integer idProduto, Integer quantidade) {
-        Produto produto = produtoRepository.findById(idProduto)
-                .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + idProduto));
+private void adicionarItemProdutoInterno(Pedido pedido, Integer idProduto, Integer quantidade) {
+    Produto produto = produtoRepository.findById(idProduto)
+            .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + idProduto));
 
-        garantirEstoqueDisponivel(produto, quantidade);
+    garantirEstoqueDisponivel(produto, quantidade);
 
-        BigDecimal precoUnitario = produto.getPrecoPromocional() != null
-                ? produto.getPrecoPromocional()
-                : produto.getPreco();
+    BigDecimal precoUnitario = produto.getPrecoPromocional() != null
+            ? produto.getPrecoPromocional()
+            : produto.getPreco();
 
-        ItemPedido item = ItemPedido.builder()
-                .pedido(pedido)
-                .produto(produto)
-                .quantidade(quantidade)
-                .precoUnitario(precoUnitario)
-                .build();
+    ItemPedido item = ItemPedido.builder()
+            .pedido(pedido)
+            .produto(produto)
+            .quantidade(quantidade)
+            .precoUnitario(precoUnitario)
+            .confirmadoCredito(false)
+            .build();
 
-        itemPedidoRepository.save(item);
-        pedido.getItensProduto().add(item);
-        ajustarEstoqueSemMovimento(produto, -quantidade);
+    itemPedidoRepository.save(item);
+    pedido.getItensProduto().add(item);
+    ajustarEstoqueSemMovimento(produto, -quantidade);
 
-        log.info("Item produto '{}' criado | qty: {} | preço: {}",
-                produto.getNomeProduto(), quantidade, precoUnitario);
-    }
+    log.info("Item produto '{}' criado | qty: {} | preço: {}",
+            produto.getNomeProduto(), quantidade, precoUnitario);
+}
 
     /**
      * Valida existência e estado activo do serviço via ServicoService.
@@ -739,13 +771,26 @@ private void adicionarItemServicoInterno(Pedido pedido, ItemServicoRequestDTO dt
             .quantidade(dto.quantidade)
             .precoUnitario(servico.getPrecoUnitario())
             .observacoes(dto.observacoes)
+            .confirmadoCredito(false)
             .build();
 
-    itemPedidoServicoRepository.save(item);   // ✅ persiste com preço
+    itemPedidoServicoRepository.save(item);
     pedido.getItensServico().add(item);
 
     log.info("Item serviço '{}' criado | qty: {} | preço: {}",
             servico.getNomeServico(), dto.quantidade, servico.getPrecoUnitario());
+}
+
+private void marcarItensComoConfirmadosNoCredito(Pedido pedido) {
+    for (ItemPedido item : pedido.getItensProduto()) {
+        item.setConfirmadoCredito(true);
+        itemPedidoRepository.save(item);
+    }
+
+    for (ItemPedidoServico item : pedido.getItensServico()) {
+        item.setConfirmadoCredito(true);
+        itemPedidoServicoRepository.save(item);
+    }
 }
 
     private void ajustarEstoqueSemMovimento(Produto produto, int delta) {
@@ -866,6 +911,15 @@ private void associarClienteCreditoSePrimeiraDeclaracao(
         }
     }
 
+    private PedidoResponseDTO responderPedidoAtualizado(Integer idPedido) {
+    pedidoRepository.flush();
+
+    Pedido atualizado = buscarPedidoComItens(idPedido);
+    atualizado.recalcularTotal();
+
+    return toResponseDTO(atualizado);
+}
+
     private Pedido buscarPedidoComItens(Integer idPedido) {
         return pedidoRepository.findByIdComItens(idPedido)
                 .orElseThrow(() -> new PedidoNaoEncontradoException(idPedido));
@@ -919,32 +973,42 @@ dto.saldoDevedorCredito       = pedido.getSaldoDevedorCredito();
         return dto;
     }
 
- private ItemPedidoResponseDTO toItemPedidoResponseDTO(ItemPedido item) {
+private ItemPedidoResponseDTO toItemPedidoResponseDTO(ItemPedido item) {
     ItemPedidoResponseDTO dto = new ItemPedidoResponseDTO();
+
     dto.idItemPedido  = item.getIdItemPedido();
     dto.idProduto     = item.getProduto().getIdProduto();
     dto.nomeProduto   = item.getProduto().getNomeProduto();
     dto.quantidade    = item.getQuantidade();
     dto.precoUnitario = item.getPrecoUnitario();
-    // ✅ calcula no Java se a BD ainda não propagou
-    dto.subtotal      = item.getSubtotal() != null
+
+    dto.subtotal = item.getSubtotal() != null
             ? item.getSubtotal()
             : item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
+
+    dto.confirmadoCredito = Boolean.TRUE.equals(item.getConfirmadoCredito());
+
     return dto;
 }
 
 private ItemServicoResponseDTO toItemServicoResponseDTO(ItemPedidoServico item) {
     ItemServicoResponseDTO dto = new ItemServicoResponseDTO();
+
     dto.idItemServico  = item.getIdItemServico();
     dto.idServico      = item.getIdServico();
-    dto.nomeServico    = item.getServico() != null ? item.getServico().getNomeServico() : null;
+    dto.nomeServico    = item.getServico() != null
+            ? item.getServico().getNomeServico()
+            : null;
     dto.quantidade     = item.getQuantidade();
     dto.precoUnitario  = item.getPrecoUnitario();
-    // ✅ calcula no Java se a BD ainda não propagou
-    dto.subtotal       = item.getSubtotal() != null
+
+    dto.subtotal = item.getSubtotal() != null
             ? item.getSubtotal()
             : item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
-    dto.observacoes    = item.getObservacoes();
+
+    dto.observacoes = item.getObservacoes();
+    dto.confirmadoCredito = Boolean.TRUE.equals(item.getConfirmadoCredito());
+
     return dto;
 }
 }

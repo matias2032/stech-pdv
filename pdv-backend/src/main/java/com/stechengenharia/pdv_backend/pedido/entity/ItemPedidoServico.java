@@ -28,6 +28,8 @@ public class ItemPedidoServico {
     @Column(name = "preco_unitario", nullable = false, precision = 12, scale = 2)
     private BigDecimal precoUnitario;
 
+
+
     // subtotal é GENERATED ALWAYS AS (quantidade * preco_unitario) STORED
     // → insertable=false, updatable=false para que o JPA não tente escrever neste campo
 @org.hibernate.annotations.Generated
@@ -36,6 +38,9 @@ private BigDecimal subtotal;
 
     @Column(name = "observacoes", columnDefinition = "TEXT")
     private String observacoes;
+
+        @Column(name = "confirmado_credito", nullable = false)
+private Boolean confirmadoCredito = false;
 
     // ─── Construtor vazio (obrigatório pelo JPA) ─────────────────────────────
     public ItemPedidoServico() {}
@@ -51,7 +56,13 @@ private BigDecimal subtotal;
         public Builder quantidade(Integer v)       { i.quantidade = v;     return this; }
         public Builder precoUnitario(BigDecimal v) { i.precoUnitario = v;  return this; }
         public Builder observacoes(String v)       { i.observacoes = v;    return this; }
+        public Builder confirmadoCredito(Boolean v) {
+    i.confirmadoCredito = v;
+    return this;
+}
         public ItemPedidoServico build()           { return i; }
+
+
     }
 
     // ─── Getters ─────────────────────────────────────────────────────────────
@@ -63,6 +74,9 @@ private BigDecimal subtotal;
     public BigDecimal   getPrecoUnitario()  { return precoUnitario; }
     public BigDecimal   getSubtotal()       { return subtotal; }
     public String       getObservacoes()    { return observacoes; }
+    public Boolean getConfirmadoCredito() {
+    return confirmadoCredito;
+}
 
     // ─── Setters ─────────────────────────────────────────────────────────────
     public void setIdItemServico(Integer v)    { this.idItemServico = v; }
@@ -71,4 +85,7 @@ private BigDecimal subtotal;
     public void setQuantidade(Integer v)       { this.quantidade = v; }
     public void setPrecoUnitario(BigDecimal v) { this.precoUnitario = v; }
     public void setObservacoes(String v)       { this.observacoes = v; }
+    public void setConfirmadoCredito(Boolean confirmadoCredito) {
+    this.confirmadoCredito = confirmadoCredito;
+}
 }

@@ -44,6 +44,12 @@ class PedidoAtivoController {
     pedidoAtivo.value = pedido;
   }
 
+  void actualizarPedidoMantendoBloqueios(PedidoModel pedido) {
+  pedidoAtivo.value = pedido;
+}
+
+
+
   bool produtoEstaBloqueado(int idItemPedido) {
     return _edicaoCredito &&
         itensProdutoBloqueados.value.contains(idItemPedido);

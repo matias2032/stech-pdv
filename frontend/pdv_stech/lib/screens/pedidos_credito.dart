@@ -86,8 +86,15 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
     }
   }
 
-  Future<void> _editarPedidoCredito(PedidoModel pedido) async {
-  PedidoAtivoController.instance.definirEdicaoCredito(pedido);
+Future<void> _editarPedidoCredito(PedidoModel pedido) async {
+  final provider = context.read<PedidoProvider>();
+
+  // Busca versão completa/actualizada com itens
+  final atualizado = await provider.buscarPorId(pedido.idPedido);
+  final pedidoParaEditar = atualizado ?? pedido;
+
+  provider.definirPedidoActual(pedidoParaEditar);
+  PedidoAtivoController.instance.definirEdicaoCredito(pedidoParaEditar);
 
   await Navigator.of(context).pushNamed('/catalogo');
 

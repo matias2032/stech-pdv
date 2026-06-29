@@ -39,15 +39,17 @@ List<Pedido> findByStatusPedidoAndDeletedFalseOrderByDataPedidoDesc(String statu
 
 List<Pedido> findByIdUsuarioAndDeletedFalseOrderByDataPedidoDesc(Integer idUsuario);
 
-    @Query("""
-        SELECT p FROM Pedido p
-        LEFT JOIN FETCH p.itensProduto ip
-        LEFT JOIN FETCH ip.produto
-        LEFT JOIN FETCH p.itensServico is2
-        LEFT JOIN FETCH is2.servico
-        WHERE p.idPedido = :id
-        """)
-    Optional<Pedido> findByIdComItens(@Param("id") Integer id);
+@Query("""
+    SELECT DISTINCT p
+    FROM Pedido p
+    LEFT JOIN FETCH p.itensProduto ip
+    LEFT JOIN FETCH ip.produto
+    LEFT JOIN FETCH p.itensServico isv
+    LEFT JOIN FETCH isv.servico
+    WHERE p.idPedido = :idPedido
+      AND p.deleted = false
+""")
+Optional<Pedido> findByIdComItens(@Param("idPedido") Integer idPedido);
 
     // ─── Evolução de vendas por dia ──────────────────────────────────────────
 
@@ -98,8 +100,13 @@ List<Pedido> findByIdUsuarioAndDeletedFalseOrderByDataPedidoDesc(Integer idUsuar
             @Param("idUsuario") Integer idUsuario,
             @Param("dataInicio") LocalDateTime dataInicio);
 
-            @Query("SELECT COUNT(p) FROM Pedido p WHERE p.statusPedido = 'aberto'")
-            long contarPedidosAbertos();
+       @Query("""
+    SELECT COUNT(p)
+    FROM Pedido p
+    WHERE p.statusPedido = 'aberto'
+      AND p.deleted = false
+""")
+long contarPedidosAbertos();
 
             List<Pedido> findByIdClienteAndTipoVendaAndDeletedFalse(Long idCliente, String tipoVenda);
             List<Pedido> findByTipoVendaAndDeletedFalseOrderByDataPedidoDesc(String tipoVenda);

@@ -412,12 +412,11 @@ DeclararCreditoRequestModel(
 
 if (!mounted) return;
 
-// Mantém o pedido activo para permitir adicionar novos itens depois da venda a crédito.
-final pedidoParaEditar = pedidoCredito ?? widget.pedido;
+final pedidoFinal = pedidoCredito ?? widget.pedido;
 
-PedidoAtivoController.instance.definirEdicaoCredito(pedidoParaEditar);
 
-context.read<PedidoProvider>().buscarPorId(pedidoParaEditar.idPedido);
+PedidoAtivoController.instance.limpar();
+context.read<PedidoProvider>().limparPedidoActual();
 
 Navigator.pop(context, true);
   } catch (e) {

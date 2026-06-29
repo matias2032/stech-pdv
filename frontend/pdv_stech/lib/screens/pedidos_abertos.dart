@@ -40,21 +40,23 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
     await context.read<PedidoProvider>().listarPorStatus('aberto');
   }
 
-  List<PedidoModel> _pedidosVisiveis(PedidoProvider provider) {
-    final pedidos = [...provider.pedidos];
+List<PedidoModel> _pedidosVisiveis(PedidoProvider provider) {
+  final pedidos = [...provider.pedidos];
 
-    final pedidoAtivo = PedidoAtivoController.instance.pedidoAtivo.value;
+  final pedidoAtivo = PedidoAtivoController.instance.pedidoAtivo.value;
 
-    if (pedidoAtivo != null) {
-      final jaExiste = pedidos.any((p) => p.idPedido == pedidoAtivo.idPedido);
+  if (pedidoAtivo != null &&
+      PedidoAtivoController.instance.edicaoCredito &&
+      (pedidoAtivo.ehCredito || pedidoAtivo.estaEmDivida)) {
+    final jaExiste = pedidos.any((p) => p.idPedido == pedidoAtivo.idPedido);
 
-      if (!jaExiste) {
-        pedidos.insert(0, pedidoAtivo);
-      }
+    if (!jaExiste) {
+      pedidos.insert(0, pedidoAtivo);
     }
-
-    return pedidos;
   }
+
+  return pedidos;
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // ACÇÕES
@@ -141,72 +143,94 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
     await _carregar();
   }
 
-  Future<void> _eliminarItemProduto(ItemPedidoModel item) async {
-    if (_operacaoEmAndamento) return;
+Future<void> _eliminarItemProduto(ItemPedidoModel item) async {
+  if (_operacaoEmAndamento) return;
 
-    final ok = await _confirmarEliminarItem(
-      titulo: 'Remover produto',
-      mensagem: 'Deseja remover "${item.nomeProduto}" deste pedido?',
-    );
+  final ok = await _confirmarEliminarItem(
+    titulo: 'Remover produto',
+    mensagem: 'Deseja remover "${item.nomeProduto}" deste pedido?',
+  );
 
-    if (!ok) return;
+  if (!ok) return;
 
-    setState(() => _operacaoEmAndamento = true);
+  setState(() => _operacaoEmAndamento = true);
 
-    try {
-      final pedido = context.read<PedidoProvider>().pedidos.firstWhere(
-            (p) => p.itensProduto.any(
-              (i) => i.idItemPedido == item.idItemPedido,
-            ),
-          );
+  try {
+    final pedido = _buscarPedidoDoItemProduto(item);
 
-      await context.read<PedidoProvider>().eliminarItemProduto(
-            pedido.idPedido,
-            item.idItemPedido,
-          );
-
-      _snack('Produto removido do pedido', Colors.green);
-      await _carregar();
-    } catch (e) {
-      _snack('Erro ao remover produto: $e', _kAccent);
-    } finally {
-      if (mounted) setState(() => _operacaoEmAndamento = false);
+    if (pedido == null) {
+      throw Exception('Pedido do item não encontrado na lista visível.');
     }
-  }
 
-  Future<void> _eliminarItemServico(ItemPedidoServicoModel item) async {
-    if (_operacaoEmAndamento) return;
+    final atualizado = await context.read<PedidoProvider>().eliminarItemProduto(
+          pedido.idPedido,
+          item.idItemPedido,
+        );
 
-    final ok = await _confirmarEliminarItem(
-      titulo: 'Remover serviço',
-      mensagem:
-          'Deseja remover "${item.nomeServico ?? 'Serviço #${item.idServico}'}" deste pedido?',
-    );
+    if (atualizado != null) {
+      context.read<PedidoProvider>().definirPedidoActual(atualizado);
 
-    if (!ok) return;
-
-    setState(() => _operacaoEmAndamento = true);
-
-    try {
-      final pedido = context.read<PedidoProvider>().pedidos.firstWhere(
-            (p) => p.itensServico.any(
-              (i) => i.idItemServico == item.idItemServico,
-            ),
-          );
-
-      await context.read<PedidoProvider>().eliminarItemServico(
-            pedido.idPedido,
-            item.idItemServico,
-          );
-
-      _snack('Serviço removido do pedido', Colors.green);
-      await _carregar();
-    } catch (e) {
-      _snack('Erro ao remover serviço: $e', _kAccent);
-    } finally {
-      if (mounted) setState(() => _operacaoEmAndamento = false);
+      if (PedidoAtivoController.instance.edicaoCredito) {
+        PedidoAtivoController.instance
+            .actualizarPedidoMantendoBloqueios(atualizado);
+      } else {
+        PedidoAtivoController.instance.definir(atualizado);
+      }
     }
+
+    _snack('Produto removido do pedido', Colors.green);
+    await _carregar();
+  } catch (e) {
+    _snack('Erro ao remover produto: $e', _kAccent);
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
   }
+}
+
+Future<void> _eliminarItemServico(ItemPedidoServicoModel item) async {
+  if (_operacaoEmAndamento) return;
+
+  final ok = await _confirmarEliminarItem(
+    titulo: 'Remover serviço',
+    mensagem:
+        'Deseja remover "${item.nomeServico ?? 'Serviço #${item.idServico}'}" deste pedido?',
+  );
+
+  if (!ok) return;
+
+  setState(() => _operacaoEmAndamento = true);
+
+  try {
+    final pedido = _buscarPedidoDoItemServico(item);
+
+    if (pedido == null) {
+      throw Exception('Pedido do item não encontrado na lista visível.');
+    }
+
+    final atualizado = await context.read<PedidoProvider>().eliminarItemServico(
+          pedido.idPedido,
+          item.idItemServico,
+        );
+
+    if (atualizado != null) {
+      context.read<PedidoProvider>().definirPedidoActual(atualizado);
+
+      if (PedidoAtivoController.instance.edicaoCredito) {
+        PedidoAtivoController.instance
+            .actualizarPedidoMantendoBloqueios(atualizado);
+      } else {
+        PedidoAtivoController.instance.definir(atualizado);
+      }
+    }
+
+    _snack('Serviço removido do pedido', Colors.green);
+    await _carregar();
+  } catch (e) {
+    _snack('Erro ao remover serviço: $e', _kAccent);
+  } finally {
+    if (mounted) setState(() => _operacaoEmAndamento = false);
+  }
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // DIÁLOGOS
@@ -322,6 +346,34 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
       ),
     );
   }
+
+  PedidoModel? _buscarPedidoDoItemProduto(ItemPedidoModel item) {
+  final provider = context.read<PedidoProvider>();
+
+  for (final p in _pedidosVisiveis(provider)) {
+    final existe = p.itensProduto.any(
+      (i) => i.idItemPedido == item.idItemPedido,
+    );
+
+    if (existe) return p;
+  }
+
+  return null;
+}
+
+PedidoModel? _buscarPedidoDoItemServico(ItemPedidoServicoModel item) {
+  final provider = context.read<PedidoProvider>();
+
+  for (final p in _pedidosVisiveis(provider)) {
+    final existe = p.itensServico.any(
+      (i) => i.idItemServico == item.idItemServico,
+    );
+
+    if (existe) return p;
+  }
+
+  return null;
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   // BUILD
@@ -740,8 +792,10 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
           const SizedBox(width: 6),
           Builder(
             builder: (_) {
-              final bloqueado = PedidoAtivoController.instance
-                  .produtoEstaBloqueado(item.idItemPedido);
+final bloqueado = item.confirmadoCredito ||
+    PedidoAtivoController.instance.produtoEstaBloqueado(
+      item.idItemPedido,
+    );
 
               if (bloqueado) {
                 return const Tooltip(
@@ -822,8 +876,10 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
           const SizedBox(width: 6),
           Builder(
             builder: (_) {
-              final bloqueado = PedidoAtivoController.instance
-                  .servicoEstaBloqueado(item.idItemServico);
+final bloqueado = item.confirmadoCredito ||
+    PedidoAtivoController.instance.servicoEstaBloqueado(
+      item.idItemServico,
+    );
 
               if (bloqueado) {
                 return const Tooltip(

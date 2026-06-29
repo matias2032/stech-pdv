@@ -42,8 +42,14 @@ class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
   double get totalParcial       => precoEfetivo * _quantidade;
   bool   get temPromocao        => produto.precoPromocional != null;
   bool   get semEstoque         => produto.quantidadeEstoque == 0;
-PedidoModel? get _pedidoAtivo => context.read<PedidoProvider>().pedidoActual;
-bool get _temPedidoAtivo      => _pedidoAtivo != null;
+PedidoModel? get _pedidoAtivo =>
+    PedidoAtivoController.instance.pedidoAtivo.value ??
+    context.read<PedidoProvider>().pedidoActual;
+
+bool get _temPedidoAtivo => _pedidoAtivo != null;
+
+bool get _edicaoCredito =>
+    PedidoAtivoController.instance.edicaoCredito;
 
   String get nomesMarcas {
     if (produto.marcas.isEmpty) return 'Sem marca';
@@ -119,10 +125,18 @@ Future<void> _adicionarAoPedido() async {
     if (provider.status == PedidoStatus.success) {
         context.read<ProdutoProvider>().listarAtivos(); 
         
- final resultado = provider.pedidoActual!;
+final resultado = provider.pedidoActual!;
 
-// ADICIONADO: atualiza imediatamente o badge de pedidos abertos
-PedidoAtivoController.instance.definir(resultado);
+if (_edicaoCredito || resultado.ehCredito || resultado.estaEmDivida) {
+  context.read<PedidoProvider>().definirPedidoActual(resultado);
+
+  // Importante:
+  // Não recalcula os bloqueios, senão o novo item também fica bloqueado.
+  PedidoAtivoController.instance.actualizarPedidoMantendoBloqueios(resultado);
+} else {
+  context.read<PedidoProvider>().definirPedidoActual(resultado);
+  PedidoAtivoController.instance.definir(resultado);
+}
 
 _snack(
   _temPedidoAtivo
@@ -484,48 +498,70 @@ Navigator.pop(context, resultado);
   // SUBSTITUI O MÉTODO INTEIRO:
 
 Widget _buildBotao() {
-  // context.watch → redesenha o botão sempre que o Provider mudar
-  final pedidoActual = context.watch<PedidoProvider>().pedidoActual;
-  final adicionando  = pedidoActual != null;
+  return ValueListenableBuilder<PedidoModel?>(
+    valueListenable: PedidoAtivoController.instance.pedidoAtivo,
+    builder: (_, pedidoAtivoController, __) {
+      final pedidoActual =
+          pedidoAtivoController ?? context.watch<PedidoProvider>().pedidoActual;
 
-  final label = _criandoPedido
-      ? (adicionando ? 'A adicionar...' : 'A criar pedido...')
-      : semEstoque
-          ? 'Produto Indisponível'
-          : adicionando
-              ? 'Adicionar ao ${pedidoActual.referencia}'
-              : 'Criar Pedido';
+      final adicionando = pedidoActual != null;
+      final edicaoCredito = PedidoAtivoController.instance.edicaoCredito;
 
-  final icone = _criandoPedido
-      ? const SizedBox(
-          width: 18, height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-        )
-      : Icon(semEstoque
-          ? Icons.block
-          : adicionando
-              ? Icons.add_shopping_cart
-              : Icons.shopping_cart_checkout);
+      final label = _criandoPedido
+          ? (adicionando ? 'A adicionar...' : 'A criar pedido...')
+          : semEstoque
+              ? 'Produto Indisponível'
+              : adicionando
+                  ? edicaoCredito
+                      ? 'Adicionar ao crédito ${pedidoActual.referencia}'
+                      : 'Adicionar ao ${pedidoActual.referencia}'
+                  : 'Criar Pedido';
 
-  return SizedBox(
-    width: double.infinity,
-    height: 48,
-    child: ElevatedButton.icon(
-      onPressed: semEstoque || _criandoPedido ? null : _adicionarAoPedido,
-      icon: icone,
-      label: Text(label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: semEstoque
-            ? Colors.grey
-            : adicionando
-                ? Colors.green[700]
-                : _kPrimary,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: semEstoque ? 0 : 3,
-      ),
-    ),
+      final icone = _criandoPedido
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Icon(
+              semEstoque
+                  ? Icons.block
+                  : adicionando
+                      ? Icons.add_shopping_cart
+                      : Icons.shopping_cart_checkout,
+            );
+
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: semEstoque || _criandoPedido ? null : _adicionarAoPedido,
+          icon: icone,
+          label: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: semEstoque
+                ? Colors.grey
+                : adicionando
+                    ? Colors.green[700]
+                    : _kPrimary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: semEstoque ? 0 : 3,
+          ),
+        ),
+      );
+    },
   );
 }
 

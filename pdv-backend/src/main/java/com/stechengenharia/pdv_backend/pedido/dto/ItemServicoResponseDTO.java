@@ -1,9 +1,9 @@
 package com.stechengenharia.pdv_backend.pedido.dto;
- 
+
 import java.math.BigDecimal;
- 
+
 public class ItemServicoResponseDTO {
- 
+
     public Integer    idItemServico;
     public Integer    idServico;
     public String     nomeServico;
@@ -11,4 +11,5 @@ public class ItemServicoResponseDTO {
     public BigDecimal precoUnitario;
     public BigDecimal subtotal;
     public String     observacoes;
+    public Boolean    confirmadoCredito;
 }

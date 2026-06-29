@@ -41,12 +41,13 @@ class TipoPagamentoModel {
 // ─── Item de Produto (response) ───────────────────────────────────────────────
 
 class ItemPedidoModel {
-  final int    idItemPedido;
-  final int    idProduto;
+  final int idItemPedido;
+  final int idProduto;
   final String nomeProduto;
-  final int    quantidade;
+  final int quantidade;
   final double precoUnitario;
   final double subtotal;
+  final bool confirmadoCredito;
 
   const ItemPedidoModel({
     required this.idItemPedido,
@@ -55,37 +56,40 @@ class ItemPedidoModel {
     required this.quantidade,
     required this.precoUnitario,
     required this.subtotal,
+    this.confirmadoCredito = false,
   });
 
   factory ItemPedidoModel.fromJson(Map<String, dynamic> json) => ItemPedidoModel(
-        idItemPedido:  json['idItemPedido']              as int,
-        idProduto:     json['idProduto']                 as int,
-        nomeProduto:   json['nomeProduto']               as String,
-        quantidade:    json['quantidade']                as int,
+        idItemPedido: _parseInt(json['idItemPedido']),
+        idProduto: _parseInt(json['idProduto']),
+        nomeProduto: json['nomeProduto'] as String,
+        quantidade: _parseInt(json['quantidade']),
         precoUnitario: (json['precoUnitario'] as num?)?.toDouble() ?? 0.0,
-        subtotal:      (json['subtotal']      as num?)?.toDouble() ?? 0.0,
+        subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+        confirmadoCredito: json['confirmadoCredito'] == true,
       );
 
   Map<String, dynamic> toJson() => {
-        'idItemPedido':  idItemPedido,
-        'idProduto':     idProduto,
-        'nomeProduto':   nomeProduto,
-        'quantidade':    quantidade,
+        'idItemPedido': idItemPedido,
+        'idProduto': idProduto,
+        'nomeProduto': nomeProduto,
+        'quantidade': quantidade,
         'precoUnitario': precoUnitario,
-        'subtotal':      subtotal,
+        'subtotal': subtotal,
+        'confirmadoCredito': confirmadoCredito,
       };
 }
-
 // ─── Item de Serviço (response) ───────────────────────────────────────────────
 
 class ItemPedidoServicoModel {
-  final int     idItemServico;
-  final int     idServico;
+  final int idItemServico;
+  final int idServico;
   final String? nomeServico;
-  final int     quantidade;
-  final double  precoUnitario;
-  final double  subtotal;
+  final int quantidade;
+  final double precoUnitario;
+  final double subtotal;
   final String? observacoes;
+  final bool confirmadoCredito;
 
   const ItemPedidoServicoModel({
     required this.idItemServico,
@@ -95,27 +99,30 @@ class ItemPedidoServicoModel {
     required this.precoUnitario,
     required this.subtotal,
     this.observacoes,
+    this.confirmadoCredito = false,
   });
 
   factory ItemPedidoServicoModel.fromJson(Map<String, dynamic> json) =>
       ItemPedidoServicoModel(
-        idItemServico: json['idItemServico']              as int,
-        idServico:     json['idServico']                  as int,
-        nomeServico:   json['nomeServico']                as String?,
-        quantidade:    json['quantidade']                 as int,
+        idItemServico: _parseInt(json['idItemServico']),
+        idServico: _parseInt(json['idServico']),
+        nomeServico: json['nomeServico'] as String?,
+        quantidade: _parseInt(json['quantidade']),
         precoUnitario: (json['precoUnitario'] as num?)?.toDouble() ?? 0.0,
-        subtotal:      (json['subtotal']      as num?)?.toDouble() ?? 0.0,
-        observacoes:   json['observacoes']                as String?,
+        subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+        observacoes: json['observacoes'] as String?,
+        confirmadoCredito: json['confirmadoCredito'] == true,
       );
 
   Map<String, dynamic> toJson() => {
         'idItemServico': idItemServico,
-        'idServico':     idServico,
-        'nomeServico':   nomeServico,
-        'quantidade':    quantidade,
+        'idServico': idServico,
+        'nomeServico': nomeServico,
+        'quantidade': quantidade,
         'precoUnitario': precoUnitario,
-        'subtotal':      subtotal,
-        'observacoes':   observacoes,
+        'subtotal': subtotal,
+        'observacoes': observacoes,
+        'confirmadoCredito': confirmadoCredito,
       };
 }
 
