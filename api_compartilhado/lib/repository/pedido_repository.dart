@@ -508,18 +508,41 @@ Future<PedidoModel> editarQuantidadeItemServico(
 }
 
 Future<PedidoModel> eliminarItemProduto(int idPedido, int idItemPedido) async {
-  await _bloquearAlteracaoItemSeCredito(idPedido);
-
   if (_connectivity.isOnline) {
     final m = await _service.eliminarItemProduto(idPedido, idItemPedido);
     await _upsertPedidoComItens(m);
     return m;
   }
 
+  final rowPedido = await _dao.getById(idPedido);
+  if (rowPedido == null) {
+    throw Exception('Pedido não encontrado no cache local.');
+  }
+
+  final pedido = await _pedidoComItensDoCache(rowPedido);
+
+  final item = pedido.itensProduto.firstWhere(
+    (i) => i.idItemPedido == idItemPedido,
+    orElse: () => throw Exception('Item de produto não encontrado no pedido.'),
+  );
+
+  if ((pedido.ehCredito || pedido.estaEmDivida) && item.confirmadoCredito) {
+    throw Exception(
+      'Este item já pertence à versão confirmada do crédito e não pode ser removido.',
+    );
+  }
+
+  if (!pedido.ehCredito && !pedido.estaEmDivida) {
+    await _bloquearAlteracaoItemSeCredito(idPedido);
+  }
+
   await _db.delete('item_pedido', where: 'id = ?', whereArgs: [idItemPedido]);
 
+  await _recalcularTotalLocal(idPedido);
+
   await _syncQueueDao.enqueue('pedido', 'REMOVE_ITEM_PRODUTO', {
-    'idPedido': idPedido,
+    'idPedido': idPedido.isNegative ? null : idPedido,
+    'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
     'idItemPedido': idItemPedido,
   });
 
@@ -528,12 +551,32 @@ Future<PedidoModel> eliminarItemProduto(int idPedido, int idItemPedido) async {
 }
 
 Future<PedidoModel> eliminarItemServico(int idPedido, int idItemServico) async {
-  await _bloquearAlteracaoItemSeCredito(idPedido);
-
   if (_connectivity.isOnline) {
     final m = await _service.eliminarItemServico(idPedido, idItemServico);
     await _upsertPedidoComItens(m);
     return m;
+  }
+
+  final rowPedido = await _dao.getById(idPedido);
+  if (rowPedido == null) {
+    throw Exception('Pedido não encontrado no cache local.');
+  }
+
+  final pedido = await _pedidoComItensDoCache(rowPedido);
+
+  final item = pedido.itensServico.firstWhere(
+    (i) => i.idItemServico == idItemServico,
+    orElse: () => throw Exception('Item de serviço não encontrado no pedido.'),
+  );
+
+  if ((pedido.ehCredito || pedido.estaEmDivida) && item.confirmadoCredito) {
+    throw Exception(
+      'Este item já pertence à versão confirmada do crédito e não pode ser removido.',
+    );
+  }
+
+  if (!pedido.ehCredito && !pedido.estaEmDivida) {
+    await _bloquearAlteracaoItemSeCredito(idPedido);
   }
 
   await _db.delete(
@@ -542,8 +585,11 @@ Future<PedidoModel> eliminarItemServico(int idPedido, int idItemServico) async {
     whereArgs: [idItemServico],
   );
 
+  await _recalcularTotalLocal(idPedido);
+
   await _syncQueueDao.enqueue('pedido', 'REMOVE_ITEM_SERVICO', {
-    'idPedido': idPedido,
+    'idPedido': idPedido.isNegative ? null : idPedido,
+    'idPedidoLocal': idPedido.isNegative ? '$idPedido' : null,
     'idItemServico': idItemServico,
   });
 
