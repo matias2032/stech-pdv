@@ -125,7 +125,14 @@ Future<void> _adicionarAoPedido() async {
     if (provider.status == PedidoStatus.success) {
         context.read<ProdutoProvider>().listarAtivos(); 
         
-final resultado = provider.pedidoActual!;
+var resultado = provider.pedidoActual!;
+
+if (_edicaoCredito || resultado.ehCredito || resultado.estaEmDivida) {
+  final atualizado = await provider.buscarPorId(resultado.idPedido);
+  if (atualizado != null) {
+    resultado = atualizado;
+  }
+}
 
 if (_edicaoCredito || resultado.ehCredito || resultado.estaEmDivida) {
   context.read<PedidoProvider>().definirPedidoActual(resultado);

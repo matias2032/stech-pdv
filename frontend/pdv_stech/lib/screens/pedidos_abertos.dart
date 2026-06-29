@@ -40,18 +40,53 @@ class _PedidosAbertosScreenState extends State<PedidosAbertosScreen> {
     await context.read<PedidoProvider>().listarPorStatus('aberto');
   }
 
+  Future<void> _sincronizarPedidoCreditoAtivo() async {
+  final ativo = PedidoAtivoController.instance.pedidoAtivo.value;
+
+  if (ativo == null) return;
+  if (!PedidoAtivoController.instance.edicaoCredito) return;
+  if (!ativo.ehCredito && !ativo.estaEmDivida) return;
+
+  final provider = context.read<PedidoProvider>();
+
+  final atualizado = await provider.buscarPorId(ativo.idPedido);
+
+  if (atualizado != null) {
+    provider.definirPedidoActual(atualizado);
+
+    // Mantém os itens antigos bloqueados,
+    // mas actualiza a lista visível com os itens novos.
+    PedidoAtivoController.instance.actualizarPedidoMantendoBloqueios(
+      atualizado,
+    );
+  }
+}
+
 List<PedidoModel> _pedidosVisiveis(PedidoProvider provider) {
   final pedidos = [...provider.pedidos];
 
   final pedidoAtivo = PedidoAtivoController.instance.pedidoAtivo.value;
+  final pedidoActual = provider.pedidoActual;
 
-  if (pedidoAtivo != null &&
+  PedidoModel? creditoAtivo = pedidoAtivo;
+
+  if (pedidoActual != null &&
+      pedidoAtivo != null &&
+      pedidoActual.idPedido == pedidoAtivo.idPedido) {
+    creditoAtivo = pedidoActual;
+  }
+
+  if (creditoAtivo != null &&
       PedidoAtivoController.instance.edicaoCredito &&
-      (pedidoAtivo.ehCredito || pedidoAtivo.estaEmDivida)) {
-    final jaExiste = pedidos.any((p) => p.idPedido == pedidoAtivo.idPedido);
+      (creditoAtivo.ehCredito || creditoAtivo.estaEmDivida)) {
+    final index = pedidos.indexWhere(
+      (p) => p.idPedido == creditoAtivo!.idPedido,
+    );
 
-    if (!jaExiste) {
-      pedidos.insert(0, pedidoAtivo);
+    if (index == -1) {
+      pedidos.insert(0, creditoAtivo);
+    } else {
+      pedidos[index] = creditoAtivo;
     }
   }
 
@@ -120,29 +155,30 @@ List<PedidoModel> _pedidosVisiveis(PedidoProvider provider) {
     );
   }
 
-  Future<void> _editarPedido(PedidoModel pedido) async {
-    if (pedido.ehCredito || pedido.estaEmDivida) {
-      PedidoAtivoController.instance.definirEdicaoCredito(pedido);
-      context.read<PedidoProvider>().definirPedidoActual(pedido);
-    } else {
-      PedidoAtivoController.instance.definir(pedido);
-      context.read<PedidoProvider>().definirPedidoActual(pedido);
-    }
-
-    await Navigator.pushNamed(context, '/catalogo');
-
-    if (!mounted) return;
-
-    // Só limpa automaticamente pedidos normais.
-    // Pedido a crédito continua activo para permitir adicionar itens.
-    if (!pedido.ehCredito && !pedido.estaEmDivida) {
-      PedidoAtivoController.instance.limpar();
-      context.read<PedidoProvider>().limparPedidoActual();
-    }
-
-    await _carregar();
+Future<void> _editarPedido(PedidoModel pedido) async {
+  if (pedido.ehCredito || pedido.estaEmDivida) {
+    PedidoAtivoController.instance.definirEdicaoCredito(pedido);
+    context.read<PedidoProvider>().definirPedidoActual(pedido);
+  } else {
+    PedidoAtivoController.instance.definir(pedido);
+    context.read<PedidoProvider>().definirPedidoActual(pedido);
   }
 
+  await Navigator.pushNamed(context, '/catalogo');
+
+  if (!mounted) return;
+
+  if (pedido.ehCredito || pedido.estaEmDivida) {
+    await _sincronizarPedidoCreditoAtivo();
+  } else {
+    PedidoAtivoController.instance.limpar();
+    context.read<PedidoProvider>().limparPedidoActual();
+  }
+
+  await _carregar();
+
+  if (mounted) setState(() {});
+}
 Future<void> _eliminarItemProduto(ItemPedidoModel item) async {
   if (_operacaoEmAndamento) return;
 
@@ -180,6 +216,8 @@ Future<void> _eliminarItemProduto(ItemPedidoModel item) async {
 
     _snack('Produto removido do pedido', Colors.green);
     await _carregar();
+    await _sincronizarPedidoCreditoAtivo();
+if (mounted) setState(() {});
   } catch (e) {
     _snack('Erro ao remover produto: $e', _kAccent);
   } finally {
@@ -225,6 +263,8 @@ Future<void> _eliminarItemServico(ItemPedidoServicoModel item) async {
 
     _snack('Serviço removido do pedido', Colors.green);
     await _carregar();
+    await _sincronizarPedidoCreditoAtivo();
+if (mounted) setState(() {});
   } catch (e) {
     _snack('Erro ao remover serviço: $e', _kAccent);
   } finally {
