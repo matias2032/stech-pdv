@@ -16,15 +16,17 @@ const _kCinzaTexto = Color(0xFF6B7280);
 
 class _MenuItem {
   final IconData icon;
-  final String   title;
-  final String   route;
-  final int      badge;
+  final String title;
+  final String route;
+  final int badge;
+  final Color badgeColor;
 
   const _MenuItem({
     required this.icon,
     required this.title,
     required this.route,
     this.badge = 0,
+    this.badgeColor = _kVermelho,
   });
 }
 
@@ -66,7 +68,8 @@ class _AppSidebarState extends State<AppSidebar>
   final _pedidoService  = PedidoService();
 final _cotacaoService = CotacaoService();
 
-int _pedidosAbertos  = 0;
+int _pedidosAbertos = 0;
+int _pedidosEmDivida = 0;
 int _cotacoesAbertas = 0;
 int _cotacoesProntas = 0;
   // ─────────────────────────────────────────────────────────────────
@@ -84,10 +87,14 @@ int _cotacoesProntas = 0;
     );
 
 _carregarPedidosAbertos();
+_carregarPedidosEmDivida();
 _carregarCotacoes();
 
-PedidoAtivoController.instance.pedidoAtivo
-    .addListener(_carregarPedidosAbertos);
+PedidoAtivoController.instance.pedidoAtivo.addListener(() {
+  _carregarPedidosAbertos();
+  _carregarPedidosEmDivida();
+  PedidoAtivoController.instance.pedidoAtivo.addListener(_onPedidoAtivoChanged);
+});
 
 CotacaoAtivaController.instance.cotacaoAtiva
     .addListener(_carregarCotacoes);
@@ -101,10 +108,20 @@ CotacaoAtivaController.instance.cotacaoAtiva
   @override
   void dispose() {
     _animController.dispose();
-    PedidoAtivoController.instance.pedidoAtivo
-        .removeListener(_carregarPedidosAbertos);
+PedidoAtivoController.instance.pedidoAtivo.removeListener(() {
+  _carregarPedidosAbertos();
+  _carregarPedidosEmDivida();
+PedidoAtivoController.instance.pedidoAtivo.removeListener(_onPedidoAtivoChanged);
+});
     super.dispose();
   }
+
+  void _onPedidoAtivoChanged() {
+  _carregarPedidosAbertos();
+  _carregarPedidosEmDivida();
+}
+
+
 
   Future<void> _carregarPedidosAbertos() async {
     try {
@@ -112,6 +129,24 @@ CotacaoAtivaController.instance.cotacaoAtiva
       if (mounted) setState(() => _pedidosAbertos = total);
     } catch (_) {}
   }
+
+  Future<void> _carregarPedidosEmDivida() async {
+  try {
+    final pedidos = await _pedidoService.listarEmDivida();
+
+    final total = pedidos
+        .where((p) =>
+            p.estaEmDivida &&
+            p.ehCredito &&
+            !p.pagamentoPago &&
+            !p.estaFinalizado)
+        .length;
+
+    if (mounted) {
+      setState(() => _pedidosEmDivida = total);
+    }
+  } catch (_) {}
+}
 
   Future<void> _carregarCotacoes() async {
   try {
@@ -144,6 +179,7 @@ CotacaoAtivaController.instance.cotacaoAtiva
   void _expandirGrupoActivo() {
   for (final grupo in _grupos(
   _pedidosAbertos,
+  _pedidosEmDivida,
   _cotacoesAbertas,
   _cotacoesProntas,
 )) {
@@ -162,6 +198,7 @@ CotacaoAtivaController.instance.cotacaoAtiva
 
 List<_MenuGroup> _grupos(
   int pedidosAbertos,
+  int pedidosEmDivida,
   int cotacoesAbertas,
   int cotacoesProntas,
 ) => [
@@ -180,11 +217,13 @@ List<_MenuGroup> _grupos(
         title: 'Pedidos Finalizados',
         route: '/pedidos_finalizados',
       ),
-      _MenuItem(
-        icon: Icons.account_balance_wallet_rounded,
-        title: 'Pedidos à Crédito',
-        route: '/pedidos_credito',
-      ),
+_MenuItem(
+  icon: Icons.account_balance_wallet_rounded,
+  title: 'Pedidos à Crédito',
+  route: '/pedidos_credito',
+  badge: pedidosEmDivida,
+  badgeColor: Colors.amber,
+),
       _MenuItem(
         icon: Icons.receipt_long_rounded,
         title: 'Facturação',
@@ -331,6 +370,7 @@ _MenuGroup(
 
  final gruposBase = _grupos(
   _pedidosAbertos,
+  _pedidosEmDivida,
   _cotacoesAbertas,
   _cotacoesProntas,
 );
@@ -578,10 +618,10 @@ Widget _buildHeader(usuario) {
                 right: -6,
                 child: Container(
                   padding: const EdgeInsets.all(3),
-                  decoration: const BoxDecoration(
-                    color: _kVermelho,
-                    shape: BoxShape.circle,
-                  ),
+                decoration: BoxDecoration(
+  color: item.badgeColor,
+  shape: BoxShape.circle,
+),
                   child: Text(
                     item.badge > 99 ? '99+' : '${item.badge}',
                     style: const TextStyle(

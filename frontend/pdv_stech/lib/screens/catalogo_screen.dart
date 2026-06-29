@@ -1730,7 +1730,6 @@ Future<bool> _confirmarDialog(
 
 
 // catalogo_screen.dart — adicionar ao final do arquivo:
-
 class _BadgePedidosAbertos extends StatefulWidget {
   const _BadgePedidosAbertos();
 
@@ -1754,20 +1753,31 @@ class _BadgePedidosAbertosState extends State<_BadgePedidosAbertos> {
     return ValueListenableBuilder<PedidoModel?>(
       valueListenable: PedidoAtivoController.instance.pedidoAtivo,
       builder: (_, pedidoAtivo, __) {
+        final creditoEmEdicao = pedidoAtivo != null &&
+            PedidoAtivoController.instance.edicaoCredito &&
+            (pedidoAtivo.ehCredito || pedidoAtivo.estaEmDivida);
+
+        final pedidoAbertoAtivo = pedidoAtivo != null &&
+            pedidoAtivo.statusPedido.toLowerCase() == 'aberto';
+
         var count = pedidos.length;
 
         final ativoJaEstaNaLista = pedidoAtivo == null
             ? true
             : pedidos.any((p) => p.idPedido == pedidoAtivo.idPedido);
 
-        if (pedidoAtivo != null &&
-            pedidoAtivo.statusPedido.toLowerCase() == 'aberto' &&
-            !ativoJaEstaNaLista) {
+        // Pedido normal recém-criado: entra no badge vermelho imediatamente.
+        // Pedido a crédito em edição: entra no badge amarelo imediatamente.
+        if (!ativoJaEstaNaLista && (pedidoAbertoAtivo || creditoEmEdicao)) {
           count++;
         }
 
+        final badgeColor = creditoEmEdicao ? Colors.amber[700]! : _kAccent;
+
         return IconButton(
-          tooltip: 'Pedidos Abertos',
+          tooltip: creditoEmEdicao
+              ? 'Pedido a crédito em edição'
+              : 'Pedidos Abertos',
           onPressed: () async {
             await Navigator.push(
               context,
@@ -1784,10 +1794,18 @@ class _BadgePedidosAbertosState extends State<_BadgePedidosAbertos> {
             isLabelVisible: count > 0,
             label: Text(
               count > 99 ? '99+' : '$count',
-              style: const TextStyle(fontSize: 10, color: Colors.white),
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            backgroundColor: _kAccent,
-            child: const Icon(Icons.pending_actions_outlined),
+            backgroundColor: badgeColor,
+            child: Icon(
+              creditoEmEdicao
+                  ? Icons.credit_score_rounded
+                  : Icons.pending_actions_outlined,
+            ),
           ),
         );
       },

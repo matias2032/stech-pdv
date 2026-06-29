@@ -61,7 +61,10 @@ bool _carregandoCliente = false;
       final provider = context.read<PedidoProvider>();
 
 await provider.carregarTiposPagamento();
-await provider.carregarParcelas(_pedido.idPedido);
+
+// Parcelas desactivadas por enquanto.
+// await provider.carregarParcelas(_pedido.idPedido);
+
 await provider.carregarPagamentosCredito(_pedido.idPedido);
 
 _sincronizarPedidoDoProvider();
@@ -167,7 +170,7 @@ Future<void> _carregarCliente() async {
   }
 
   Future<void> _abrirDialogoPagamento({
-    required List<ParcelaCreditoModel> parcelas,
+    // required List<ParcelaCreditoModel> parcelas,
     required double saldoAtual,
   }) async {
     if (_operacaoEmAndamento) return;
@@ -190,7 +193,8 @@ Future<void> _carregarCliente() async {
     }
 
     int? idTipoPagamento = tiposPagamento.first.idTipoPagamento;
-    ParcelaCreditoModel? parcelaSelecionada = _proximaParcelaPendente(parcelas);
+// Parcelas desactivadas por enquanto.
+// ParcelaCreditoModel? parcelaSelecionada = _proximaParcelaPendente(parcelas);
 
     final valorCtrl = TextEditingController();
     final obsCtrl = TextEditingController();
@@ -258,31 +262,31 @@ Future<void> _carregarCliente() async {
                           setDialogState(() => idTipoPagamento = v);
                         },
                       ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<ParcelaCreditoModel?>(
-                        value: parcelaSelecionada,
-                        decoration: _dialogInputDecoration(
-                          'Parcela associada',
-                        ),
-                        items: [
-                          const DropdownMenuItem<ParcelaCreditoModel?>(
-                            value: null,
-                            child: Text('Pagamento geral da dívida'),
-                          ),
-                          ...parcelas.map(
-                            (p) => DropdownMenuItem<ParcelaCreditoModel?>(
-                              value: p,
-                              child: Text(
-                                'Parcela ${p.numeroParcela} — '
-                                '${_currencyFmt.format(p.saldoParcela ?? (p.valorParcela - p.valorPago))}',
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (v) {
-                          setDialogState(() => parcelaSelecionada = v);
-                        },
-                      ),
+                      // const SizedBox(height: 12),
+                      // DropdownButtonFormField<ParcelaCreditoModel?>(
+                      //   value: parcelaSelecionada,
+                      //   decoration: _dialogInputDecoration(
+                      //     'Parcela associada',
+                      //   ),
+                      //   items: [
+                      //     const DropdownMenuItem<ParcelaCreditoModel?>(
+                      //       value: null,
+                      //       child: Text('Pagamento geral da dívida'),
+                      //     ),
+                      //     ...parcelas.map(
+                      //       (p) => DropdownMenuItem<ParcelaCreditoModel?>(
+                      //         value: p,
+                      //         child: Text(
+                      //           'Parcela ${p.numeroParcela} — '
+                      //           '${_currencyFmt.format(p.saldoParcela ?? (p.valorParcela - p.valorPago))}',
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ],
+                      //   onChanged: (v) {
+                      //     setDialogState(() => parcelaSelecionada = v);
+                      //   },
+                      // ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: obsCtrl,
@@ -393,14 +397,11 @@ Future<void> _carregarCliente() async {
       final result = await provider.registarPagamentoCredito(
         _pedido.idPedido,
         RegistarPagamentoCreditoRequestModel(
-          idParcela: parcelaSelecionada?.idParcela,
-          idTipoPagamento: idTipoPagamento!,
-          idUsuario: SessaoService.instance.idUsuario,
-          valorPago: valorPago,
-          observacoes: observacoes ??
-              (parcelaSelecionada != null
-                  ? 'Pagamento da parcela ${parcelaSelecionada!.numeroParcela}'
-                  : 'Pagamento parcial da dívida'),
+       idParcela: null, // Parcelas desactivadas por enquanto.
+idTipoPagamento: idTipoPagamento!,
+idUsuario: SessaoService.instance.idUsuario,
+valorPago: valorPago,
+observacoes: observacoes ?? 'Pagamento parcial da dívida',
         ),
       );
 
@@ -541,7 +542,7 @@ double _calcularSaldoAnteriorDoPagamento(
 Future<void> _abrirReciboCredito(
   PagamentoCreditoModel pagamento,
   List<PagamentoCreditoModel> pagamentos,
-  List<ParcelaCreditoModel> parcelas,
+  // List<ParcelaCreditoModel> parcelas,
 ) async {
   if (_operacaoEmAndamento) return;
 
@@ -580,15 +581,15 @@ Future<void> _abrirReciboCredito(
         ? 0.0
         : saldoAnterior - pagamento.valorPago;
 
-    ParcelaCreditoModel? parcela;
+    // ParcelaCreditoModel? parcela;
 
-    if (pagamento.idParcela != null) {
-      try {
-        parcela = parcelas.firstWhere(
-          (p) => p.idParcela == pagamento.idParcela,
-        );
-      } catch (_) {}
-    }
+    // if (pagamento.idParcela != null) {
+    //   try {
+    //     parcela = parcelas.firstWhere(
+    //       (p) => p.idParcela == pagamento.idParcela,
+    //     );
+    //   } catch (_) {}
+    // }
 
     final reciboPdf = ReciboCreditoPdfModel.deApiModel(
       apiModel: reciboFiscal,
@@ -599,8 +600,8 @@ Future<void> _abrirReciboCredito(
       tipoPagamento: _nomeTipoPagamento(pagamento.idTipoPagamento),
       saldoAnterior: saldoAnterior,
       saldoRemanescente: saldoRemanescente,
-      numeroParcela: parcela?.numeroParcela,
-      totalParcelas: parcelas.isEmpty ? null : parcelas.length,
+      // numeroParcela: parcela?.numeroParcela,
+      // totalParcelas: parcelas.isEmpty ? null : parcelas.length,
       observacoes: pagamento.observacoes,
     );
 
@@ -619,243 +620,243 @@ Future<void> _abrirReciboCredito(
 
 
 
-  Future<void> _abrirDialogoParcelas({
-    required List<ParcelaCreditoModel> parcelas,
-    required double saldoAtual,
-  }) async {
-    if (_operacaoEmAndamento) return;
+  // Future<void> _abrirDialogoParcelas({
+  //   required List<ParcelaCreditoModel> parcelas,
+  //   required double saldoAtual,
+  // }) async {
+  //   if (_operacaoEmAndamento) return;
 
-    if (saldoAtual <= 0) {
-      _snack('Esta dívida já está liquidada.', Colors.green);
-      return;
-    }
+  //   if (saldoAtual <= 0) {
+  //     _snack('Esta dívida já está liquidada.', Colors.green);
+  //     return;
+  //   }
 
-    int numeroParcelas = 3;
-    DateTime primeiroVencimento =
-        DateTime.now().add(const Duration(days: 30));
+  //   int numeroParcelas = 3;
+  //   DateTime primeiroVencimento =
+  //       DateTime.now().add(const Duration(days: 30));
 
-    String? erro;
+  //   String? erro;
 
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              title: const Text(
-                'Criar parcelas',
-                style: TextStyle(
-                  color: _kAzul,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              content: SizedBox(
-                width: 440,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _DialogInfoBox(
-                      icon: Icons.account_balance_wallet_outlined,
-                      texto:
-                          'Saldo a parcelar: ${_currencyFmt.format(saldoAtual)}',
-                      cor: _kAzul,
-                    ),
-                    if (parcelas.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      _DialogInfoBox(
-                        icon: Icons.warning_amber_rounded,
-                        texto:
-                            'Esta dívida já possui parcelas. Criar novas parcelas pode substituir ou sobrepor o plano actual, conforme a regra do repository/backend.',
-                        cor: Colors.orange,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
-                      value: numeroParcelas,
-                      decoration:
-                          _dialogInputDecoration('Número de parcelas'),
-                      items: List.generate(12, (i) => i + 1)
-                          .map(
-                            (n) => DropdownMenuItem<int>(
-                              value: n,
-                              child: Text('$n parcela(s)'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setDialogState(() => numeroParcelas = v);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () async {
-                        final data = await showDatePicker(
-                          context: ctx,
-                          initialDate: primeiroVencimento,
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 3650),
-                          ),
-                        );
+  //   final confirmar = await showDialog<bool>(
+  //     context: context,
+  //     builder: (ctx) {
+  //       return StatefulBuilder(
+  //         builder: (ctx, setDialogState) {
+  //           return AlertDialog(
+  //             shape: RoundedRectangleBorder(
+  //               borderRadius: BorderRadius.circular(14),
+  //             ),
+  //             title: const Text(
+  //               'Criar parcelas',
+  //               style: TextStyle(
+  //                 color: _kAzul,
+  //                 fontWeight: FontWeight.w700,
+  //               ),
+  //             ),
+  //             content: SizedBox(
+  //               width: 440,
+  //               child: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: [
+  //                   _DialogInfoBox(
+  //                     icon: Icons.account_balance_wallet_outlined,
+  //                     texto:
+  //                         'Saldo a parcelar: ${_currencyFmt.format(saldoAtual)}',
+  //                     cor: _kAzul,
+  //                   ),
+  //                   if (parcelas.isNotEmpty) ...[
+  //                     const SizedBox(height: 10),
+  //                     _DialogInfoBox(
+  //                       icon: Icons.warning_amber_rounded,
+  //                       texto:
+  //                           'Esta dívida já possui parcelas. Criar novas parcelas pode substituir ou sobrepor o plano actual, conforme a regra do repository/backend.',
+  //                       cor: Colors.orange,
+  //                     ),
+  //                   ],
+  //                   const SizedBox(height: 12),
+  //                   DropdownButtonFormField<int>(
+  //                     value: numeroParcelas,
+  //                     decoration:
+  //                         _dialogInputDecoration('Número de parcelas'),
+  //                     items: List.generate(12, (i) => i + 1)
+  //                         .map(
+  //                           (n) => DropdownMenuItem<int>(
+  //                             value: n,
+  //                             child: Text('$n parcela(s)'),
+  //                           ),
+  //                         )
+  //                         .toList(),
+  //                     onChanged: (v) {
+  //                       if (v == null) return;
+  //                       setDialogState(() => numeroParcelas = v);
+  //                     },
+  //                   ),
+  //                   const SizedBox(height: 12),
+  //                   InkWell(
+  //                     borderRadius: BorderRadius.circular(10),
+  //                     onTap: () async {
+  //                       final data = await showDatePicker(
+  //                         context: ctx,
+  //                         initialDate: primeiroVencimento,
+  //                         firstDate: DateTime.now(),
+  //                         lastDate: DateTime.now().add(
+  //                           const Duration(days: 3650),
+  //                         ),
+  //                       );
 
-                        if (data != null) {
-                          setDialogState(() => primeiroVencimento = data);
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: _dialogInputDecoration(
-                          'Primeiro vencimento',
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(_dateFmt.format(primeiroVencimento)),
-                            const Icon(
-                              Icons.calendar_month_outlined,
-                              color: _kAzul,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _PreviewParcelas(
-                      total: saldoAtual,
-                      numeroParcelas: numeroParcelas,
-                      primeiroVencimento: primeiroVencimento,
-                      currencyFmt: _currencyFmt,
-                      dateFmt: _dateFmt,
-                    ),
-                    if (erro != null) ...[
-                      const SizedBox(height: 10),
-                      _DialogInfoBox(
-                        icon: Icons.warning_amber_rounded,
-                        texto: erro!,
-                        cor: _kVermelho,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(color: _kCinzaTexto),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    if (numeroParcelas <= 0) {
-                      setDialogState(() {
-                        erro = 'Informe um número válido de parcelas.';
-                      });
-                      return;
-                    }
+  //                       if (data != null) {
+  //                         setDialogState(() => primeiroVencimento = data);
+  //                       }
+  //                     },
+  //                     child: InputDecorator(
+  //                       decoration: _dialogInputDecoration(
+  //                         'Primeiro vencimento',
+  //                       ),
+  //                       child: Row(
+  //                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                         children: [
+  //                           Text(_dateFmt.format(primeiroVencimento)),
+  //                           const Icon(
+  //                             Icons.calendar_month_outlined,
+  //                             color: _kAzul,
+  //                           ),
+  //                         ],
+  //                       ),
+  //                     ),
+  //                   ),
+  //                   const SizedBox(height: 12),
+  //                   _PreviewParcelas(
+  //                     total: saldoAtual,
+  //                     numeroParcelas: numeroParcelas,
+  //                     primeiroVencimento: primeiroVencimento,
+  //                     currencyFmt: _currencyFmt,
+  //                     dateFmt: _dateFmt,
+  //                   ),
+  //                   if (erro != null) ...[
+  //                     const SizedBox(height: 10),
+  //                     _DialogInfoBox(
+  //                       icon: Icons.warning_amber_rounded,
+  //                       texto: erro!,
+  //                       cor: _kVermelho,
+  //                     ),
+  //                   ],
+  //                 ],
+  //               ),
+  //             ),
+  //             actions: [
+  //               TextButton(
+  //                 onPressed: () => Navigator.pop(ctx, false),
+  //                 child: const Text(
+  //                   'Cancelar',
+  //                   style: TextStyle(color: _kCinzaTexto),
+  //                 ),
+  //               ),
+  //               ElevatedButton.icon(
+  //                 onPressed: () {
+  //                   if (numeroParcelas <= 0) {
+  //                     setDialogState(() {
+  //                       erro = 'Informe um número válido de parcelas.';
+  //                     });
+  //                     return;
+  //                   }
 
-                    Navigator.pop(ctx, true);
-                  },
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('Criar parcelas'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kAzul,
-                    foregroundColor: _kBranco,
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+  //                   Navigator.pop(ctx, true);
+  //                 },
+  //                 icon: const Icon(Icons.check_rounded),
+  //                 label: const Text('Criar parcelas'),
+  //                 style: ElevatedButton.styleFrom(
+  //                   backgroundColor: _kAzul,
+  //                   foregroundColor: _kBranco,
+  //                 ),
+  //               ),
+  //             ],
+  //           );
+  //         },
+  //       );
+  //     },
+  //   );
 
-    if (confirmar != true) return;
+  //   if (confirmar != true) return;
 
-    setState(() => _operacaoEmAndamento = true);
+  //   setState(() => _operacaoEmAndamento = true);
 
-    try {
-      final provider = context.read<PedidoProvider>();
+  //   try {
+  //     final provider = context.read<PedidoProvider>();
 
-      final parcelasRequest = _gerarParcelasRequest(
-        total: saldoAtual,
-        numeroParcelas: numeroParcelas,
-        primeiroVencimento: primeiroVencimento,
-      );
+  //     final parcelasRequest = _gerarParcelasRequest(
+  //       total: saldoAtual,
+  //       numeroParcelas: numeroParcelas,
+  //       primeiroVencimento: primeiroVencimento,
+  //     );
 
-      final criadas = await provider.criarParcelas(
-        _pedido.idPedido,
-        CriarParcelasRequestModel(parcelas: parcelasRequest),
-      );
+  //     final criadas = await provider.criarParcelas(
+  //       _pedido.idPedido,
+  //       CriarParcelasRequestModel(parcelas: parcelasRequest),
+  //     );
 
-      if (!mounted) return;
+  //     if (!mounted) return;
 
-      if (criadas.isNotEmpty && provider.errorMessage == null) {
-        _snack('Parcelas criadas com sucesso.', Colors.green);
-        await _carregar();
-      } else {
-        _snack(
-          provider.errorMessage ?? 'Não foi possível criar as parcelas.',
-          _kVermelho,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _operacaoEmAndamento = false);
-    }
-  }
+  //     if (criadas.isNotEmpty && provider.errorMessage == null) {
+  //       _snack('Parcelas criadas com sucesso.', Colors.green);
+  //       await _carregar();
+  //     } else {
+  //       _snack(
+  //         provider.errorMessage ?? 'Não foi possível criar as parcelas.',
+  //         _kVermelho,
+  //       );
+  //     }
+  //   } finally {
+  //     if (mounted) setState(() => _operacaoEmAndamento = false);
+  //   }
+  // }
 
-  List<CriarParcelaItemRequestModel> _gerarParcelasRequest({
-    required double total,
-    required int numeroParcelas,
-    required DateTime primeiroVencimento,
-  }) {
-    final parcelas = <CriarParcelaItemRequestModel>[];
+  // List<CriarParcelaItemRequestModel> _gerarParcelasRequest({
+  //   required double total,
+  //   required int numeroParcelas,
+  //   required DateTime primeiroVencimento,
+  // }) {
+  //   final parcelas = <CriarParcelaItemRequestModel>[];
 
-    final valorBase =
-        double.parse((total / numeroParcelas).toStringAsFixed(2));
+  //   final valorBase =
+  //       double.parse((total / numeroParcelas).toStringAsFixed(2));
 
-    double acumulado = 0;
+  //   double acumulado = 0;
 
-    for (var i = 1; i <= numeroParcelas; i++) {
-      final isUltima = i == numeroParcelas;
+  //   for (var i = 1; i <= numeroParcelas; i++) {
+  //     final isUltima = i == numeroParcelas;
 
-      final valor = isUltima
-          ? double.parse((total - acumulado).toStringAsFixed(2))
-          : valorBase;
+  //     final valor = isUltima
+  //         ? double.parse((total - acumulado).toStringAsFixed(2))
+  //         : valorBase;
 
-      acumulado += valor;
+  //     acumulado += valor;
 
-      parcelas.add(
-        CriarParcelaItemRequestModel(
-          numeroParcela: i,
-          valorParcela: valor,
-          dataVencimento: DateTime(
-            primeiroVencimento.year,
-            primeiroVencimento.month + (i - 1),
-            primeiroVencimento.day,
-          ),
-        ),
-      );
-    }
+  //     parcelas.add(
+  //       CriarParcelaItemRequestModel(
+  //         numeroParcela: i,
+  //         valorParcela: valor,
+  //         dataVencimento: DateTime(
+  //           primeiroVencimento.year,
+  //           primeiroVencimento.month + (i - 1),
+  //           primeiroVencimento.day,
+  //         ),
+  //       ),
+  //     );
+  //   }
 
-    return parcelas;
-  }
+  //   return parcelas;
+  // }
 
-  ParcelaCreditoModel? _proximaParcelaPendente(
-    List<ParcelaCreditoModel> parcelas,
-  ) {
-    final pendentes = parcelas
-        .where((p) => p.statusParcela.toUpperCase() != 'PAGA')
-        .toList()
-      ..sort((a, b) => a.numeroParcela.compareTo(b.numeroParcela));
+  // ParcelaCreditoModel? _proximaParcelaPendente(
+  //   List<ParcelaCreditoModel> parcelas,
+  // ) {
+  //   final pendentes = parcelas
+  //       .where((p) => p.statusParcela.toUpperCase() != 'PAGA')
+  //       .toList()
+  //     ..sort((a, b) => a.numeroParcela.compareTo(b.numeroParcela));
 
-    return pendentes.isEmpty ? null : pendentes.first;
-  }
+  //   return pendentes.isEmpty ? null : pendentes.first;
+  // }
 
   InputDecoration _dialogInputDecoration(
     String label, {
@@ -905,7 +906,8 @@ Future<void> _abrirReciboCredito(
   Widget build(BuildContext context) {
     final provider = context.watch<PedidoProvider>();
 
-    final parcelas = provider.parcelasCredito;
+// Parcelas desactivadas por enquanto.
+// final parcelas = provider.parcelasCredito;
     final pagamentos = provider.pagamentosCredito;
 
     final totalPago = _totalPagoEfetivo(pagamentos);
@@ -948,28 +950,23 @@ Future<void> _abrirReciboCredito(
   onAbrirFactura: _abrirFacturaCredito,
 ),
                       const SizedBox(height: 12),
-                      _AcoesCreditoCard(
-                        operacaoEmAndamento: _operacaoEmAndamento,
-                        saldo: saldo,
-                        onRegistarPagamento: () => _abrirDialogoPagamento(
-                          parcelas: parcelas,
-                          saldoAtual: saldo,
-                        ),
-                        onCriarParcelas: () => _abrirDialogoParcelas(
-                          parcelas: parcelas,
-                          saldoAtual: saldo,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _ParcelasCard(
-                        parcelas: parcelas,
-                        currencyFmt: _currencyFmt,
-                        dateFmt: _dateFmt,
-                        onCriarParcelas: () => _abrirDialogoParcelas(
-                          parcelas: parcelas,
-                          saldoAtual: saldo,
-                        ),
-                      ),
+                     _AcoesCreditoCard(
+  operacaoEmAndamento: _operacaoEmAndamento,
+  saldo: saldo,
+  onRegistarPagamento: () => _abrirDialogoPagamento(
+    saldoAtual: saldo,
+  ),
+),
+                      // const SizedBox(height: 12),
+                      // _ParcelasCard(
+                      //   parcelas: parcelas,
+                      //   currencyFmt: _currencyFmt,
+                      //   dateFmt: _dateFmt,
+                      //   onCriarParcelas: () => _abrirDialogoParcelas(
+                      //     parcelas: parcelas,
+                      //     saldoAtual: saldo,
+                      //   ),
+                      // ),
                       const SizedBox(height: 12),
                     _PagamentosCard(
   pagamentos: pagamentos,
@@ -978,7 +975,7 @@ Future<void> _abrirReciboCredito(
   onAbrirRecibo: (pagamento) => _abrirReciboCredito(
     pagamento,
     pagamentos,
-    parcelas,
+    // parcelas,
   ),
 ),
                     ],
@@ -1270,13 +1267,11 @@ class _AcoesCreditoCard extends StatelessWidget {
   final bool operacaoEmAndamento;
   final double saldo;
   final VoidCallback onRegistarPagamento;
-  final VoidCallback onCriarParcelas;
 
   const _AcoesCreditoCard({
     required this.operacaoEmAndamento,
     required this.saldo,
     required this.onRegistarPagamento,
-    required this.onCriarParcelas,
   });
 
   @override
@@ -1305,19 +1300,6 @@ class _AcoesCreditoCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: operacaoEmAndamento || liquidada ? null : onCriarParcelas,
-            icon: const Icon(Icons.view_timeline_outlined, size: 18),
-            label: const Text('Criar parcelas'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _kAzul,
-              side: const BorderSide(color: _kAzul),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1328,151 +1310,151 @@ class _AcoesCreditoCard extends StatelessWidget {
 // Parcelas
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _ParcelasCard extends StatelessWidget {
-  final List<ParcelaCreditoModel> parcelas;
-  final NumberFormat currencyFmt;
-  final DateFormat dateFmt;
-  final VoidCallback onCriarParcelas;
+// class _ParcelasCard extends StatelessWidget {
+//   final List<ParcelaCreditoModel> parcelas;
+//   final NumberFormat currencyFmt;
+//   final DateFormat dateFmt;
+//   final VoidCallback onCriarParcelas;
 
-  const _ParcelasCard({
-    required this.parcelas,
-    required this.currencyFmt,
-    required this.dateFmt,
-    required this.onCriarParcelas,
-  });
+//   const _ParcelasCard({
+//     required this.parcelas,
+//     required this.currencyFmt,
+//     required this.dateFmt,
+//     required this.onCriarParcelas,
+//   });
 
-  @override
-  Widget build(BuildContext context) {
-    return _CardBase(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _SectionTitle(
-                icon: Icons.view_timeline_outlined,
-                title: 'Parcelas',
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: onCriarParcelas,
-                icon: const Icon(Icons.add_rounded, size: 17),
-                label: const Text('Criar'),
-                style: TextButton.styleFrom(foregroundColor: _kAzul),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (parcelas.isEmpty)
-            const _EmptyBox(
-              icon: Icons.view_timeline_outlined,
-              text: 'Nenhuma parcela criada para esta dívida.',
-            )
-          else
-            Column(
-              children: parcelas
-                  .map(
-                    (p) => _LinhaParcela(
-                      parcela: p,
-                      currencyFmt: currencyFmt,
-                      dateFmt: dateFmt,
-                    ),
-                  )
-                  .toList(),
-            ),
-        ],
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return _CardBase(
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Row(
+//             children: [
+//               const _SectionTitle(
+//                 icon: Icons.view_timeline_outlined,
+//                 title: 'Parcelas',
+//               ),
+//               const Spacer(),
+//               TextButton.icon(
+//                 onPressed: onCriarParcelas,
+//                 icon: const Icon(Icons.add_rounded, size: 17),
+//                 label: const Text('Criar'),
+//                 style: TextButton.styleFrom(foregroundColor: _kAzul),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 10),
+//           if (parcelas.isEmpty)
+//             const _EmptyBox(
+//               icon: Icons.view_timeline_outlined,
+//               text: 'Nenhuma parcela criada para esta dívida.',
+//             )
+//           else
+//             Column(
+//               children: parcelas
+//                   .map(
+//                     (p) => _LinhaParcela(
+//                       parcela: p,
+//                       currencyFmt: currencyFmt,
+//                       dateFmt: dateFmt,
+//                     ),
+//                   )
+//                   .toList(),
+//             ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 
-class _LinhaParcela extends StatelessWidget {
-  final ParcelaCreditoModel parcela;
-  final NumberFormat currencyFmt;
-  final DateFormat dateFmt;
+// class _LinhaParcela extends StatelessWidget {
+//   final ParcelaCreditoModel parcela;
+//   final NumberFormat currencyFmt;
+//   final DateFormat dateFmt;
 
-  const _LinhaParcela({
-    required this.parcela,
-    required this.currencyFmt,
-    required this.dateFmt,
-  });
+//   const _LinhaParcela({
+//     required this.parcela,
+//     required this.currencyFmt,
+//     required this.dateFmt,
+//   });
 
-  @override
-  Widget build(BuildContext context) {
-    final saldo = parcela.saldoParcela ??
-        (parcela.valorParcela - parcela.valorPago).clamp(0, double.infinity);
+//   @override
+//   Widget build(BuildContext context) {
+//     final saldo = parcela.saldoParcela ??
+//         (parcela.valorParcela - parcela.valorPago).clamp(0, double.infinity);
 
-    final status = parcela.statusParcela.toUpperCase();
-    final paga = status == 'PAGA';
-    final parcial = status == 'PARCIAL';
+//     final status = parcela.statusParcela.toUpperCase();
+//     final paga = status == 'PAGA';
+//     final parcial = status == 'PARCIAL';
 
-    final cor = paga
-        ? Colors.green
-        : parcial
-            ? _kAzul
-            : _kVermelho;
+//     final cor = paga
+//         ? Colors.green
+//         : parcial
+//             ? _kAzul
+//             : _kVermelho;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: _kCinzaClaro,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: cor.withOpacity(0.10),
-            child: Text(
-              '${parcela.numeroParcela}',
-              style: TextStyle(
-                color: cor,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: _TextPair(
-              label: 'Vencimento',
-              value: dateFmt.format(parcela.dataVencimento),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _TextPair(
-              label: 'Valor',
-              value: currencyFmt.format(parcela.valorParcela),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _TextPair(
-              label: 'Pago',
-              value: currencyFmt.format(parcela.valorPago),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _TextPair(
-              label: 'Saldo',
-              value: currencyFmt.format(saldo),
-              valueColor: saldo <= 0 ? Colors.green : _kVermelho,
-            ),
-          ),
-          _StatusBadge(
-            label: _statusParcelaLabel(parcela.statusParcela),
-            color: cor,
-          ),
-        ],
-      ),
-    );
-  }
-}
+//     return Container(
+//       margin: const EdgeInsets.only(bottom: 8),
+//       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+//       decoration: BoxDecoration(
+//         color: _kCinzaClaro,
+//         borderRadius: BorderRadius.circular(10),
+//         border: Border.all(color: const Color(0xFFE5E7EB)),
+//       ),
+//       child: Row(
+//         children: [
+//           CircleAvatar(
+//             radius: 15,
+//             backgroundColor: cor.withOpacity(0.10),
+//             child: Text(
+//               '${parcela.numeroParcela}',
+//               style: TextStyle(
+//                 color: cor,
+//                 fontWeight: FontWeight.w800,
+//                 fontSize: 12,
+//               ),
+//             ),
+//           ),
+//           const SizedBox(width: 10),
+//           Expanded(
+//             flex: 2,
+//             child: _TextPair(
+//               label: 'Vencimento',
+//               value: dateFmt.format(parcela.dataVencimento),
+//             ),
+//           ),
+//           Expanded(
+//             flex: 2,
+//             child: _TextPair(
+//               label: 'Valor',
+//               value: currencyFmt.format(parcela.valorParcela),
+//             ),
+//           ),
+//           Expanded(
+//             flex: 2,
+//             child: _TextPair(
+//               label: 'Pago',
+//               value: currencyFmt.format(parcela.valorPago),
+//             ),
+//           ),
+//           Expanded(
+//             flex: 2,
+//             child: _TextPair(
+//               label: 'Saldo',
+//               value: currencyFmt.format(saldo),
+//               valueColor: saldo <= 0 ? Colors.green : _kVermelho,
+//             ),
+//           ),
+//           _StatusBadge(
+//             label: _statusParcelaLabel(parcela.statusParcela),
+//             color: cor,
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Pagamentos
@@ -2081,14 +2063,7 @@ String _formatarData(DateTime? data, DateFormat fmt) {
 }
 
 String _modalidadeLabel(String? modalidade) {
-  switch (modalidade?.toUpperCase()) {
-    case 'SEM_PARCELAS':
-      return 'Sem parcelas';
-    case 'PARCELADO':
-      return 'Parcelado';
-    default:
-      return '—';
-  }
+  return 'Sem parcelas';
 }
 
 String _statusLabel(PedidoModel pedido) {
