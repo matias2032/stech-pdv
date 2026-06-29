@@ -949,6 +949,118 @@ final bloqueado = item.confirmadoCredito ||
   }
 
   // ─── Rodapé do card ───────────────────────────────────────────────────────
+Widget _buildAcoesFinalizacaoNormal(PedidoModel pedido) {
+  return Container(
+    constraints: const BoxConstraints(maxWidth: 360),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: _kPrimary.withOpacity(0.035),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: _kPrimary.withOpacity(0.12),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.task_alt_rounded,
+              size: 16,
+              color: _kPrimary.withOpacity(0.8),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Escolha o tipo de finalização',
+              style: TextStyle(
+                color: _kPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Acção principal: venda normal
+        ElevatedButton.icon(
+          onPressed: _operacaoEmAndamento
+              ? null
+              : () => _abrirFinalizar(pedido),
+          icon: const Icon(Icons.check_circle_rounded, size: 19),
+          label: const Text(
+            'Finalizar venda normal',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _kPrimary,
+            foregroundColor: Colors.white,
+            elevation: 2,
+            minimumSize: const Size.fromHeight(44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(11),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Acção alternativa: crédito
+        InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: _operacaoEmAndamento ? null : () => _abrirCredito(pedido),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(
+                color: Colors.orange.withOpacity(0.35),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.credit_score_outlined,
+                  color: Colors.orange[800],
+                  size: 19,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Vender a crédito',
+                    style: TextStyle(
+                      color: Colors.orange[900],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  'Dívida',
+                  style: TextStyle(
+                    color: Colors.orange[800],
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.orange[800],
+                  size: 13,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+
 
   Widget _buildRodape(PedidoModel pedido, int totalItens) {
     final ehCredito = pedido.ehCredito || pedido.estaEmDivida;
@@ -1029,51 +1141,7 @@ final bloqueado = item.confirmadoCredito ||
             ),
           )
         else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              ElevatedButton.icon(
-                onPressed: _operacaoEmAndamento
-                    ? null
-                    : () => _abrirFinalizar(pedido),
-                icon: const Icon(Icons.check, size: 18),
-                label: const Text(
-                  'Finalizar',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kPrimary,
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _operacaoEmAndamento
-                    ? null
-                    : () => _abrirCredito(pedido),
-                icon: const Icon(Icons.credit_score_outlined, size: 17),
-                label: const Text(
-                  'Vender a crédito',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _kPrimary,
-                  side: const BorderSide(color: _kPrimary),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-              ),
-            ],
-          ),
+  _buildAcoesFinalizacaoNormal(pedido),
       ],
     );
   }

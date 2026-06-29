@@ -86,7 +86,98 @@ class _PedidosCreditoScreenState extends State<PedidosCreditoScreen> {
     }
   }
 
+  Future<bool> _confirmarEntradaEdicaoCredito(PedidoModel pedido) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          title: const Text(
+            'Editar dívida',
+            style: TextStyle(
+              color: _kAzul,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pedido.referencia,
+                style: const TextStyle(
+                  color: _kAzul,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Vai entrar no modo de edição deste pedido a crédito.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Todos os produtos ou serviços adicionados no catálogo serão anexados a esta dívida.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.amber.withOpacity(0.35),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.orange,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Use esta opção apenas quando quiser acrescentar novos itens à dívida.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _kCinzaTexto,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.edit_note_rounded),
+              label: const Text('Entrar em edição'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber[700],
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
+
 Future<void> _editarPedidoCredito(PedidoModel pedido) async {
+  final confirmar = await _confirmarEntradaEdicaoCredito(pedido);
+
+  if (!confirmar) return;
+
   final provider = context.read<PedidoProvider>();
 
   // Busca versão completa/actualizada com itens

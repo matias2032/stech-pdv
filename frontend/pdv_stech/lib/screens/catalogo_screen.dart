@@ -76,13 +76,20 @@ appBar: AppBar(
     ],
   ),
 ),
-      body: TabBarView(
+body: Column(
+  children: [
+    const _BannerEdicaoCredito(),
+    Expanded(
+      child: TabBarView(
         controller: _tabController,
         children: const [
           _ProdutosTab(),
           _ServicosTab(),
         ],
       ),
+    ),
+  ],
+),
     );
   }
 }
@@ -1806,6 +1813,122 @@ class _BadgePedidosAbertosState extends State<_BadgePedidosAbertos> {
                   ? Icons.credit_score_rounded
                   : Icons.pending_actions_outlined,
             ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BannerEdicaoCredito extends StatelessWidget {
+  const _BannerEdicaoCredito();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<PedidoModel?>(
+      valueListenable: PedidoAtivoController.instance.pedidoAtivo,
+      builder: (_, pedidoAtivo, __) {
+        final creditoEmEdicao = pedidoAtivo != null &&
+            PedidoAtivoController.instance.edicaoCredito &&
+            (pedidoAtivo.ehCredito || pedidoAtivo.estaEmDivida);
+
+        if (!creditoEmEdicao) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.amber[100],
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.amber.shade300,
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.amber[900],
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Editando crédito ${pedidoAtivo.referencia} — novos itens serão adicionados à dívida.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.amber[900],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  final sair = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          title: const Text(
+                            'Sair da edição?',
+                            style: TextStyle(
+                              color: _kPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          content: const Text(
+                            'Ao sair, os próximos itens adicionados no catálogo já não serão anexados a esta dívida.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Continuar edição'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber[700],
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Sair da edição'),
+                            ),
+                          ],
+                        ),
+                      ) ??
+                      false;
+
+                  if (!sair) return;
+
+                  PedidoAtivoController.instance.limpar();
+                  context.read<PedidoProvider>().limparPedidoActual();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Modo de edição de crédito desactivado.'),
+                      backgroundColor: Colors.amber[800],
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Sair'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.amber[900],
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
