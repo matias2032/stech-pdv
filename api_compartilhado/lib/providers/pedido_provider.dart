@@ -34,6 +34,7 @@ PedidoProvider({
 List<PagamentoCreditoModel>     _pagamentosCredito = [];
 Map<String, dynamic>            _extractoCliente = {};
 List<PedidoModel> _pedidosEmDivida = [];
+DevolucaoResponseModel? _ultimaDevolucao;
 
   PedidoStatus _status       = PedidoStatus.idle;
   String?      _errorMessage;
@@ -53,6 +54,7 @@ List<PagamentoCreditoModel> get pagamentosCredito =>
 
 Map<String, dynamic> get extractoCliente =>
     Map.unmodifiable(_extractoCliente);
+DevolucaoResponseModel? get ultimaDevolucao => _ultimaDevolucao;
   PedidoStatus                   get status         => _status;
   String?                        get errorMessage    => _errorMessage;
   bool                           get isLoading       => _status == PedidoStatus.loading;
@@ -236,6 +238,14 @@ Future<bool> cancelarPedido(
     }
     return _status == PedidoStatus.success;
   }
+
+  /// True se o último erro de [cancelarPedido] foi por o pedido já ter
+  /// factura emitida — a UI deve usar isto para redireccionar o utilizador
+  /// para o fluxo de devolução/Nota de Crédito em vez de repetir o cancelamento.
+  bool get erroEhPedidoJaFaturado =>
+      _status == PedidoStatus.error &&
+      _errorMessage != null &&
+      _errorMessage!.contains('PedidoJaFaturadoException');
   // ════════════════════════════════════════════════════════════════════════
   // CONSULTAS
   // ════════════════════════════════════════════════════════════════════════
@@ -418,9 +428,62 @@ Future<void> carregarExtractoCliente(int idCliente) async {
   }
 }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // DEVOLUÇÃO / TROCA / NOTA DE CRÉDITO
+  // ════════════════════════════════════════════════════════════════════════
 
+  Future<DevolucaoResponseModel?> processarDevolucaoOuTroca(
+    int idPedido,
+    DevolucaoRequestModel dto,
+  ) async {
+    final result = await _run(() => _repository.processarDevolucaoOuTroca(
+          idPedido,
+          DevolucaoRequestDTO(
+            idDocumentoOrigem: dto.idDocumentoOrigem,
+            motivo:            dto.motivo,
+            idUsuario:         dto.idUsuario,
+            codigoAt:          dto.codigoAt,
+            itensDevolvidos: dto.itensDevolvidos
+                .map((i) => ItemDevolvidoRequestDTO(
+                      idItemPedido:  i.idItemPedido,
+                      idItemServico: i.idItemServico,
+                      quantidade:    i.quantidade,
+                    ))
+                .toList(),
+            observacoes: dto.observacoes,
+          ),
+        ));
 
+    if (result != null) {
+      _ultimaDevolucao = DevolucaoResponseModel(
+        idNotaCredito:         result.idNotaCredito,
+        referenciaNotaCredito: result.referenciaNotaCredito,
+        idPedidoOrigem:        result.idPedidoOrigem,
+        valorCreditado:        result.valorCreditado,
+        motivo:                result.motivo,
+      );
 
+      // Recarrega o estoque, já que ERRO_PREENCHIMENTO não mexe nele mas
+      // DEVOLUCAO/TROCA_PRODUTO restauram quantidade — mais simples e
+      // seguro recarregar sempre do que decidir aqui qual foi o caso.
+      await _produtoProvider.listarAtivos();
+
+      // Remove o pedido da lista actual, se estiver lá (ex: já não é mais
+      // relevante para dívida em caso de anulação total).
+      _pedidos.removeWhere((p) => p.idPedido == idPedido);
+      _pedidosEmDivida.removeWhere((p) => p.idPedido == idPedido);
+
+      notifyListeners();
+      return _ultimaDevolucao;
+    }
+
+    return null;
+  }
+
+  void limparUltimaDevolucao() {
+    _ultimaDevolucao = null;
+    notifyListeners();
+  }
 
   @override
   void dispose() {

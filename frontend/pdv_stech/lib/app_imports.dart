@@ -72,3 +72,8 @@ export 'screens/detalhes_cliente.dart';
 export 'screens/despesa_list_screen.dart';
 export 'screens/despesa_form_screen.dart';
 export 'screens/despesas_excluidas_screen.dart';
+
+export 'screens/nota_debito_screen.dart';
+export 'screens/devolucao_troca_screen.dart';
+
+

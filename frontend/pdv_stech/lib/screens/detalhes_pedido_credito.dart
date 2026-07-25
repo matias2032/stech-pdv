@@ -5,6 +5,7 @@ import 'package:api_compartilhado/api_compartilhado.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:api_compartilhado/services/pdf_service.dart';
+import 'devolucao_troca_screen.dart';
 
 // ── Cores STech Engenharia ────────────────────────────────────────────────────
 const _kVermelho = Color(0xFFC8102E);
@@ -517,6 +518,37 @@ Future<void> _abrirFacturaCredito() async {
   }
 }
 
+/// Restrição temporária (decisão pendente): só permitido quando
+/// statusPagamento == PENDENTE — decidido no botão que chama este método.
+Future<void> _abrirDevolucao() async {
+  if (_operacaoEmAndamento) return;
+
+  final idDocumento = _pedido.idDocumentoFacturaCredito;
+
+  if (idDocumento == null || idDocumento == 0) {
+    _snack(
+      'Factura ainda não disponível. Sincronize o pedido primeiro.',
+      Colors.orange,
+    );
+    return;
+  }
+
+  final resultado = await Navigator.push<dynamic>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DevolucaoTrocaScreen(
+        idPedido: _pedido.idPedido,
+        idDocumentoOrigem: idDocumento,
+        pedidoInicial: _pedido,
+      ),
+    ),
+  );
+
+  if (resultado != null && mounted) {
+    await _carregar();
+  }
+}
+
 double _calcularSaldoAnteriorDoPagamento(
   PagamentoCreditoModel pagamento,
   List<PagamentoCreditoModel> pagamentos,
@@ -949,13 +981,14 @@ Future<void> _abrirReciboCredito(
   pedido: _pedido,
   onAbrirFactura: _abrirFacturaCredito,
 ),
-                      const SizedBox(height: 12),
-                     _AcoesCreditoCard(
+_AcoesCreditoCard(
   operacaoEmAndamento: _operacaoEmAndamento,
   saldo: saldo,
+  podeDevolver: _pedido.statusPagamento == 'PENDENTE',
   onRegistarPagamento: () => _abrirDialogoPagamento(
     saldoAtual: saldo,
   ),
+  onDevolver: _abrirDevolucao,
 ),
                       // const SizedBox(height: 12),
                       // _ParcelasCard(
@@ -1266,12 +1299,16 @@ class _FacturaPrincipalCard extends StatelessWidget {
 class _AcoesCreditoCard extends StatelessWidget {
   final bool operacaoEmAndamento;
   final double saldo;
+  final bool podeDevolver;
   final VoidCallback onRegistarPagamento;
+  final VoidCallback onDevolver;
 
   const _AcoesCreditoCard({
     required this.operacaoEmAndamento,
     required this.saldo,
+    required this.podeDevolver,
     required this.onRegistarPagamento,
+    required this.onDevolver,
   });
 
   @override
@@ -1279,27 +1316,51 @@ class _AcoesCreditoCard extends StatelessWidget {
     final liquidada = saldo <= 0;
 
     return _CardBase(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Expanded(
-            child: _SectionTitle(
-              icon: Icons.tune_rounded,
-              title: 'Acções da dívida',
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: _SectionTitle(
+                  icon: Icons.tune_rounded,
+                  title: 'Acções da dívida',
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: operacaoEmAndamento || liquidada
+                    ? null
+                    : onRegistarPagamento,
+                icon: const Icon(Icons.payments_outlined, size: 18),
+                label: const Text('Registar pagamento'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kAzul,
+                  foregroundColor: _kBranco,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
           ),
-          ElevatedButton.icon(
-            onPressed:
-                operacaoEmAndamento || liquidada ? null : onRegistarPagamento,
-            icon: const Icon(Icons.payments_outlined, size: 18),
-            label: const Text('Registar pagamento'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _kAzul,
-              foregroundColor: _kBranco,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+          if (podeDevolver) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: operacaoEmAndamento ? null : onDevolver,
+                icon: const Icon(Icons.assignment_return_outlined, size: 18),
+                label: const Text('Devolver / Anular'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kVermelho,
+                  side: const BorderSide(color: _kVermelho),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

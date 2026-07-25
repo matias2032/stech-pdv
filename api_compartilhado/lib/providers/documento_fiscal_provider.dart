@@ -246,6 +246,43 @@ _documentos = lista
   }
 }
 
+  // ─── NOTA DE CRÉDITO / DÉBITO ──────────────────────────────────────────────
+
+  Future<NotaRetificativaResponseModel?> emitirNotaRetificativa({
+    required int    idDocumentoOrigem,
+    required String codigoTipo,
+    required int    idUsuario,
+    required String codigoAt,
+    required String motivo,
+    required double valor,
+    String? observacoes,
+  }) async {
+    _emitindo = true;
+    _erro = null;
+    notifyListeners();
+    try {
+      final resposta = await _repository.emitirNotaRetificativa(
+        idDocumentoOrigem: idDocumentoOrigem,
+        codigoTipo:        codigoTipo,
+        idUsuario:         idUsuario,
+        codigoAt:          codigoAt,
+        motivo:            motivo,
+        valor:             valor,
+        observacoes:       observacoes,
+      );
+      _documentos.add(resposta.documento);
+      notifyListeners();
+      return resposta;
+    } catch (e) {
+      _erro = e.toString();
+      notifyListeners();
+      rethrow;
+    } finally {
+      _emitindo = false;
+      notifyListeners();
+    }
+  }
+
 
   // ─── Helper ───────────────────────────────────────────────────────────────
 

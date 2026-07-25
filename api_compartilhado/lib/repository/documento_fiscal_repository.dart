@@ -189,6 +189,32 @@ await _syncQueueDao.enqueue(
     await _dao.delete(id);
   }
 
+  /// Emite Nota de Crédito (NCR) ou Nota de Débito (NDB).
+  /// Requer sempre ligação — o documento usa uma sequência gerada no
+  /// servidor (PL/pgSQL), exactamente como emitir() e emitirMultiplos().
+  Future<NotaRetificativaResponseModel> emitirNotaRetificativa({
+    required int    idDocumentoOrigem,
+    required String codigoTipo,
+    required int    idUsuario,
+    required String codigoAt,
+    required String motivo,
+    required double valor,
+    String? observacoes,
+  }) async {
+    _requireOnline('emitir nota de crédito/débito');
+    final resposta = await _service.emitirNotaRetificativa(
+      idDocumentoOrigem: idDocumentoOrigem,
+      codigoTipo:        codigoTipo,
+      idUsuario:         idUsuario,
+      codigoAt:          codigoAt,
+      motivo:            motivo,
+      valor:             valor,
+      observacoes:       observacoes,
+    );
+    await _dao.upsert(resposta.documento.toLocalDb());
+    return resposta;
+  }
+
 
 Future<Map<String, dynamic>> extractoDocumentalCliente(int idCliente) async {
   if (_connectivity.isOnline) {

@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import '../core/database/daos/pedido_dao.dart';
+import '../core/database/daos/documento_fiscal_dao.dart';
 import '../core/connectivity/connectivity_service.dart';
 import '../services/pedido_service.dart';
 import 'package:uuid/uuid.dart';
@@ -19,20 +20,23 @@ class PedidoRepository {
     required SyncQueueDao syncQueueDao,
     required ConnectivityService connectivity,
     required ProdutoDao produtoDao,
-       required ServicoDao servicoDao,    
+       required ServicoDao servicoDao,
+    DocumentoFiscalDao? documentoFiscalDao,
   })  : _service = service,
         _dao = dao,
         _syncQueueDao = syncQueueDao,
         _connectivity = connectivity,
         _produtoDao = produtoDao,
-        _servicoDao = servicoDao;  
+        _servicoDao = servicoDao,
+        _documentoFiscalDao = documentoFiscalDao;
 
   final PedidoService _service;
   final PedidoDao _dao;
   final SyncQueueDao _syncQueueDao;
   final ConnectivityService _connectivity;
   final ProdutoDao _produtoDao;
-   final ServicoDao _servicoDao;   
+   final ServicoDao _servicoDao;
+  final DocumentoFiscalDao? _documentoFiscalDao;
   Database get _db => LocalDatabase.instance.db;
 
   static const _uuid = Uuid();
@@ -695,9 +699,23 @@ Future<PedidoModel> finalizarPedido(
     CancelamentoPedidoRequestDTO dto,
   ) async {
     if (_connectivity.isOnline) {
+      // Deixa PedidoJaFaturadoException propagar tal como vem do backend.
       await _service.cancelarPedido(idPedido, dto);
       await _dao.delete(idPedido);
       return;
+    }
+
+    // Offline — bloqueia localmente se já existir FAT/VD não anulada
+    // para este pedido (mesma regra do backend). Só é possível se o
+    // DocumentoFiscalDao tiver sido injectado.
+    if (_documentoFiscalDao != null) {
+      final documentos = await _documentoFiscalDao!.getByPedido(idPedido);
+      final temFacturaEmitida = documentos.any((d) =>
+          (d['tipo_codigo'] == 'FAT' || d['tipo_codigo'] == 'VD') &&
+          (d['anulado'] as int?) != 1);
+      if (temFacturaEmitida) {
+        throw PedidoJaFaturadoException(idPedido);
+      }
     }
 
     // Offline — restaura estoque dos produtos
@@ -1026,7 +1044,7 @@ Future<Map<String, dynamic>> extractoCliente(int idCliente) async {
     });
   }
 
-  return {
+   return {
     'idCliente': idCliente,
     'totalDivida': totalDivida,
     'totalPago': totalPago,
@@ -1035,7 +1053,35 @@ Future<Map<String, dynamic>> extractoCliente(int idCliente) async {
   };
 }
 
+  // ══════════════════════════════════════════════════════════════════
+  // DEVOLUÇÃO / TROCA / NOTA DE CRÉDITO
+  // Sempre online — a Nota de Crédito usa sequência gerada no servidor,
+  // mesmo raciocínio de declararCredito/registarPagamentoCredito.
+  // ══════════════════════════════════════════════════════════════════
 
+  Future<DevolucaoResponseDTO> processarDevolucaoOuTroca(
+    int idPedido,
+    DevolucaoRequestDTO dto,
+  ) async {
+    _requireOnline('processar devolução/troca');
+
+    final resposta = await _service.processarDevolucaoOuTroca(idPedido, dto);
+
+    // Actualiza o cache local do pedido de origem com o estado mais
+    // recente vindo do backend (stock devolvido já reflectido no produto,
+    // fatura de origem possivelmente anulada em caso de erro de preenchimento).
+    try {
+      final pedidoAtualizado = await _service.buscarPorId(idPedido);
+      await _upsertPedidoComItens(pedidoAtualizado);
+    } catch (e) {
+      debugPrint(
+        '⚠️ PedidoRepository.processarDevolucaoOuTroca — pull do pedido '
+        '$idPedido falhou após devolução: $e',
+      );
+    }
+
+    return resposta;
+  }
 
 }
 

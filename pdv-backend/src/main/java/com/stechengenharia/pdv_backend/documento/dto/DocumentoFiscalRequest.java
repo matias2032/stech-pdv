@@ -1,10 +1,12 @@
 package com.stechengenharia.pdv_backend.documento.dto;
 
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;  // ← adicionar
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.List;                            // ← adicionar
+import java.math.BigDecimal;
+import java.util.List;
 
 // ─── REQUEST ────────────────────────────────────────────────────────────────
 
@@ -53,8 +55,37 @@ public class DocumentoFiscalRequest {
         @NotNull(message = "O id do utilizador é obrigatório")
         Long idUsuario,
 
+// DEPOIS
         @NotBlank(message = "O código AT é obrigatório")
         @Size(max = 50)
         String codigoAt
 ) {}
+
+    /**
+     * Emitir uma Nota de Crédito (NCR) ou Nota de Débito (NDB) associada
+     * a um documento de origem (id vem do path, não deste record).
+     * Reflecte os parâmetros de emitir_nota_retificativa(...).
+     */
+    public record EmitirNotaRetificativaRequest(
+
+            @NotBlank(message = "O código do tipo de documento é obrigatório")
+            @Size(max = 10)
+            String codigoTipo,        // "NCR" ou "NDB"
+
+            @NotNull(message = "O id do utilizador é obrigatório")
+            Long idUsuario,
+
+            @NotBlank(message = "O código AT é obrigatório")
+            @Size(max = 50)
+            String codigoAt,
+
+            @NotBlank(message = "O motivo da retificação é obrigatório")
+            String motivo,            // ERRO_PREENCHIMENTO | TROCA_PRODUTO | DEVOLUCAO | IVA_INCORRETO | OUTRO
+
+            @NotNull(message = "O valor é obrigatório")
+            @DecimalMin(value = "0.01", message = "O valor deve ser positivo")
+            BigDecimal valor,
+
+            String observacoes
+    ) {}
 }

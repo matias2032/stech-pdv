@@ -1,4 +1,4 @@
-// lib/features/usuario/screens/usuarios_list_screen.dart
+// lib/screens/usuarios_list_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';

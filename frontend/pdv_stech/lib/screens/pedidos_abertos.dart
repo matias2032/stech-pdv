@@ -6,7 +6,7 @@ import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:provider/provider.dart';
 
 import 'finalizar_pedido.dart';
-
+import 'devolucao_troca_screen.dart';
 // ─── Paleta (igual a detalhes_produto.dart) ───────────────────────────────────
 const _kPrimary = Color(0xFF1B2A6B);
 const _kAccent = Color(0xFFC8102E);
@@ -97,7 +97,7 @@ List<PedidoModel> _pedidosVisiveis(PedidoProvider provider) {
   // ACÇÕES
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<void> _cancelarPedido(PedidoModel pedido) async {
+Future<void> _cancelarPedido(PedidoModel pedido) async {
     if (_operacaoEmAndamento) return;
 
     final ok = await _dialogoCancelamento(pedido);
@@ -121,11 +121,90 @@ List<PedidoModel> _pedidosVisiveis(PedidoProvider provider) {
       if (provider.status == PedidoStatus.success) {
         _snack('Pedido ${pedido.referencia} cancelado', Colors.orange);
         await _carregar();
+      } else if (provider.erroEhPedidoJaFaturado) {
+        await _tratarPedidoJaFaturado(pedido);
       } else {
         _snack('Erro ao cancelar: ${provider.errorMessage}', _kAccent);
       }
     } finally {
       if (mounted) setState(() => _operacaoEmAndamento = false);
+    }
+  }
+
+  /// Pedido já tem factura emitida — não pode ser cancelado directamente.
+  /// Oferece o fluxo de devolução/Nota de Crédito em vez de repetir o erro.
+  Future<void> _tratarPedidoJaFaturado(PedidoModel pedido) async {
+    final irParaDevolucao = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text(
+              'Pedido já facturado',
+              style: TextStyle(color: _kPrimary, fontWeight: FontWeight.bold),
+            ),
+            content: const Text(
+              'Este pedido já tem factura emitida e não pode ser cancelado '
+              'directamente. Deseja processar uma devolução/anulação?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Ir para devolução'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!irParaDevolucao || !mounted) return;
+
+    await context
+        .read<DocumentoFiscalProvider>()
+        .carregarPorPedido(pedido.idPedido);
+    if (!mounted) return;
+
+    final documentos = context.read<DocumentoFiscalProvider>().documentos;
+
+    DocumentoFiscalModel? documentoValido;
+    for (final d in documentos) {
+      if ((d.tipoDocumento.codigo == 'FAT' || d.tipoDocumento.codigo == 'VD') &&
+          !d.anulado) {
+        documentoValido = d;
+        break;
+      }
+    }
+
+    if (documentoValido == null) {
+      _snack(
+        'Não foi encontrado um documento fiscal válido para este pedido.',
+        _kAccent,
+      );
+      return;
+    }
+
+    final resultado = await Navigator.push<dynamic>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DevolucaoTrocaScreen(
+          idPedido: pedido.idPedido,
+          idDocumentoOrigem: documentoValido!.id,
+          pedidoInicial: pedido,
+          documentoOrigem: documentoValido,
+        ),
+      ),
+    );
+
+    if (resultado != null && mounted) {
+      await _carregar();
     }
   }
 

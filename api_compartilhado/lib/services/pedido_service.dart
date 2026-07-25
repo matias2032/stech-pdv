@@ -100,10 +100,81 @@ class TipoPagamentoResponseDTO {
     required this.tipoPagamento,
   });
 
-  factory TipoPagamentoResponseDTO.fromJson(Map<String, dynamic> json) =>
+ factory TipoPagamentoResponseDTO.fromJson(Map<String, dynamic> json) =>
       TipoPagamentoResponseDTO(
         idTipoPagamento: json['idTipoPagamento'] as int,
         tipoPagamento: json['tipoPagamento'] as String,
+      );
+}
+
+class ItemDevolvidoRequestDTO {
+  final int? idItemPedido;
+  final int? idItemServico;
+  final int quantidade;
+
+  const ItemDevolvidoRequestDTO({
+    this.idItemPedido,
+    this.idItemServico,
+    required this.quantidade,
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (idItemPedido != null) 'idItemPedido': idItemPedido,
+        if (idItemServico != null) 'idItemServico': idItemServico,
+        'quantidade': quantidade,
+      };
+}
+
+class DevolucaoRequestDTO {
+  final int idDocumentoOrigem;
+  final String motivo;
+  final int idUsuario;
+  final String? codigoAt;
+  final List<ItemDevolvidoRequestDTO> itensDevolvidos;
+  final String? observacoes;
+
+  const DevolucaoRequestDTO({
+    required this.idDocumentoOrigem,
+    required this.motivo,
+    required this.idUsuario,
+    this.codigoAt,
+    this.itensDevolvidos = const [],
+    this.observacoes,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'idDocumentoOrigem': idDocumentoOrigem,
+        'motivo': motivo,
+        'idUsuario': idUsuario,
+        if (codigoAt != null) 'codigoAt': codigoAt,
+        'itensDevolvidos': itensDevolvidos.map((e) => e.toJson()).toList(),
+        if (observacoes != null) 'observacoes': observacoes,
+      };
+}
+
+class DevolucaoResponseDTO {
+  final int idNotaCredito;
+  final String referenciaNotaCredito;
+  final int idPedidoOrigem;
+  final double valorCreditado;
+  final String motivo;
+
+  const DevolucaoResponseDTO({
+    required this.idNotaCredito,
+    required this.referenciaNotaCredito,
+    required this.idPedidoOrigem,
+    required this.valorCreditado,
+    required this.motivo,
+  });
+
+  factory DevolucaoResponseDTO.fromJson(Map<String, dynamic> json) =>
+      DevolucaoResponseDTO(
+        idNotaCredito: json['idNotaCredito'] as int,
+        referenciaNotaCredito:
+            (json['referenciaNotaCredito'] as String?) ?? '',
+        idPedidoOrigem: json['idPedidoOrigem'] as int,
+        valorCreditado: (json['valorCreditado'] as num).toDouble(),
+        motivo: (json['motivo'] as String?) ?? '',
       );
 }
 
@@ -147,6 +218,18 @@ class ItemNaoPertenceAoPedidoException implements Exception {
 
   @override
   String toString() => 'Item $idItem não pertence ao pedido $idPedido.';
+}
+
+/// Lançada quando se tenta cancelar um pedido que já tem factura/VD emitida.
+/// O fluxo correcto nesse caso é a devolução/troca (Nota de Crédito).
+class PedidoJaFaturadoException implements Exception {
+  final int idPedido;
+  PedidoJaFaturadoException(this.idPedido);
+
+  @override
+  String toString() =>
+      'O pedido $idPedido já tem factura emitida. Utilize o fluxo de '
+      'devolução (Nota de Crédito) em vez de cancelar directamente.';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -412,6 +495,12 @@ if (lower.contains('saldo')) {
           body: jsonEncode(dto.toJson()),
         )
         .timeout(ApiConfig.timeout);
+
+    if (res.statusCode == 409) {
+      debugPrint(
+          '⚠️ PedidoService.cancelarPedido — 409, pedido já faturado');
+      throw PedidoJaFaturadoException(idPedido);
+    }
 
     if (res.statusCode != 204 && res.statusCode != 200) {
       _throwFromResponse(res);
@@ -727,6 +816,34 @@ Future<Map<String, dynamic>> extractoCliente(int idCliente) async {
 
   _throwFromResponse(res);
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// DEVOLUÇÃO / TROCA / NOTA DE CRÉDITO
+// POST /api/pedidos/{idPedido}/devolucao
+// ════════════════════════════════════════════════════════════════════════
+
+Future<DevolucaoResponseDTO> processarDevolucaoOuTroca(
+  int idPedido,
+  DevolucaoRequestDTO dto,
+) async {
+  debugPrint('↩️ PedidoService.processarDevolucaoOuTroca — pedido $idPedido');
+
+  final res = await _client
+      .post(
+        Uri.parse('$_baseUrl/$idPedido/devolucao'),
+        headers: _headers,
+        body: jsonEncode(dto.toJson()),
+      )
+      .timeout(ApiConfig.timeout);
+
+  if (res.statusCode >= 200 && res.statusCode < 300) {
+    return DevolucaoResponseDTO.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  _throwFromResponse(res);
+}
+
 
 // ─── Dispose ─────────────────────────────────────────────────────────────
 void dispose() => _client.close();

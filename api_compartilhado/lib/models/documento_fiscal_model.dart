@@ -191,3 +191,31 @@ class DocumentoFiscalModel {
 
   
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resposta da emissão de uma Nota de Crédito (NCR) ou Nota de Débito (NDB).
+/// Reflecte DocumentoFiscalResponse.NotaRetificativaResponse do backend.
+class NotaRetificativaResponseModel {
+  final DocumentoFiscalModel documento;
+  final int idDocumentoOrigem;
+  final String motivoRetificacao;
+  final double valor;
+
+  const NotaRetificativaResponseModel({
+    required this.documento,
+    required this.idDocumentoOrigem,
+    required this.motivoRetificacao,
+    required this.valor,
+  });
+
+  factory NotaRetificativaResponseModel.fromJson(Map<String, dynamic> json) {
+    return NotaRetificativaResponseModel(
+      documento: DocumentoFiscalModel.fromJson(
+          json['documento'] as Map<String, dynamic>),
+      idDocumentoOrigem: json['idDocumentoOrigem'] as int,
+      motivoRetificacao: json['motivoRetificacao'] as String? ?? '',
+      valor: (json['valor'] as num).toDouble(),
+    );
+  }
+}

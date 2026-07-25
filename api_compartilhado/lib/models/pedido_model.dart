@@ -763,7 +763,7 @@ class RegistarPagamentoCreditoRequestModel {
     this.observacoes,
   });
 
-  Map<String, dynamic> toJson() => {
+ Map<String, dynamic> toJson() => {
         if (idParcela != null) 'idParcela': idParcela,
         'idTipoPagamento': idTipoPagamento,
         'idUsuario': idUsuario,
@@ -773,3 +773,83 @@ class RegistarPagamentoCreditoRequestModel {
       };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DEVOLUÇÃO / TROCA / NOTA DE CRÉDITO
+// Espelho de DevolucaoRequestDTO / ItemDevolvidoDTO / DevolucaoResponseDTO (Java)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class ItemDevolvidoModel {
+  // Exactamente um dos dois deve vir preenchido
+  final int? idItemPedido;
+  final int? idItemServico;
+  final int quantidade;
+
+  const ItemDevolvidoModel({
+    this.idItemPedido,
+    this.idItemServico,
+    required this.quantidade,
+  }) : assert(
+          (idItemPedido != null) ^ (idItemServico != null),
+          'Indicar exactamente um de idItemPedido ou idItemServico',
+        );
+
+  Map<String, dynamic> toJson() => {
+        if (idItemPedido != null) 'idItemPedido': idItemPedido,
+        if (idItemServico != null) 'idItemServico': idItemServico,
+        'quantidade': quantidade,
+      };
+}
+
+class DevolucaoRequestModel {
+  final int idDocumentoOrigem;
+  final String motivo; // ERRO_PREENCHIMENTO | TROCA_PRODUTO | DEVOLUCAO | OUTRO
+  final int idUsuario;
+  final String? codigoAt;
+  /// Vazio/nulo = anulação total (ERRO_PREENCHIMENTO), sem mexer em stock.
+  final List<ItemDevolvidoModel> itensDevolvidos;
+  final String? observacoes;
+
+  const DevolucaoRequestModel({
+    required this.idDocumentoOrigem,
+    required this.motivo,
+    required this.idUsuario,
+    this.codigoAt,
+    this.itensDevolvidos = const [],
+    this.observacoes,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'idDocumentoOrigem': idDocumentoOrigem,
+        'motivo': motivo,
+        'idUsuario': idUsuario,
+        if (codigoAt != null) 'codigoAt': codigoAt,
+        'itensDevolvidos': itensDevolvidos.map((e) => e.toJson()).toList(),
+        if (observacoes != null) 'observacoes': observacoes,
+      };
+}
+
+class DevolucaoResponseModel {
+  final int idNotaCredito;
+  final String referenciaNotaCredito;
+  final int idPedidoOrigem;
+  final double valorCreditado;
+  final String motivo;
+
+  const DevolucaoResponseModel({
+    required this.idNotaCredito,
+    required this.referenciaNotaCredito,
+    required this.idPedidoOrigem,
+    required this.valorCreditado,
+    required this.motivo,
+  });
+
+  factory DevolucaoResponseModel.fromJson(Map<String, dynamic> json) =>
+      DevolucaoResponseModel(
+        idNotaCredito: _parseInt(json['idNotaCredito']),
+        referenciaNotaCredito:
+            (json['referenciaNotaCredito'] as String?) ?? '',
+        idPedidoOrigem: _parseInt(json['idPedidoOrigem']),
+        valorCreditado: (json['valorCreditado'] as num).toDouble(),
+        motivo: (json['motivo'] as String?) ?? '',
+      );
+}

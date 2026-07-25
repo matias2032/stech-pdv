@@ -2,6 +2,7 @@ package com.stechengenharia.pdv_backend.pedido.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Entity
@@ -26,6 +27,12 @@ public class DocumentoFiscalRelacao {
 
     @Column(name = "observacoes", columnDefinition = "TEXT")
     private String observacoes;
+
+    @Column(name = "valor", precision = 12, scale = 2)
+    private BigDecimal valor;
+
+    @Column(name = "motivo_retificacao", length = 30)
+    private String motivoRetificacao;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

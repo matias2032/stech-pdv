@@ -173,6 +173,7 @@ Future<DocumentoFiscalModel> emitirMultiplos({
   return DocumentoFiscalModel.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>);
 }
+
 Future<Map<String, dynamic>> extractoDocumentalCliente(int idCliente) async {
   final response = await _client.get(
     Uri.parse('$_baseUrl/clientes/$idCliente/extracto'),
@@ -181,6 +182,37 @@ Future<Map<String, dynamic>> extractoDocumentalCliente(int idCliente) async {
   _checkStatus(response);
   return jsonDecode(response.body) as Map<String, dynamic>;
 }
+
+  /// POST /api/documentos-fiscais/{idDocumentoOrigem}/nota-retificativa
+  /// [codigoTipo] "NCR" (Nota de Crédito) ou "NDB" (Nota de Débito)
+  /// [motivo] ERRO_PREENCHIMENTO | TROCA_PRODUTO | DEVOLUCAO | IVA_INCORRETO | OUTRO
+  Future<NotaRetificativaResponseModel> emitirNotaRetificativa({
+    required int idDocumentoOrigem,
+    required String codigoTipo,
+    required int idUsuario,
+    required String codigoAt,
+    required String motivo,
+    required double valor,
+    String? observacoes,
+  }) async {
+    final body = jsonEncode({
+      'codigoTipo': codigoTipo,
+      'idUsuario': idUsuario,
+      'codigoAt': codigoAt,
+      'motivo': motivo,
+      'valor': valor,
+      'observacoes': observacoes,
+    });
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/$idDocumentoOrigem/nota-retificativa'),
+      headers: ApiConfig.defaultHeaders,
+      body: body,
+    );
+    _checkStatus(response);
+    return NotaRetificativaResponseModel.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   // ─── Helper ───────────────────────────────────────────────────────────────
 
   void _checkStatus(http.Response response) {

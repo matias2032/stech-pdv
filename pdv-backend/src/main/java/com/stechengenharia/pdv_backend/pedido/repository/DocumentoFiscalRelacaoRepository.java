@@ -10,4 +10,7 @@ public interface DocumentoFiscalRelacaoRepository
 
     List<DocumentoFiscalRelacao> findByIdDocumentoOrigemAndTipoRelacao(
             Integer idDocumentoOrigem, String tipoRelacao);
+
+    List<DocumentoFiscalRelacao> findByIdDocumentoRelacionadoAndTipoRelacao(
+            Integer idDocumentoRelacionado, String tipoRelacao);
 }

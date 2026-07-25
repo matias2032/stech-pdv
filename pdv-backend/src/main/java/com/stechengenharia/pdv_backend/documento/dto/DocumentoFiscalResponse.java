@@ -2,6 +2,7 @@ package com.stechengenharia.pdv_backend.documento.dto;
 
 import com.stechengenharia.pdv_backend.documento.entity.DocumentoFiscal;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 public class DocumentoFiscalResponse {
@@ -53,4 +54,11 @@ public class DocumentoFiscalResponse {
             );
         }
     }
+
+    public record NotaRetificativaResponse(
+            DocumentoResponse documento,
+            Integer idDocumentoOrigem,
+            String motivoRetificacao,
+            BigDecimal valor
+    ) {}
 }

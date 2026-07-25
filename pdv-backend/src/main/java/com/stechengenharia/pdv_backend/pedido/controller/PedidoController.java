@@ -308,9 +308,26 @@ public ResponseEntity<List<PedidoResponseDTO>> listarEmDivida() {
 
 /** GET /api/clientes/{idCliente}/extracto  
  *  (mantido aqui para não criar ClienteController só para isto) */
+// DEPOIS
+/** GET /api/clientes/{idCliente}/extracto  
+ *  (mantido aqui para não criar ClienteController só para isto) */
 @GetMapping("/clientes/{idCliente}/extracto")
 public ResponseEntity<ExtractoClienteResponseDTO> extractoCliente(
         @PathVariable Long idCliente) {
     return ResponseEntity.ok(pedidoService.extractoCliente(idCliente));
+}
+
+// ─── DEVOLUÇÃO / TROCA / NOTA DE CRÉDITO ─────────────────────────────────
+
+/**
+ * POST /api/pedidos/{idPedido}/devolucao
+ * Cobre erro de preenchimento (anulação total), troca de produtos e devolução parcial.
+ */
+@PostMapping("/{idPedido}/devolucao")
+public ResponseEntity<DevolucaoResponseDTO> processarDevolucaoOuTroca(
+        @PathVariable Integer idPedido,
+        @Valid @RequestBody DevolucaoRequestDTO dto) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+            .body(pedidoService.processarDevolucaoOuTroca(idPedido, dto));
 }
 }

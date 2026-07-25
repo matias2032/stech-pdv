@@ -1,4 +1,4 @@
-// lib/features/usuario/screens/detalhes_usuario_screen.dart
+// lib/screens/detalhes_usuario_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

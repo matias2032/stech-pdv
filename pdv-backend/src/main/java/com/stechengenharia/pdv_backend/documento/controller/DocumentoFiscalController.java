@@ -2,10 +2,13 @@
 
 package com.stechengenharia.pdv_backend.documento.controller;
 
+
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.AnularDocumentoRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoMultiplosRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirNotaRetificativaRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.DocumentoResponse;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.NotaRetificativaResponse;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.TipoDocumentoResponse;
 import com.stechengenharia.pdv_backend.documento.dto.ExtractoDocumentalClienteResponseDTO;
 import com.stechengenharia.pdv_backend.documento.service.DocumentoFiscalService;
@@ -129,5 +132,18 @@ public ResponseEntity<DocumentoResponse> emitirMultiplos(
 public ResponseEntity<ExtractoDocumentalClienteResponseDTO> extractoDocumentalCliente(
         @PathVariable Long idCliente) {
     return ResponseEntity.ok(service.extractoDocumentalCliente(idCliente));
+}
+
+/**
+ * POST /api/documentos-fiscais/{id}/nota-retificativa
+ * Emite uma Nota de Crédito (NCR) ou Nota de Débito (NDB) ligada ao documento {id}.
+ */
+@PostMapping("/{id}/nota-retificativa")
+public ResponseEntity<NotaRetificativaResponse> emitirNotaRetificativa(
+        @PathVariable Integer id,
+        @Valid @RequestBody EmitirNotaRetificativaRequest request) {
+    return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(service.emitirNotaRetificativa(id, request));
 }
 }

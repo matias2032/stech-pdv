@@ -2,7 +2,13 @@ package com.stechengenharia.pdv_backend.pedido.service;
 
 import com.stechengenharia.pdv_backend.cliente.repository.ClienteRepository;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirNotaRetificativaRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.DocumentoResponse;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.NotaRetificativaResponse;
+import com.stechengenharia.pdv_backend.documento.entity.DocumentoFiscal;
+import com.stechengenharia.pdv_backend.documento.exception.DocumentoFiscalNotFoundException;
+import com.stechengenharia.pdv_backend.documento.exception.DocumentoJaAnuladoException;
+import com.stechengenharia.pdv_backend.documento.repository.DocumentoFiscalRepository;
 import com.stechengenharia.pdv_backend.documento.service.DocumentoFiscalService;
 import com.stechengenharia.pdv_backend.pedido.dto.*;
 import com.stechengenharia.pdv_backend.pedido.entity.*;
@@ -41,10 +47,11 @@ public class PedidoService {
     private final TipoPagamentoRepository       tipoPagamentoRepository;
     private final ClienteRepository clienteRepository;
     // Adicionar às injecções existentes (@RequiredArgsConstructor trata o resto)
-private final PedidoCreditoParcelaRepository    parcelaRepository;
-private final PedidoCreditoPagamentoRepository  pagamentoRepository;
-private final DocumentoFiscalRelacaoRepository  relacaoRepository;
-private final DocumentoFiscalService            documentoFiscalService;
+    private final PedidoCreditoParcelaRepository    parcelaRepository;
+    private final PedidoCreditoPagamentoRepository  pagamentoRepository;
+    private final DocumentoFiscalRelacaoRepository  relacaoRepository;
+    private final DocumentoFiscalService            documentoFiscalService;
+    private final DocumentoFiscalRepository         documentoFiscalRepository;
 
     // ─── Serviços cross-module ───────────────────────────────────────────────
     private final ServicoService servicoService;
@@ -397,14 +404,24 @@ public PedidoResponseDTO finalizarPedido(Integer idPedido, FinalizarPedidoReques
     // i) CANCELAR PEDIDO
     // ════════════════════════════════════════════════════════════════════════
 
-    @Transactional
+@Transactional
 public void cancelarPedido(Integer idPedido, CancelamentoPedidoRequestDTO dto) {
     Pedido pedido = buscarPedidoComItens(idPedido);
+
+    boolean temFacturaEmitida = documentoFiscalRepository.findByIdPedido(idPedido).stream()
+            .anyMatch(d -> {
+                String codigo = d.getTipoDocumento().getCodigo();
+                return ("FAT".equals(codigo) || "VD".equals(codigo))
+                        && !Boolean.TRUE.equals(d.getAnulado());
+            });
+
+    if (temFacturaEmitida) {
+        throw new PedidoJaFaturadoException(idPedido);
+    }
 
     if ("cancelado".equalsIgnoreCase(pedido.getStatusPedido())) {
         throw new StatusPedidoInvalidoException(pedido.getStatusPedido(), "cancelamento");
     }
-
     for (ItemPedido item : pedido.getItensProduto()) {
         Produto produto = item.getProduto();
         ajustarEstoqueSemMovimento(produto, item.getQuantidade());
@@ -1006,9 +1023,109 @@ private ItemServicoResponseDTO toItemServicoResponseDTO(ItemPedidoServico item) 
             ? item.getSubtotal()
             : item.getPrecoUnitario().multiply(BigDecimal.valueOf(item.getQuantidade()));
 
+
     dto.observacoes = item.getObservacoes();
     dto.confirmadoCredito = Boolean.TRUE.equals(item.getConfirmadoCredito());
 
     return dto;
+}
+
+    // ════════════════════════════════════════════════════════════════════════
+    // DEVOLUÇÃO / TROCA / NOTA DE CRÉDITO
+    // ════════════════════════════════════════════════════════════════════════
+
+@Transactional
+public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, DevolucaoRequestDTO dto) {
+    Pedido pedido = buscarPedidoComItens(idPedido);
+
+    DocumentoFiscal documentoOrigem = documentoFiscalRepository
+            .findById(dto.idDocumentoOrigem)
+            .orElseThrow(() -> new DocumentoFiscalNotFoundException(dto.idDocumentoOrigem));
+
+    if (!documentoOrigem.getIdPedido().equals(idPedido)) {
+        throw new ItemNaoPertenceAFacturaException(idPedido, dto.idDocumentoOrigem);
+    }
+
+    if (Boolean.TRUE.equals(documentoOrigem.getAnulado())) {
+        throw new DocumentoJaAnuladoException(documentoOrigem.getReferencia());
+    }
+
+    boolean anulacaoTotal = dto.itensDevolvidos == null || dto.itensDevolvidos.isEmpty();
+    BigDecimal valorNota;
+
+    if (anulacaoTotal) {
+        // ERRO_PREENCHIMENTO: credita o valor total, sem mexer em stock
+        valorNota = pedido.getTotal();
+
+        documentoOrigem.setAnulado(true);
+        documentoOrigem.setMotivoAnulacao(dto.motivo);
+        documentoOrigem.setSyncStatus("PENDING_UPDATE");
+        documentoFiscalRepository.save(documentoOrigem);
+
+    } else {
+        valorNota = BigDecimal.ZERO;
+        for (ItemDevolvidoDTO itemDto : dto.itensDevolvidos) {
+            valorNota = valorNota.add(devolverItemAoEstoque(pedido, itemDto));
+        }
+    }
+
+    NotaRetificativaResponse notaResponse = documentoFiscalService.emitirNotaRetificativa(
+            dto.idDocumentoOrigem,
+            new EmitirNotaRetificativaRequest(
+                    "NCR",
+                    dto.idUsuario,
+                    dto.codigoAt != null ? dto.codigoAt : "STECH-MZ-NCR",
+                    dto.motivo,
+                    valorNota,
+                    dto.observacoes
+            )
+    );
+
+    log.info("Nota de crédito {} emitida | pedido origem {} | motivo={} | valor={} | anulacaoTotal={}",
+            notaResponse.documento().referencia(), idPedido, dto.motivo, valorNota, anulacaoTotal);
+
+    return new DevolucaoResponseDTO(
+            notaResponse.documento().id(),
+            notaResponse.documento().referencia(),
+            idPedido,
+            valorNota,
+            dto.motivo
+    );
+}
+
+private BigDecimal devolverItemAoEstoque(Pedido pedido, ItemDevolvidoDTO itemDto) {
+    if (itemDto.idItemPedido == null && itemDto.idItemServico == null) {
+        throw new IllegalArgumentException(
+                "Cada item devolvido precisa indicar idItemPedido ou idItemServico");
+    }
+
+    if (itemDto.idItemPedido != null) {
+        ItemPedido item = itemPedidoRepository
+                .findByIdItemPedidoAndPedidoIdPedido(itemDto.idItemPedido, pedido.getIdPedido())
+                .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemPedido, pedido.getIdPedido()));
+
+        if (itemDto.quantidade > item.getQuantidade()) {
+            throw new IllegalArgumentException(
+                    "Quantidade devolvida (" + itemDto.quantidade + ") excede a quantidade do item "
+                    + itemDto.idItemPedido + " (" + item.getQuantidade() + ")");
+        }
+
+        ajustarEstoqueSemMovimento(item.getProduto(), itemDto.quantidade);
+
+        return item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
+    }
+
+    ItemPedidoServico item = itemPedidoServicoRepository
+            .findByIdItemServicoAndPedido_IdPedido(itemDto.idItemServico, pedido.getIdPedido())
+            .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemServico, pedido.getIdPedido()));
+
+    if (itemDto.quantidade > item.getQuantidade()) {
+        throw new IllegalArgumentException(
+                "Quantidade devolvida (" + itemDto.quantidade + ") excede a quantidade do item "
+                + itemDto.idItemServico + " (" + item.getQuantidade() + ")");
+    }
+
+    // Serviços não têm stock físico — apenas contabiliza o valor para a Nota de Crédito
+    return item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
 }
 }

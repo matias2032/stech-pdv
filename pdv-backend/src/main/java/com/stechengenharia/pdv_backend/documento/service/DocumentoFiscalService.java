@@ -1,14 +1,18 @@
 package com.stechengenharia.pdv_backend.documento.service;
 
+
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.AnularDocumentoRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoMultiplosRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirNotaRetificativaRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.DocumentoResponse;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.NotaRetificativaResponse;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.TipoDocumentoResponse;
 import com.stechengenharia.pdv_backend.documento.entity.DocumentoFiscal;
 import com.stechengenharia.pdv_backend.documento.entity.TipoDocumentoFiscal;
 import com.stechengenharia.pdv_backend.documento.exception.DocumentoFiscalNotFoundException;
 import com.stechengenharia.pdv_backend.documento.exception.DocumentoJaAnuladoException;
+import com.stechengenharia.pdv_backend.documento.exception.DocumentoJaSincronizadoException;
 import com.stechengenharia.pdv_backend.documento.exception.TipoDocumentoNotFoundException;
 import com.stechengenharia.pdv_backend.documento.repository.DocumentoFiscalRepository;
 import com.stechengenharia.pdv_backend.documento.repository.TipoDocumentoFiscalRepository;
@@ -16,6 +20,7 @@ import com.stechengenharia.pdv_backend.usuario.entity.Usuario;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.stechengenharia.pdv_backend.cliente.repository.ClienteRepository;
@@ -30,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocumentoFiscalService {
@@ -154,6 +160,12 @@ public DocumentoResponse anular(Integer id, AnularDocumentoRequest request) {
         throw new DocumentoJaAnuladoException(doc.getReferencia());
     }
 
+    String codigoTipo = doc.getTipoDocumento().getCodigo();
+    boolean isFaturaOuVd = "FAT".equals(codigoTipo) || "VD".equals(codigoTipo);
+    if (isFaturaOuVd && "SYNCED".equals(doc.getSyncStatus())) {
+        throw new DocumentoJaSincronizadoException(doc.getReferencia());
+    }
+
     doc.setAnulado(true);
     doc.setMotivoAnulacao(request.motivoAnulacao());
     doc.setSyncStatus("PENDING_UPDATE"); // anulação deve chegar à nuvem
@@ -266,12 +278,59 @@ public ExtractoDocumentalClienteResponseDTO extractoDocumentalCliente(Long idCli
     String nomeCliente = (cliente.getNome() != null ? cliente.getNome() : "")
         + (cliente.getApelido() != null ? " " + cliente.getApelido() : "");
 
+// DEPOIS
     return new ExtractoDocumentalClienteResponseDTO(
         idCliente,
         nomeCliente.trim(),
         linhas.size(),
         somaTotal,
         linhas
+    );
+}
+
+// ─── NOTAS DE CRÉDITO / DÉBITO ────────────────────────────────────────────
+
+/**
+ * Emite uma Nota de Crédito (NCR) ou Nota de Débito (NDB) ligada a um
+ * documento de origem, delegando na função PL/pgSQL emitir_nota_retificativa(),
+ * que já grava a relação em documento_fiscal_relacao.
+ */
+@Transactional
+public NotaRetificativaResponse emitirNotaRetificativa(
+        Integer idDocumentoOrigem, EmitirNotaRetificativaRequest request) {
+
+    documentoRepository.findById(idDocumentoOrigem)
+            .orElseThrow(() -> new DocumentoFiscalNotFoundException(idDocumentoOrigem));
+
+    tipoDocumentoRepository.findByCodigo(request.codigoTipo())
+            .orElseThrow(() -> new TipoDocumentoNotFoundException(request.codigoTipo()));
+
+    DocumentoFiscal doc = (DocumentoFiscal) entityManager
+            .createNativeQuery(
+                    "SELECT * FROM emitir_nota_retificativa(:idDocumentoOrigem, :codigoTipo, " +
+                    ":idUsuario, :codigoAt, :motivo, :valor, :observacoes)",
+                    DocumentoFiscal.class
+            )
+            .setParameter("idDocumentoOrigem", idDocumentoOrigem)
+            .setParameter("codigoTipo",        request.codigoTipo())
+            .setParameter("idUsuario",         request.idUsuario().intValue())
+            .setParameter("codigoAt",          request.codigoAt())
+            .setParameter("motivo",            request.motivo())
+            .setParameter("valor",             request.valor())
+            .setParameter("observacoes",       request.observacoes())
+            .getSingleResult();
+
+    doc.setSyncStatus("PENDING_CREATE");
+    documentoRepository.save(doc);
+
+    log.info("Nota retificativa {} emitida | documento origem {} | motivo={} | valor={}",
+            doc.getReferencia(), idDocumentoOrigem, request.motivo(), request.valor());
+
+    return new NotaRetificativaResponse(
+            DocumentoResponse.from(doc),
+            idDocumentoOrigem,
+            request.motivo(),
+            request.valor()
     );
 }
 }

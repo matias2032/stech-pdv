@@ -8,7 +8,6 @@ export 'models/usuario_model.dart';
 export 'models/resultado_autenticacao.dart';
 export 'models/api_response.dart';
 export 'models/produto_model.dart';
-export 'models/produto_request.dart';
 export 'models/disponibilidade_produto_model.dart';
 export 'models/servico_model.dart';
 export 'models/preco_produto_model.dart';
