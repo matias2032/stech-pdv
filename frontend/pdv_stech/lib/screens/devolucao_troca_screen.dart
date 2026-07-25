@@ -778,7 +778,19 @@ class _DevolucaoTrocaScreenState extends State<DevolucaoTrocaScreen> {
     );
   }
 }
+class DevolucaoTrocaArgs {
+  final int idPedido;
+  final int idDocumentoOrigem;
+  final PedidoModel? pedidoInicial;
+  final DocumentoFiscalModel? documentoOrigem;
 
+  const DevolucaoTrocaArgs({
+    required this.idPedido,
+    required this.idDocumentoOrigem,
+    this.pedidoInicial,
+    this.documentoOrigem,
+  });
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // Linha reutilizável de item (checkbox + stepper de quantidade)
 // ─────────────────────────────────────────────────────────────────────────────

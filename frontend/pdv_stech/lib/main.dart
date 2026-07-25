@@ -282,8 +282,8 @@ ChangeNotifierProvider(
           '/historico_cotacoes'      : (_) => const HistoricoCotacoesScreen(),
            '/pedidos_credito'      : (_) => const PedidosCreditoScreen(),  
            '/gerenciar_despesas': (_) => const DespesaListScreen(),
-        
-       '/despesas_excluidas': (_) => const DespesasExcluidasScreen(),
+           '/despesas_excluidas': (_) => const DespesasExcluidasScreen(),
+           
            
         },
 
@@ -355,6 +355,31 @@ if (settings.name == '/cadastrar_despesas') {
               settings: settings,
             );
           }
+
+if (settings.name == '/devolucao_troca') {
+  final args = settings.arguments as DevolucaoTrocaArgs;
+
+  return MaterialPageRoute(
+    builder: (_) => DevolucaoTrocaScreen(
+      idPedido: args.idPedido,
+      idDocumentoOrigem: args.idDocumentoOrigem,
+      pedidoInicial: args.pedidoInicial,
+      documentoOrigem: args.documentoOrigem,
+    ),
+    settings: settings,
+  );
+}
+
+if (settings.name == '/nota_debito') {
+    final idDocumentoOrigem = settings.arguments as int;
+
+    return MaterialPageRoute(
+      builder: (_) => NotaDebitoScreen(
+        idDocumentoOrigem: idDocumentoOrigem,
+      ),
+      settings: settings,
+    );
+  }
           return null;
         },
 
@@ -385,3 +410,4 @@ if (settings.name == '/cadastrar_despesas') {
     );
   }
 }
+
