@@ -45,3 +45,4 @@ List<Object[]> findAllWithTipoVenda();
 """)
 List<DocumentoFiscal> findFacturasEVdsPorCliente(@Param("idCliente") Long idCliente);
 }
+
