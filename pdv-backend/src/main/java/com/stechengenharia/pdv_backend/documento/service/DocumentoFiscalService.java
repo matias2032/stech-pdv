@@ -145,12 +145,56 @@ public DocumentoResponse emitir(EmitirDocumentoRequest request) {
             .setParameter("codigoAt",   request.codigoAt())
             .getSingleResult();
 
-    // A função PL/pgSQL faz INSERT direto — o JPA não disparou @PrePersist
-    // Forçamos o syncStatus manualmente após o facto
     doc.setSyncStatus("PENDING_CREATE");
+
+    // Documentos "originais" (FAT/VD) congelam o conteúdo do pedido no
+    // momento da emissão — o PDF passa a ler daqui, não do pedido ao vivo.
+    String codigo = doc.getTipoDocumento().getCodigo();
+    if ("FAT".equals(codigo) || "VD".equals(codigo)) {
+        pedidoRepository.findById(request.idPedido())
+                .ifPresent(pedido -> doc.setSnapshotConteudo(gerarSnapshotPedido(pedido)));
+    }
+
     documentoRepository.save(doc);
 
     return DocumentoResponse.from(doc);
+}
+
+/**
+ * Serializa em JSON os dados imutáveis do pedido (itens, preços, total)
+ * no instante da emissão da factura. Usado pela geração de PDF para que
+ * a factura nunca reflicta alterações posteriores ao pedido.
+ */
+private String gerarSnapshotPedido(Pedido pedido) {
+    try {
+        var itens = pedido.getItensProduto().stream()
+                .map(i -> Map.of(
+                        "produto", i.getProduto().getNomeProduto(),
+                        "quantidade", i.getQuantidade(),
+                        "precoUnitario", i.getPrecoUnitario(),
+                        "subtotal", i.getSubtotal()
+                )).toList();
+
+        var servicos = pedido.getItensServico().stream()
+                .map(i -> Map.of(
+                        "servico", i.getServico() != null ? i.getServico().getNomeServico() : null,
+                        "quantidade", i.getQuantidade(),
+                        "precoUnitario", i.getPrecoUnitario(),
+                        "subtotal", i.getSubtotal()
+                )).toList();
+
+        Map<String, Object> snapshot = Map.of(
+                "referenciaPedido", pedido.getReferencia(),
+                "total", pedido.getTotal(),
+                "itensProduto", itens,
+                "itensServico", servicos
+        );
+
+        return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(snapshot);
+    } catch (Exception e) {
+        log.error("Falha ao gerar snapshot do pedido {} para documento fiscal", pedido.getIdPedido(), e);
+        return null;
+    }
 }
 
     // ─── ANULAR ───────────────────────────────────────────────────────────────

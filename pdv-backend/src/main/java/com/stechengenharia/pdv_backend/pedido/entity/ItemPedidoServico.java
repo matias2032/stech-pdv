@@ -42,9 +42,6 @@ private BigDecimal subtotal;
 @Column(name = "confirmado_credito", nullable = false)
 private Boolean confirmadoCredito = false;
 
-        @Column(name = "quantidade_devolvida", nullable = false)
-private Integer quantidadeDevolvida = 0;
-
     // ─── Construtor vazio (obrigatório pelo JPA) ─────────────────────────────
     public ItemPedidoServico() {}
 
@@ -81,7 +78,7 @@ private Integer quantidadeDevolvida = 0;
     public Boolean getConfirmadoCredito() {
     return confirmadoCredito;
 }
-public Integer getQuantidadeDevolvida() { return quantidadeDevolvida; }
+
     
     // ─── Setters ─────────────────────────────────────────────────────────────
     public void setIdItemServico(Integer v)    { this.idItemServico = v; }
@@ -93,6 +90,6 @@ public Integer getQuantidadeDevolvida() { return quantidadeDevolvida; }
     public void setConfirmadoCredito(Boolean confirmadoCredito) {
     this.confirmadoCredito = confirmadoCredito;
 }
-public void setQuantidadeDevolvida(Integer v) { this.quantidadeDevolvida = v; }
+
 
 }

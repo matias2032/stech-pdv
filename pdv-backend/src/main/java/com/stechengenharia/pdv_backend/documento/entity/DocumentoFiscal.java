@@ -45,12 +45,19 @@ public class DocumentoFiscal extends AuditableEntity {
     @Column(name = "emitido_em", nullable = false, updatable = false)
     private OffsetDateTime emitidoEm;
 
-    @Column(nullable = false)
+@Column(nullable = false)
     private Boolean anulado = false;
 
     @Column(name = "motivo_anulacao")
     private String motivoAnulacao;
 
+    // Fotografia imutável do pedido (itens, preços, total) no momento da
+    // emissão. Preenchido apenas para documentos "originais" (FAT/VD).
+    // A geração de PDF deve usar este campo, quando presente, em vez de
+    // ler o pedido ao vivo — assim a factura nunca muda depois de emitida.
+    @Column(name = "snapshot_conteudo", columnDefinition = "TEXT")
+    private String snapshotConteudo;
+    
     @PrePersist
     protected void onCreate() {
         if (emitidoEm == null) emitidoEm = OffsetDateTime.now();
