@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 3,       
+  version: 4,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -51,6 +51,12 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute(''' ALTER TABLE documento_fiscal ADD COLUMN snapshot_conteudo TEXT;''');
    
 }
+
+  if (oldVersion < 4) {
+    await db.execute('''
+      ALTER TABLE documento_fiscal ADD COLUMN tipo_venda TEXT;
+    ''');
+  }
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -352,26 +358,27 @@ await txn.execute('''
 ''');
 
 await txn.execute('''
-  CREATE TABLE documento_fiscal (
-    id              INTEGER PRIMARY KEY,
-    id_tipo_doc     INTEGER NOT NULL,
-    tipo_codigo     TEXT    NOT NULL DEFAULT '',
-    tipo_nome       TEXT    NOT NULL DEFAULT '',
-    tipo_prefixo    TEXT    NOT NULL DEFAULT '',
-    id_pedido       INTEGER NOT NULL,
-    referencia      TEXT,
-    numero_seq      INTEGER,
-    ano             INTEGER,
-    codigo_at       TEXT,
-    id_usuario      INTEGER NOT NULL,
-    nome_usuario    TEXT    NOT NULL DEFAULT '',
-    emitido_em      TEXT    NOT NULL,
-    anulado         INTEGER NOT NULL DEFAULT 0,
-    motivo_anulacao TEXT,
-    snapshot_conteudo TEXT,
-    sync_status     TEXT    NOT NULL DEFAULT 'synced',
-    updated_at      TEXT
-  )
+CREATE TABLE documento_fiscal (
+  id              INTEGER PRIMARY KEY,
+  id_tipo_doc     INTEGER NOT NULL,
+  tipo_codigo     TEXT    NOT NULL DEFAULT '',
+  tipo_nome       TEXT    NOT NULL DEFAULT '',
+  tipo_prefixo    TEXT    NOT NULL DEFAULT '',
+  id_pedido       INTEGER NOT NULL,
+  referencia      TEXT,
+  numero_seq      INTEGER,
+  ano             INTEGER,
+  codigo_at       TEXT,
+  id_usuario      INTEGER NOT NULL,
+  nome_usuario    TEXT    NOT NULL DEFAULT '',
+  emitido_em      TEXT    NOT NULL,
+  anulado         INTEGER NOT NULL DEFAULT 0,
+  motivo_anulacao TEXT,
+  tipo_venda      TEXT,
+  snapshot_conteudo TEXT,
+  sync_status     TEXT    NOT NULL DEFAULT 'synced',
+  updated_at      TEXT
+)
 ''');
 
 await txn.execute('''
