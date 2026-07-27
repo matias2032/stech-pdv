@@ -27,7 +27,8 @@ public class DocumentoFiscalResponse {
             OffsetDateTime emitidoEm,
             Boolean anulado,
             String motivoAnulacao,
-             String tipoVenda
+             String tipoVenda,
+             String snapshotConteudo
     ) {
         /** Método de fábrica — converte a entidade para o DTO de resposta. */
         public static DocumentoResponse from(DocumentoFiscal doc) {
@@ -50,6 +51,7 @@ public class DocumentoFiscalResponse {
                     doc.getEmitidoEm(),
                     doc.getAnulado(),
                     doc.getMotivoAnulacao(),
+                    doc.getSnapshotConteudo(),
                     null                
             );
         }

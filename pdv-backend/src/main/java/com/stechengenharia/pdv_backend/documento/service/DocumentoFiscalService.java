@@ -77,7 +77,7 @@ public List<DocumentoResponse> listarTodos() {
                         dto.emitidoEm(),
                         dto.anulado(),
                         dto.motivoAnulacao(),
-
+                        doc.getSnapshotConteudo(),
                         // 🔥 aqui injectamos
                         tipoVenda
                 );

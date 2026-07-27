@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'dart:convert';
 
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTES FISCAIS — fonte única de verdade, NUNCA em base de dados
@@ -99,6 +100,12 @@ class DocumentoPdfModel {
 final ClienteModel? cliente;
   final String tipoPagamento;
 
+  /// Fotografia imutável dos itens/total no momento da emissão da FAT/VD,
+  /// vinda de DocumentoFiscalModel.snapshotConteudo. Quando presente, o PDF
+  /// deve usar SEMPRE este conteúdo em vez de `pedido` (que pode já ter sido
+  /// alterado por devoluções/trocas posteriores).
+  final SnapshotPedidoFiscal? snapshot;
+
   const DocumentoPdfModel({
     required this.tipo,
     required this.referencia,
@@ -110,6 +117,7 @@ final ClienteModel? cliente;
 
     this.salesperson,
     this.prazoPagamento = 'Pronto Pagamento',
+    this.snapshot,
   });
 
   /// Fábrica de conveniência — constrói a partir do DocumentoFiscalModel
@@ -132,8 +140,11 @@ ClienteModel? cliente,
       tipoPagamento: tipoPagamento,
       salesperson: salesperson,
       prazoPagamento: prazoPagamento,
+      snapshot: SnapshotPedidoFiscal.tentarParsear(apiModel.snapshotConteudo),
     );
   }
+
+  
 
   // Adicionar dentro de class DocumentoPdfModel, após o factory deApiModel existente:
 
@@ -167,6 +178,76 @@ ClienteModel? cliente,
     tipoPagamento: tipoPagamento,
   );
 }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SNAPSHOT DO PEDIDO — fotografia imutável gravada pelo backend na
+// emissão de FAT/VD (DocumentoFiscal.snapshotConteudo).
+// ═══════════════════════════════════════════════════════════════════
+
+class SnapshotItemFiscal {
+  final String descricao;
+  final int quantidade;
+  final double precoUnitario;
+  final double subtotal;
+  final String? observacoes;
+
+  const SnapshotItemFiscal({
+    required this.descricao,
+    required this.quantidade,
+    required this.precoUnitario,
+    required this.subtotal,
+    this.observacoes,
+  });
+
+  factory SnapshotItemFiscal.fromJson(Map<String, dynamic> json, {
+    required String chaveDescricao,
+  }) {
+    return SnapshotItemFiscal(
+      descricao: (json[chaveDescricao] ?? '').toString(),
+      quantidade: (json['quantidade'] as num?)?.toInt() ?? 0,
+      precoUnitario: (json['precoUnitario'] as num?)?.toDouble() ?? 0,
+      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
+      observacoes: json['observacoes'] as String?,
+    );
+  }
+}
+
+class SnapshotPedidoFiscal {
+  final String referenciaPedido;
+  final double total;
+  final List<SnapshotItemFiscal> itensProduto;
+  final List<SnapshotItemFiscal> itensServico;
+
+  const SnapshotPedidoFiscal({
+    required this.referenciaPedido,
+    required this.total,
+    required this.itensProduto,
+    required this.itensServico,
+  });
+
+  /// Retorna null se `raw` for nulo/vazio/inválido — nesse caso o chamador
+  /// deve recorrer ao pedido ao vivo (ex: documentos que não são FAT/VD).
+  static SnapshotPedidoFiscal? tentarParsear(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return SnapshotPedidoFiscal(
+        referenciaPedido: (json['referenciaPedido'] ?? '').toString(),
+        total: (json['total'] as num?)?.toDouble() ?? 0,
+        itensProduto: (json['itensProduto'] as List<dynamic>? ?? [])
+            .map((e) => SnapshotItemFiscal.fromJson(
+                e as Map<String, dynamic>, chaveDescricao: 'produto'))
+            .toList(),
+        itensServico: (json['itensServico'] as List<dynamic>? ?? [])
+            .map((e) => SnapshotItemFiscal.fromJson(
+                e as Map<String, dynamic>, chaveDescricao: 'servico'))
+            .toList(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class ReciboCreditoPdfModel {
@@ -1593,15 +1674,52 @@ _metaRow('Gerado em:', DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now()))
 
   // ─── 4. Tabela de itens ───────────────────────────────────────
 
-  pw.Widget _docFiscalTabelaItens(DocumentoPdfModel doc) {
-    final pedido = doc.pedido;
-final totalComIva = pedido.total;
+pw.Widget _docFiscalTabelaItens(DocumentoPdfModel doc) {
+    // Se existir snapshot (FAT/VD já emitida), usa-o SEMPRE — é a
+    // fotografia imutável do momento da emissão. Só cai para o pedido ao
+    // vivo quando não há snapshot (ex: documento antigo emitido antes desta
+    // funcionalidade, ou tipos de documento que não geram snapshot).
+    final snap = doc.snapshot;
 
-final subtotalSemIva = pedido.itensProduto.fold<double>(
+    final double totalComIva;
+    final List<SnapshotItemFiscal> produtosSnap;
+    final List<SnapshotItemFiscal> servicosSnap;
+
+    if (snap != null) {
+      totalComIva = snap.total;
+      produtosSnap = snap.itensProduto;
+      servicosSnap = snap.itensServico;
+    } else {
+      final pedido = doc.pedido;
+      totalComIva = pedido.total;
+      produtosSnap = pedido.itensProduto
+          .map((p) => SnapshotItemFiscal(
+                descricao: p.nomeProduto.isNotEmpty
+                    ? p.nomeProduto
+                    : 'Produto #${p.idProduto}',
+                quantidade: p.quantidade,
+                precoUnitario: p.precoUnitario,
+                subtotal: p.subtotal,
+              ))
+          .toList();
+      servicosSnap = pedido.itensServico
+          .map((s) => SnapshotItemFiscal(
+                descricao: (s.nomeServico != null && s.nomeServico!.isNotEmpty)
+                    ? s.nomeServico!
+                    : 'Serviço #${s.idServico}',
+                quantidade: s.quantidade,
+                precoUnitario: s.precoUnitario,
+                subtotal: s.subtotal,
+                observacoes: s.observacoes,
+              ))
+          .toList();
+    }
+
+final subtotalSemIva = produtosSnap.fold<double>(
       0,
       (soma, item) => soma + _removerIva(item.subtotal),
     ) +
-    pedido.itensServico.fold<double>(
+    servicosSnap.fold<double>(
       0,
       (soma, item) => soma + _removerIva(item.subtotal),
     );
@@ -1609,21 +1727,17 @@ final subtotalSemIva = pedido.itensProduto.fold<double>(
 final valorIva = totalComIva - subtotalSemIva;
 
  final List<_LinhaItem> linhas = [
-  for (final p in pedido.itensProduto)
+  for (final p in produtosSnap)
     _LinhaItem(
       quantidade: p.quantidade,
-      descricao: p.nomeProduto.isNotEmpty
-          ? p.nomeProduto
-          : 'Produto #${p.idProduto}',
+      descricao: p.descricao,
       precoUnitario: _removerIva(p.precoUnitario),
       total: _removerIva(p.subtotal),
     ),
-for (final s in pedido.itensServico)
+for (final s in servicosSnap)
   _LinhaItem(
     quantidade: s.quantidade,
-    descricao: (s.nomeServico != null && s.nomeServico!.isNotEmpty)
-        ? s.nomeServico!
-        : 'Serviço #${s.idServico}',
+    descricao: s.descricao,
     precoUnitario: _removerIva(s.precoUnitario),
     total: _removerIva(s.subtotal),
     obs: s.observacoes,

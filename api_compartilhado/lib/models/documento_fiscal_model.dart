@@ -63,8 +63,9 @@ class DocumentoFiscalModel {
   final bool anulado;
   final String? motivoAnulacao;
   final String? tipoVenda;
+  final String? snapshotConteudo;
 
-  const DocumentoFiscalModel({
+const DocumentoFiscalModel({
     required this.id,
     required this.tipoDocumento,
     required this.idPedido,
@@ -78,9 +79,10 @@ class DocumentoFiscalModel {
     required this.anulado,
     this.motivoAnulacao,
     this.tipoVenda,
+    this.snapshotConteudo,
   });
 
-  factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
+factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
     return DocumentoFiscalModel(
       id: json['id'] as int,
       tipoDocumento: TipoDocumentoModel.fromJson(
@@ -96,10 +98,11 @@ class DocumentoFiscalModel {
       anulado: json['anulado'] as bool? ?? false,
       motivoAnulacao: json['motivoAnulacao'] as String?,
       tipoVenda: json['tipoVenda'],
+      snapshotConteudo: json['snapshotConteudo'] as String?,
     );
   }
 
-    factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
+factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
       DocumentoFiscalModel(
         id:        row['id']         as int,
         tipoDocumento: TipoDocumentoModel(
@@ -118,9 +121,10 @@ class DocumentoFiscalModel {
         emitidoEm:      DateTime.parse(row['emitido_em'] as String),
         anulado:        (row['anulado']    as int?) == 1,
         motivoAnulacao: row['motivo_anulacao'] as String?,
+        snapshotConteudo: row['snapshot_conteudo'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {
+Map<String, dynamic> toJson() => {
         'id': id,
         'tipoDocumento': tipoDocumento.toJson(),
         'idPedido': idPedido,
@@ -134,9 +138,10 @@ class DocumentoFiscalModel {
         'anulado': anulado,
         'motivoAnulacao': motivoAnulacao,
         'tipoVenda': tipoVenda,
+        'snapshotConteudo': snapshotConteudo,
       };
 
-        Map<String, dynamic> toLocalDb() => {
+Map<String, dynamic> toLocalDb() => {
         'id':              id,
         'id_tipo_doc':     tipoDocumento.id,
         'tipo_codigo':     tipoDocumento.codigo,
@@ -152,6 +157,7 @@ class DocumentoFiscalModel {
         'emitido_em':      emitidoEm.toIso8601String(),
         'anulado':         anulado ? 1 : 0,
         'motivo_anulacao': motivoAnulacao,
+        'snapshot_conteudo': snapshotConteudo,
         'sync_status':     'synced',
         'updated_at':      DateTime.now().toIso8601String(),
       };
@@ -170,6 +176,7 @@ class DocumentoFiscalModel {
     bool? anulado,
     String? motivoAnulacao,
     String? tipoVenda,
+    String? snapshotConteudo,
   }) {
     return DocumentoFiscalModel(
       id: id ?? this.id,
@@ -185,7 +192,7 @@ class DocumentoFiscalModel {
       anulado: anulado ?? this.anulado,
       motivoAnulacao: motivoAnulacao ?? this.motivoAnulacao,
       tipoVenda: tipoVenda ?? this.tipoVenda,
-      
+      snapshotConteudo: snapshotConteudo ?? this.snapshotConteudo,
     );
   }
 
