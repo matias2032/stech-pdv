@@ -1078,18 +1078,17 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
         documentoOrigem.setSyncStatus("PENDING_UPDATE");
         documentoFiscalRepository.save(documentoOrigem);
 
-    } else {
+} else {
         valorNota = BigDecimal.ZERO;
         for (ItemDevolvidoDTO itemDto : dto.itensDevolvidos) {
             valorNota = valorNota.add(devolverItemAoEstoque(pedido, itemDto));
         }
 
-        // Itens devolvidos foram reduzidos/removidos do pedido — o total
-        // precisa reflectir isso, senão o pedido continua a "valer" o
-        // valor original mesmo após a devolução ter sido processada.
-        pedido.recalcularTotal();
-        pedido.setSyncStatus("PENDING_UPDATE");
-        pedidoRepository.save(pedido);
+        // O pedido original (itens, quantidades, total) NÃO é alterado.
+        // É a base do controlo interno e da factura já emitida — o efeito
+        // financeiro da devolução fica registado apenas na NCR
+        // (documento_fiscal_relacao) e, se for crédito, em
+        // valor_creditado_devolucao (via aplicarAjusteSaldoPedido).
     }
 
     NotaRetificativaResponse notaResponse = documentoFiscalService.emitirNotaRetificativa(
@@ -1122,59 +1121,54 @@ private BigDecimal devolverItemAoEstoque(Pedido pedido, ItemDevolvidoDTO itemDto
                 "Cada item devolvido precisa indicar idItemPedido ou idItemServico");
     }
 
-    if (itemDto.idItemPedido != null) {
+if (itemDto.idItemPedido != null) {
 
         ItemPedido item = itemPedidoRepository
                 .findByIdItemPedidoAndPedidoIdPedido(itemDto.idItemPedido, pedido.getIdPedido())
                 .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemPedido, pedido.getIdPedido()));
 
-        if (itemDto.quantidade > item.getQuantidade()) {
+        int jaDevolvido = item.getQuantidadeDevolvida() != null ? item.getQuantidadeDevolvida() : 0;
+        int disponivelParaDevolucao = item.getQuantidade() - jaDevolvido;
+
+        if (itemDto.quantidade > disponivelParaDevolucao) {
             throw new IllegalArgumentException(
-                    "Quantidade devolvida (" + itemDto.quantidade + ") excede a quantidade do item "
-                    + itemDto.idItemPedido + " (" + item.getQuantidade() + ")");
+                    "Quantidade devolvida (" + itemDto.quantidade + ") excede a quantidade disponível para devolução do item "
+                    + itemDto.idItemPedido + " (" + disponivelParaDevolucao + " de " + item.getQuantidade() + ")");
         }
 
         ajustarEstoqueSemMovimento(item.getProduto(), itemDto.quantidade);
 
         BigDecimal valorDevolvido = item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
 
-        // Reduz (ou remove) o item do pedido — sem isto, a mesma devolução
-        // podia ser repetida indefinidamente, devolvendo mais estoque do
-        // que a quantidade original realmente comprada.
-        int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
-        if (quantidadeRestante <= 0) {
-            pedido.getItensProduto().remove(item);
-            itemPedidoRepository.delete(item);
-        } else {
-            item.setQuantidade(quantidadeRestante);
-            itemPedidoRepository.save(item);
-        }
+        // Não tocamos em quantidade/preço do item original (dado de auditoria,
+        // usado na factura em PDF). Só registamos quanto já foi devolvido,
+        // para impedir devoluções repetidas acima do comprado.
+        item.setQuantidadeDevolvida(jaDevolvido + itemDto.quantidade);
+        itemPedidoRepository.save(item);
 
         return valorDevolvido;
     }
 
-    ItemPedidoServico item = itemPedidoServicoRepository
+ItemPedidoServico item = itemPedidoServicoRepository
             .findByIdItemServicoAndPedido_IdPedido(itemDto.idItemServico, pedido.getIdPedido())
             .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemServico, pedido.getIdPedido()));
 
-    if (itemDto.quantidade > item.getQuantidade()) {
+    int jaDevolvido = item.getQuantidadeDevolvida() != null ? item.getQuantidadeDevolvida() : 0;
+    int disponivelParaDevolucao = item.getQuantidade() - jaDevolvido;
+
+    if (itemDto.quantidade > disponivelParaDevolucao) {
         throw new IllegalArgumentException(
-                "Quantidade devolvida (" + itemDto.quantidade + ") excede a quantidade do item "
-                + itemDto.idItemServico + " (" + item.getQuantidade() + ")");
+                "Quantidade devolvida (" + itemDto.quantidade + ") excede a quantidade disponível para devolução do item "
+                + itemDto.idItemServico + " (" + disponivelParaDevolucao + " de " + item.getQuantidade() + ")");
     }
 
     // Serviços não têm stock físico — apenas contabiliza o valor para a Nota de Crédito
     BigDecimal valorDevolvido = item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
 
-    // Mesma correção aplicada aos itens de serviço.
-    int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
-    if (quantidadeRestante <= 0) {
-        pedido.getItensServico().remove(item);
-        itemPedidoServicoRepository.delete(item);
-    } else {
-        item.setQuantidade(quantidadeRestante);
-        itemPedidoServicoRepository.save(item);
-    }
+    // Não tocamos em quantidade/preço do item original — só registamos o
+    // acumulado já devolvido, para impedir devolução repetida.
+    item.setQuantidadeDevolvida(jaDevolvido + itemDto.quantidade);
+    itemPedidoServicoRepository.save(item);
 
     return valorDevolvido;
 }

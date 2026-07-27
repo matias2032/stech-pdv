@@ -27,8 +27,11 @@ public class ItemPedido {
     @Column(name = "preco_unitario", nullable = false, precision = 12, scale = 2)
     private BigDecimal precoUnitario;
 
-    @Column(name = "confirmado_credito", nullable = false)
+@Column(name = "confirmado_credito", nullable = false)
 private Boolean confirmadoCredito = false;
+
+    @Column(name = "quantidade_devolvida", nullable = false)
+private Integer quantidadeDevolvida = 0;
 
     // subtotal é GENERATED ALWAYS AS (quantidade * preco_unitario) STORED
 @org.hibernate.annotations.Generated
@@ -66,6 +69,8 @@ private BigDecimal subtotal;
     return confirmadoCredito;
 }
 
+public Integer getQuantidadeDevolvida() { return quantidadeDevolvida; }
+    
     // ─── Setters ─────────────────────────────────────────────────────────────
     public void setIdItemPedido(Integer v)    { this.idItemPedido = v; }
     public void setPedido(Pedido v)           { this.pedido = v; }
@@ -75,4 +80,6 @@ private BigDecimal subtotal;
     public void setConfirmadoCredito(Boolean confirmadoCredito) {
     this.confirmadoCredito = confirmadoCredito;
 }
+public void setQuantidadeDevolvida(Integer v) { this.quantidadeDevolvida = v; }
+
 }
