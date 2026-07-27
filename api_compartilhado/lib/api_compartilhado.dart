@@ -33,7 +33,7 @@ export 'services/impressora_service.dart';
 export 'services/cotacao_service.dart';
 // pdf_service.dart NÃO é exportado aqui — usa DocumentoPdfModel (local)
 // e deve ser importado directamente onde for usado:
-//   import 'package:api_compartilhado/services/pdf_service.dart';
+export 'package:api_compartilhado/services/pdf_service.dart';
 export 'services/firebase_listener_service.dart';
 export 'services/sync_queue_service.dart';
 export 'services/usuario_service.dart';

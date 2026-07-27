@@ -37,5 +37,11 @@ public LocalDate       dataVencimentoCredito;
 public OffsetDateTime dataLiquidacaoCredito;
 public String         observacoesCredito;
 public BigDecimal     saldoDevedorCredito;
+
+// ── Ajustes de NCR/NDB ─────────────────────────────────────────────
+public BigDecimal     valorCreditadoDevolucao;
+public BigDecimal     valorDebitadoAjuste;
+/** Saldo devedor já considerando NCR/NDB aplicadas — usar este no frontend, não saldoDevedorCredito puro. */
+public BigDecimal     saldoDevedorAjustado;
 }
  

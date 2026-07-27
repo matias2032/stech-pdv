@@ -749,13 +749,17 @@ class _CardDocumento extends StatelessWidget {
 // ── Acções ─────────────────────────────────────────────────
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                  Tooltip(
   message: anulado ? 'Gerar PDF anulado' : 'Gerar PDF',
   child: IconButton(
     icon: const Icon(Icons.picture_as_pdf_rounded),
     color: _kAzul,
-    iconSize: 22,
+    iconSize: 20,
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+    visualDensity: VisualDensity.compact,
     onPressed: () => onGerarPdf(doc),
   ),
 ),
@@ -765,15 +769,19 @@ class _CardDocumento extends StatelessWidget {
                       child: IconButton(
                         icon: const Icon(Icons.block_rounded),
                         color: _kVermelho,
-                        iconSize: 22,
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                        visualDensity: VisualDensity.compact,
                         onPressed: () => onAnular(doc),
                       ),
                     ),
                   if (_podeDevolverOuDebitar)
                     PopupMenuButton<String>(
                       tooltip: 'Devolução / Nota de Débito',
+                      padding: EdgeInsets.zero,
                       icon: const Icon(Icons.more_vert_rounded,
-                          color: _kCinzaTexto, size: 22),
+                          color: _kCinzaTexto, size: 20),
                       onSelected: (opcao) {
                         if (opcao == 'devolver') {
                           onDevolver(doc);
@@ -943,7 +951,7 @@ class _GradeDocumentos extends StatelessWidget {
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 680,
-          mainAxisExtent: 140,
+          mainAxisExtent: 156,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),

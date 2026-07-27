@@ -4,11 +4,13 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+// DEPOIS
 public record ExtractoDocumentalClienteResponseDTO(
     Long idCliente,
     String nomeCliente,
     int totalDocumentos,
     BigDecimal somaTotal,
+    BigDecimal somaLiquida,
     List<LinhaDocumentalDTO> linhas
 ) {
     public record LinhaDocumentalDTO(
@@ -18,6 +20,10 @@ public record ExtractoDocumentalClienteResponseDTO(
         Integer idPedido,
         String referenciaPedido,
         OffsetDateTime emitidoEm,
-        BigDecimal valorTotal
+        BigDecimal valorTotal,
+        /** Soma de NDB - soma de NCR associadas a este documento. Pode ser negativo. */
+        BigDecimal valorAjuste,
+        /** valorTotal + valorAjuste — valor já líquido de notas de crédito/débito. */
+        BigDecimal valorLiquido
     ) {}
 }

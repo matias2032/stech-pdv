@@ -360,7 +360,23 @@ class _NotaDebitoScreenState extends State<NotaDebitoScreen> {
               'Valor: ${_currencyFmt.format(r.valor)}',
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
-            const SizedBox(height: 28),
+const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _gerarPdfNotaDebito(r),
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                label: const Text('Gerar PDF'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kAccent,
+                  side: const BorderSide(color: _kAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
@@ -379,5 +395,19 @@ class _NotaDebitoScreenState extends State<NotaDebitoScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _gerarPdfNotaDebito(NotaRetificativaResponseModel r) async {
+    try {
+      final pdfDoc = NotaRetificativaPdfModel.deApiModel(
+        apiModel: r,
+        referenciaDocumentoOrigem:
+            widget.referenciaDocumento ?? 'Documento #${widget.idDocumentoOrigem}',
+      );
+      final file = await PdfService.instance.gerarNotaRetificativa(pdfDoc);
+      await PdfService.instance.abrirPdf(file);
+    } catch (e) {
+      _snack('Erro ao gerar PDF: $e', _kAccent);
+    }
   }
 }

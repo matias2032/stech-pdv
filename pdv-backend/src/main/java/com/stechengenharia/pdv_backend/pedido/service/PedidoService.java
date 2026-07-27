@@ -617,11 +617,10 @@ public PagamentoCreditoResponseDTO registarPagamento(Integer idPedido, RegistarP
     Pedido pedido = buscarPedidoComItens(idPedido);
     validarPedidoCredito(pedido, "registo de pagamento");
 
-    BigDecimal saldoDevedor = pedido.getTotal()
-        .subtract(pedido.getValorPago() != null ? pedido.getValorPago() : BigDecimal.ZERO);
+BigDecimal saldoDevedor = pedido.getSaldoDevedorAjustado();
 
-    if (dto.valorPago().compareTo(saldoDevedor) > 0)
-        throw new PagamentoExcedeSaldoException(dto.valorPago(), saldoDevedor);
+if (dto.valorPago().compareTo(saldoDevedor) > 0)
+    throw new PagamentoExcedeSaldoException(dto.valorPago(), saldoDevedor);
 
     PedidoCreditoParcela parcela = null;
     if (dto.idParcela() != null) {
@@ -662,17 +661,25 @@ public PagamentoCreditoResponseDTO registarPagamento(Integer idPedido, RegistarP
     pagamento.setSyncStatus("PENDING_CREATE");
    pagamento = pagamentoRepository.save(pagamento);
    
-    BigDecimal novoValorPago = pedido.getValorPago().add(dto.valorPago());
-    pedido.setValorPago(novoValorPago);
+BigDecimal novoValorPago = pedido.getValorPago().add(dto.valorPago());
+pedido.setValorPago(novoValorPago);
 
-    if (novoValorPago.compareTo(pedido.getTotal()) >= 0) {
-        pedido.setStatusPagamento("PAGO");
-        pedido.setStatusPedido("finalizado");
-        pedido.setDataLiquidacaoCredito(OffsetDateTime.now());
-        pedido.setDataFinalizacao(LocalDateTime.now());
-    } else {
-        pedido.setStatusPagamento("PARCIAL");
-    }
+// Total ajustado por NCR/NDB — é este valor, e não pedido.getTotal() original,
+// que define quando o pedido a crédito fica efectivamente liquidado.
+BigDecimal totalAjustado = pedido.getTotal()
+        .subtract(pedido.getValorCreditadoDevolucao() != null
+                ? pedido.getValorCreditadoDevolucao() : BigDecimal.ZERO)
+        .add(pedido.getValorDebitadoAjuste() != null
+                ? pedido.getValorDebitadoAjuste() : BigDecimal.ZERO);
+
+if (novoValorPago.compareTo(totalAjustado) >= 0) {
+    pedido.setStatusPagamento("PAGO");
+    pedido.setStatusPedido("finalizado");
+    pedido.setDataLiquidacaoCredito(OffsetDateTime.now());
+    pedido.setDataFinalizacao(LocalDateTime.now());
+} else {
+    pedido.setStatusPagamento("PARCIAL");
+}
     pedido.setSyncStatus("PENDING_UPDATE");
     pedidoRepository.save(pedido);
 
@@ -716,16 +723,21 @@ public ExtractoClienteResponseDTO extractoCliente(Long idCliente) {
         .map(p -> p.getValorPago() != null ? p.getValorPago() : BigDecimal.ZERO)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+    // saldoDevedor (linha e agregado) já considera NCR/NDB aplicadas — ver Pedido.getSaldoDevedorAjustado()
     List<ExtractoClienteResponseDTO.ExtractoPedidoDTO> linhas = pedidos.stream()
         .map(p -> new ExtractoClienteResponseDTO.ExtractoPedidoDTO(
             p.getIdPedido(), p.getReferencia(), p.getTotal(), p.getValorPago(),
-            p.getTotal().subtract(p.getValorPago() != null ? p.getValorPago() : BigDecimal.ZERO),
+            p.getSaldoDevedorAjustado(),
             p.getStatusPagamento(),
             p.getIdDocumentoFacturaCredito()
         )).toList();
 
+    BigDecimal saldoDevedorAgregado = pedidos.stream()
+        .map(Pedido::getSaldoDevedorAjustado)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
     return new ExtractoClienteResponseDTO(
-        idCliente, totalDivida, totalPago, totalDivida.subtract(totalPago), linhas);
+        idCliente, totalDivida, totalPago, saldoDevedorAgregado, linhas);
 }
 
 @Transactional(readOnly = true)
@@ -986,6 +998,10 @@ dto.dataVencimentoCredito     = pedido.getDataVencimentoCredito();
 dto.dataLiquidacaoCredito     = pedido.getDataLiquidacaoCredito();
 dto.observacoesCredito        = pedido.getObservacoesCredito();
 dto.saldoDevedorCredito       = pedido.getSaldoDevedorCredito();
+
+dto.valorCreditadoDevolucao   = pedido.getValorCreditadoDevolucao();
+dto.valorDebitadoAjuste       = pedido.getValorDebitadoAjuste();
+dto.saldoDevedorAjustado      = pedido.getSaldoDevedorAjustado();
 
         return dto;
     }

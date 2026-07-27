@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
+import 'package:api_compartilhado/api_config.dart';
+import 'package:http/http.dart' as http;
+import 'dart:async';
 
 // ─── Paleta (igual às telas de pedidos) ───────────────────────────────────────
 const _kPrimary = Color(0xFF1B2A6B);
@@ -57,6 +60,7 @@ class _DevolucaoTrocaScreenState extends State<DevolucaoTrocaScreen> {
 
   PedidoModel? _pedido;
   String? _motivo; // ERRO_PREENCHIMENTO | DEVOLUCAO | TROCA_PRODUTO
+  ClienteModel? _clienteCadastrado;
 
   final Map<int, _SelecaoItem> _selecaoProduto = {};
   final Map<int, _SelecaoItem> _selecaoServico = {};
@@ -113,6 +117,28 @@ class _DevolucaoTrocaScreenState extends State<DevolucaoTrocaScreen> {
       _carregando = false;
     });
     _prepararSelecoes();
+    unawaited(_carregarClienteSeAplicavel());
+  }
+
+  /// Carrega o ClienteModel completo (cliente cadastrado) para exibição
+  /// no PDF da Nota de Crédito. Se o pedido não tiver idCliente (cliente
+  /// singular/avulso), não faz nada — o nome singular já vem no PedidoModel.
+  Future<void> _carregarClienteSeAplicavel() async {
+    final idCliente = _pedido?.idCliente;
+    if (idCliente == null) return;
+
+    try {
+final cliente = await ClienteService(
+  baseUrl: ApiConfig.baseUrl,
+  httpClient: http.Client(), // <--- Passando uma nova instância de Client
+).buscarPorId(idCliente);
+      if (!mounted) return;
+      setState(() => _clienteCadastrado = cliente);
+    } catch (e) {
+      // Não bloqueia o fluxo de devolução por causa disto — o PDF
+      // simplesmente não mostrará os dados completos do cliente.
+      debugPrint('⚠️ DevolucaoTrocaScreen — falha ao carregar cliente: $e');
+    }
   }
 
   void _prepararSelecoes() {
@@ -227,6 +253,72 @@ class _DevolucaoTrocaScreenState extends State<DevolucaoTrocaScreen> {
     }
   }
 
+
+Future<void> _gerarPdfNotaCredito(DevolucaoResponseModel r) async {
+    try {
+      // DevolucaoResponseModel não traz codigoAt/emitidoEm — busca o
+      // documento fiscal completo para poder montar o PDF correctamente.
+      final documentoNota = await context
+          .read<DocumentoFiscalProvider>()
+          .buscarPorId(r.idNotaCredito);
+
+      if (documentoNota == null) {
+        _snack('Não foi possível carregar os dados da nota emitida.', _kAccent);
+        return;
+      }
+
+      final pedido = _pedido;
+      final itensDevolvidos = <ItemNotaRetificativaModel>[];
+
+      if (_motivo != 'ERRO_PREENCHIMENTO' && pedido != null) {
+        for (final item in pedido.itensProduto) {
+          final sel = _selecaoProduto[item.idItemPedido];
+          if (sel != null && sel.selecionado) {
+            itensDevolvidos.add(ItemNotaRetificativaModel(
+              descricao: item.nomeProduto,
+              quantidade: sel.quantidade,
+              precoUnitario: item.precoUnitario,
+            ));
+          }
+        }
+        for (final item in pedido.itensServico) {
+          final sel = _selecaoServico[item.idItemServico];
+          if (sel != null && sel.selecionado) {
+            itensDevolvidos.add(ItemNotaRetificativaModel(
+              descricao: item.nomeServico ?? 'Serviço #${item.idServico}',
+              quantidade: sel.quantidade,
+              precoUnitario: item.precoUnitario,
+            ));
+          }
+        }
+      }
+
+      final nomeSingular = [
+        pedido?.nomeClienteSingular,
+        pedido?.apelidoClienteSingular,
+      ].where((v) => v != null && v.trim().isNotEmpty).join(' ').trim();
+
+final pdfDoc = NotaRetificativaPdfModel.deDevolucaoResponse(
+        devolucao: r,
+        documentoNota: documentoNota,
+        referenciaDocumentoOrigem:
+            widget.documentoOrigem?.referencia ?? 'Documento #${widget.idDocumentoOrigem}',
+        referenciaPedidoOrigem: pedido?.referencia,
+        cliente: _clienteCadastrado,
+        nomeClienteSingular: nomeSingular.isNotEmpty ? pedido?.nomeClienteSingular : null,
+        apelidoClienteSingular: nomeSingular.isNotEmpty ? pedido?.apelidoClienteSingular : null,
+        observacoes: _obsCtrl.text.trim().isEmpty ? null : _obsCtrl.text.trim(),
+        itensDevolvidos: itensDevolvidos,
+      );
+
+      final file = await PdfService.instance.gerarNotaRetificativa(pdfDoc);
+      await PdfService.instance.abrirPdf(file);
+    } catch (e) {
+      _snack('Erro ao gerar PDF: $e', _kAccent);
+    }
+  }
+
+  
   Future<bool> _confirmarAnulacaoTotal() async {
     return await showDialog<bool>(
           context: context,
@@ -739,7 +831,23 @@ class _DevolucaoTrocaScreenState extends State<DevolucaoTrocaScreen> {
               'Valor creditado: ${_currencyFmt.format(r.valorCreditado)}',
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
-            const SizedBox(height: 28),
+const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _gerarPdfNotaCredito(r),
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                label: const Text('Gerar PDF'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kAccent,
+                  side: const BorderSide(color: _kAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             if (_motivo == 'TROCA_PRODUTO') ...[
               SizedBox(
                 width: double.infinity,

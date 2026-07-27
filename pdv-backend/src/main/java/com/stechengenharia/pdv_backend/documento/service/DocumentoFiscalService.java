@@ -16,7 +16,10 @@ import com.stechengenharia.pdv_backend.documento.exception.DocumentoJaSincroniza
 import com.stechengenharia.pdv_backend.documento.exception.TipoDocumentoNotFoundException;
 import com.stechengenharia.pdv_backend.documento.repository.DocumentoFiscalRepository;
 import com.stechengenharia.pdv_backend.documento.repository.TipoDocumentoFiscalRepository;
+import com.stechengenharia.pdv_backend.pedido.entity.DocumentoFiscalRelacao;
+import com.stechengenharia.pdv_backend.pedido.repository.DocumentoFiscalRelacaoRepository;
 import com.stechengenharia.pdv_backend.usuario.entity.Usuario;
+import java.util.Objects;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +46,8 @@ public class DocumentoFiscalService {
     private final DocumentoFiscalRepository documentoRepository;
     private final TipoDocumentoFiscalRepository tipoDocumentoRepository;
     private final ClienteRepository clienteRepository;
-private final PedidoRepository pedidoRepository;
+    private final PedidoRepository pedidoRepository;
+    private final DocumentoFiscalRelacaoRepository relacaoRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -260,32 +264,69 @@ public ExtractoDocumentalClienteResponseDTO extractoDocumentalCliente(Long idCli
             p -> p.getReferencia()
         ));
 
+// DEPOIS
     List<ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO> linhas =
-        documentos.stream().map(d -> new ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO(
-            d.getId(),
-            d.getReferencia(),
-            d.getTipoDocumento().getCodigo(),
-            d.getIdPedido(),
-            refPorPedido.getOrDefault(d.getIdPedido(), "—"),
-            d.getEmitidoEm(),
-            totalPorPedido.getOrDefault(d.getIdPedido(), BigDecimal.ZERO)
-        )).toList();
+        documentos.stream().map(d -> {
+            BigDecimal valorTotal = totalPorPedido.getOrDefault(d.getIdPedido(), BigDecimal.ZERO);
+            BigDecimal valorAjuste = calcularAjusteDocumento(d.getId());
+            BigDecimal valorLiquido = valorTotal.add(valorAjuste);
+
+            return new ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO(
+                d.getId(),
+                d.getReferencia(),
+                d.getTipoDocumento().getCodigo(),
+                d.getIdPedido(),
+                refPorPedido.getOrDefault(d.getIdPedido(), "—"),
+                d.getEmitidoEm(),
+                valorTotal,
+                valorAjuste,
+                valorLiquido
+            );
+        }).toList();
 
     BigDecimal somaTotal = linhas.stream()
         .map(ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO::valorTotal)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+    BigDecimal somaLiquida = linhas.stream()
+        .map(ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO::valorLiquido)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
     String nomeCliente = (cliente.getNome() != null ? cliente.getNome() : "")
         + (cliente.getApelido() != null ? " " + cliente.getApelido() : "");
 
-// DEPOIS
     return new ExtractoDocumentalClienteResponseDTO(
         idCliente,
         nomeCliente.trim(),
         linhas.size(),
         somaTotal,
+        somaLiquida,
         linhas
     );
+}
+
+/**
+ * Calcula o ajuste líquido (débitos - créditos) das notas retificativas
+ * (NCR/NDB) associadas a um documento fiscal (FAT/VD).
+ * Nota: na tabela documento_fiscal_relacao, id_documento_relacionado
+ * aponta para a FAT/VD de origem — id_documento_origem é a própria NCR/NDB.
+ */
+private BigDecimal calcularAjusteDocumento(Integer idDocumento) {
+    BigDecimal creditos = relacaoRepository
+        .findByIdDocumentoRelacionadoAndTipoRelacao(idDocumento, "NOTA_CREDITO")
+        .stream()
+        .map(DocumentoFiscalRelacao::getValor)
+        .filter(Objects::nonNull)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    BigDecimal debitos = relacaoRepository
+        .findByIdDocumentoRelacionadoAndTipoRelacao(idDocumento, "NOTA_DEBITO")
+        .stream()
+        .map(DocumentoFiscalRelacao::getValor)
+        .filter(Objects::nonNull)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    return debitos.subtract(creditos);
 }
 
 // ─── NOTAS DE CRÉDITO / DÉBITO ────────────────────────────────────────────
@@ -299,7 +340,7 @@ public ExtractoDocumentalClienteResponseDTO extractoDocumentalCliente(Long idCli
 public NotaRetificativaResponse emitirNotaRetificativa(
         Integer idDocumentoOrigem, EmitirNotaRetificativaRequest request) {
 
-    documentoRepository.findById(idDocumentoOrigem)
+    DocumentoFiscal documentoOrigem = documentoRepository.findById(idDocumentoOrigem)
             .orElseThrow(() -> new DocumentoFiscalNotFoundException(idDocumentoOrigem));
 
     tipoDocumentoRepository.findByCodigo(request.codigoTipo())
@@ -323,6 +364,9 @@ public NotaRetificativaResponse emitirNotaRetificativa(
     doc.setSyncStatus("PENDING_CREATE");
     documentoRepository.save(doc);
 
+    // Ponto único de ajuste de saldo — cobre NCR (via PedidoService) e NDB (directo).
+    aplicarAjusteSaldoPedido(documentoOrigem.getIdPedido(), request.codigoTipo(), request.valor());
+
     log.info("Nota retificativa {} emitida | documento origem {} | motivo={} | valor={}",
             doc.getReferencia(), idDocumentoOrigem, request.motivo(), request.valor());
 
@@ -332,5 +376,49 @@ public NotaRetificativaResponse emitirNotaRetificativa(
             request.motivo(),
             request.valor()
     );
+}
+
+/**
+ * Aplica o efeito de uma NCR (crédito) ou NDB (débito) no saldo do pedido
+ * de origem — apenas para pedidos a crédito (tipoVenda == "CREDITO").
+ * Para vendas imediatas, o valor não é aplicado a nenhum saldo (não existe
+ * esse conceito hoje); fica apenas registado nas colunas de auditoria.
+ */
+private void aplicarAjusteSaldoPedido(Integer idPedido, String codigoTipo, BigDecimal valor) {
+    if (idPedido == null || valor == null || valor.compareTo(BigDecimal.ZERO) == 0) {
+        return;
+    }
+
+    Pedido pedido = pedidoRepository.findById(idPedido).orElse(null);
+    if (pedido == null) {
+        log.warn("Nota {} emitida mas pedido {} não encontrado — ajuste de saldo ignorado.",
+                codigoTipo, idPedido);
+        return;
+    }
+
+    if (!"CREDITO".equalsIgnoreCase(pedido.getTipoVenda())) {
+        log.info("Pedido {} não é a crédito (tipoVenda={}) — nota {} não altera saldo.",
+                idPedido, pedido.getTipoVenda(), codigoTipo);
+        return;
+    }
+
+    if ("NCR".equals(codigoTipo)) {
+        pedido.setValorCreditadoDevolucao(
+                (pedido.getValorCreditadoDevolucao() != null
+                        ? pedido.getValorCreditadoDevolucao() : BigDecimal.ZERO).add(valor));
+    } else if ("NDB".equals(codigoTipo)) {
+        pedido.setValorDebitadoAjuste(
+                (pedido.getValorDebitadoAjuste() != null
+                        ? pedido.getValorDebitadoAjuste() : BigDecimal.ZERO).add(valor));
+    } else {
+        return; // outros tipos de documento não afectam saldo
+    }
+
+    pedido.setSyncStatus("PENDING_UPDATE");
+    pedidoRepository.save(pedido);
+
+    log.info("Pedido {} | ajuste de saldo aplicado | tipo={} | valor={} | novoCreditado={} | novoDebitado={}",
+            idPedido, codigoTipo, valor,
+            pedido.getValorCreditadoDevolucao(), pedido.getValorDebitadoAjuste());
 }
 }

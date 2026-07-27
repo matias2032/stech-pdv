@@ -87,6 +87,27 @@ private String observacoesCredito;
         precision = 12, scale = 2)
 private BigDecimal saldoDevedorCredito;
 
+// ── Ajustes de NCR/NDB — colunas de auditoria, aditivas, nunca sobrescrevem `total` ──
+@Column(name = "valor_creditado_devolucao", nullable = false, precision = 12, scale = 2)
+private BigDecimal valorCreditadoDevolucao = BigDecimal.ZERO;
+
+@Column(name = "valor_debitado_ajuste", nullable = false, precision = 12, scale = 2)
+private BigDecimal valorDebitadoAjuste = BigDecimal.ZERO;
+
+/**
+ * Saldo devedor real, considerando notas de crédito/débito já aplicadas.
+ * Não persistido — derivado em memória a partir de saldoDevedorCredito (BD).
+ */
+public BigDecimal getSaldoDevedorAjustado() {
+    BigDecimal base = saldoDevedorCredito != null
+            ? saldoDevedorCredito
+            : total.subtract(valorPago != null ? valorPago : BigDecimal.ZERO);
+
+    return base
+            .subtract(valorCreditadoDevolucao != null ? valorCreditadoDevolucao : BigDecimal.ZERO)
+            .add(valorDebitadoAjuste != null ? valorDebitadoAjuste : BigDecimal.ZERO);
+}
+
 
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ItemPedido> itensProduto = new HashSet<>();

@@ -22,7 +22,14 @@ const double kTaxaIva = 0.16;
 // ENUM — tipos de documento fiscal (para uso local no PDF)
 // ═══════════════════════════════════════════════════════════════════
 
-enum TipoDocumentoPdf { factura,recibo, /*notaDeCompra,*/vendaADinheiro,notaDeEntrega }
+enum TipoDocumentoPdf {
+  factura,
+  recibo, /*notaDeCompra,*/
+  vendaADinheiro,
+  notaDeEntrega,
+  notaCredito,
+  notaDebito,
+}
 
 extension TipoDocumentoPdfExt on TipoDocumentoPdf {
   String get titulo => switch (this) {
@@ -32,6 +39,8 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         // TipoDocumentoPdf.notaDeCompra => 'NOTA DE COMPRA',
           TipoDocumentoPdf.vendaADinheiro => 'VENDA A DINHEIRO',
           TipoDocumentoPdf.notaDeEntrega => 'NOTA DE ENTREGA',
+          TipoDocumentoPdf.notaCredito => 'NOTA DE CRÉDITO',
+          TipoDocumentoPdf.notaDebito => 'NOTA DE DÉBITO',
       };
 
   String get prefixo => switch (this) {
@@ -41,6 +50,8 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         // TipoDocumentoPdf.notaDeCompra => 'NCO',
         TipoDocumentoPdf.vendaADinheiro => 'VD',
         TipoDocumentoPdf.notaDeEntrega => 'NOTA DE ENTREGA',
+        TipoDocumentoPdf.notaCredito => 'NCR',
+        TipoDocumentoPdf.notaDebito => 'NDB',
       };
 
   String get labelReferencia => switch (this) {
@@ -49,6 +60,8 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         // TipoDocumentoPdf.notaDeCompra => 'N. Compra Nº',
         TipoDocumentoPdf.vendaADinheiro => 'Venda a Dinheiro Nº',
         TipoDocumentoPdf.notaDeEntrega => 'N. Entrega Nº',
+        TipoDocumentoPdf.notaCredito => 'Nota de Crédito Nº',
+        TipoDocumentoPdf.notaDebito => 'Nota de Débito Nº',
       };
 
   /// Converte o prefixo da BD para o enum local de PDF.
@@ -58,10 +71,11 @@ extension TipoDocumentoPdfExt on TipoDocumentoPdf {
         // 'NCO' => TipoDocumentoPdf.notaDeCompra,
         'VD' => TipoDocumentoPdf.vendaADinheiro,
         'NE' => TipoDocumentoPdf.notaDeEntrega,
+        'NCR' => TipoDocumentoPdf.notaCredito,
+        'NDB' => TipoDocumentoPdf.notaDebito,
         _ => TipoDocumentoPdf.factura,
       };
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // MODELO LOCAL DO PDF — renomeado de DocumentoFiscalModel
 // para evitar conflito com o model da API (DocumentoFiscalModel)
@@ -251,6 +265,172 @@ class ReciboCreditoPdfModel {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// NOTA DE CRÉDITO / DÉBITO — modelo local do PDF
+// ═══════════════════════════════════════════════════════════════════
+
+/// Linha de item efectivamente devolvido/ajustado numa nota retificativa.
+/// Montada pelo chamador (screen) a partir dos itens seleccionados,
+/// já que o backend não devolve os itens dentro de
+/// NotaRetificativaResponseModel / DevolucaoResponseModel.
+class ItemNotaRetificativaModel {
+  final String descricao;
+  final int quantidade;
+  final double precoUnitario;
+
+  const ItemNotaRetificativaModel({
+    required this.descricao,
+    required this.quantidade,
+    required this.precoUnitario,
+  });
+
+  double get subtotal => precoUnitario * quantidade;
+}
+
+class NotaRetificativaPdfModel {
+  final TipoDocumentoPdf tipo; // notaCredito | notaDebito
+
+  /// Referência da própria nota, ex: NCR-0001/2026
+  final String referencia;
+
+  final String codigoAT;
+  final DateTime dataEmissao;
+
+  /// Referência do documento de origem (FAT/VD) sobre o qual a nota incide.
+  final String referenciaDocumentoOrigem;
+
+  /// Referência do pedido de origem, se disponível (apenas contexto).
+  final String? referenciaPedidoOrigem;
+
+  /// Código do motivo tal como vem do backend:
+  /// ERRO_PREENCHIMENTO | TROCA_PRODUTO | DEVOLUCAO | IVA_INCORRETO | OUTRO
+  final String motivo;
+
+  final double valor;
+
+  final ClienteModel? cliente;
+  final String? nomeClienteSingular;
+  final String? apelidoClienteSingular;
+
+  final String? observacoes;
+  final String? salesperson;
+
+  /// Itens efectivamente devolvidos — só populado para DEVOLUCAO/TROCA_PRODUTO.
+  /// Vazio para ERRO_PREENCHIMENTO (anulação total) e para NDB.
+  final List<ItemNotaRetificativaModel> itensDevolvidos;
+
+  const NotaRetificativaPdfModel({
+    required this.tipo,
+    required this.referencia,
+    required this.codigoAT,
+    required this.dataEmissao,
+    required this.referenciaDocumentoOrigem,
+    this.referenciaPedidoOrigem,
+    required this.motivo,
+    required this.valor,
+    this.cliente,
+    this.nomeClienteSingular,
+    this.apelidoClienteSingular,
+    this.observacoes,
+    this.salesperson,
+    this.itensDevolvidos = const [],
+  });
+
+  bool get temClienteSingular =>
+      cliente == null &&
+      ((nomeClienteSingular != null && nomeClienteSingular!.trim().isNotEmpty) ||
+       (apelidoClienteSingular != null && apelidoClienteSingular!.trim().isNotEmpty));
+
+  String get nomeClienteExibicao {
+    if (cliente != null) return '${cliente!.nome ?? ''} ${cliente!.apelido ?? ''}'.trim();
+    if (temClienteSingular) {
+      return [nomeClienteSingular, apelidoClienteSingular]
+          .where((v) => v != null && v.trim().isNotEmpty)
+          .join(' ')
+          .trim();
+    }
+    return '';
+  }
+
+  String get motivoLabel => switch (motivo) {
+        'ERRO_PREENCHIMENTO' => 'Erro de preenchimento (anulação total da factura)',
+        'TROCA_PRODUTO' => 'Troca de produto',
+        'DEVOLUCAO' => 'Devolução',
+        'IVA_INCORRETO' => 'IVA incorrecto',
+        'OUTRO' => 'Outro',
+        _ => motivo,
+      };
+
+  /// Fábrica a partir da resposta completa do backend (usada quando a API
+  /// devolve NotaRetificativaResponseModel — actualmente é o caso de NDB;
+  /// para NCR emitida via processarDevolucaoOuTroca, ver
+  /// NotaRetificativaPdfModel.deDevolucaoResponse.
+  factory NotaRetificativaPdfModel.deApiModel({
+    required NotaRetificativaResponseModel apiModel,
+    required String referenciaDocumentoOrigem,
+    String? referenciaPedidoOrigem,
+    ClienteModel? cliente,
+    String? nomeClienteSingular,
+    String? apelidoClienteSingular,
+    String? observacoes,
+    String? salesperson,
+    List<ItemNotaRetificativaModel> itensDevolvidos = const [],
+  }) {
+    return NotaRetificativaPdfModel(
+      tipo: TipoDocumentoPdfExt.dePrefixo(apiModel.documento.tipoDocumento.prefixo),
+      referencia: apiModel.documento.referencia,
+      codigoAT: apiModel.documento.codigoAt,
+      dataEmissao: apiModel.documento.emitidoEm,
+      referenciaDocumentoOrigem: referenciaDocumentoOrigem,
+      referenciaPedidoOrigem: referenciaPedidoOrigem,
+      motivo: apiModel.motivoRetificacao,
+      valor: apiModel.valor,
+      cliente: cliente,
+      nomeClienteSingular: nomeClienteSingular,
+      apelidoClienteSingular: apelidoClienteSingular,
+      observacoes: observacoes,
+      salesperson: salesperson,
+      itensDevolvidos: itensDevolvidos,
+    );
+  }
+
+  /// Fábrica a partir de DevolucaoResponseModel (fluxo NCR via
+  /// processarDevolucaoOuTroca), que não traz codigoAt/emitidoEm/tipoDocumento
+  /// completos. Requer que o chamador tenha buscado o DocumentoFiscalModel
+  /// completo à parte (ex: via DocumentoFiscalProvider.buscarPorId) para
+  /// preencher codigoAT e dataEmissao correctamente.
+  factory NotaRetificativaPdfModel.deDevolucaoResponse({
+    required DevolucaoResponseModel devolucao,
+    required DocumentoFiscalModel documentoNota,
+    required String referenciaDocumentoOrigem,
+    String? referenciaPedidoOrigem,
+    ClienteModel? cliente,
+    String? nomeClienteSingular,
+    String? apelidoClienteSingular,
+    String? observacoes,
+    String? salesperson,
+    List<ItemNotaRetificativaModel> itensDevolvidos = const [],
+  }) {
+    return NotaRetificativaPdfModel(
+      tipo: TipoDocumentoPdfExt.dePrefixo(documentoNota.tipoDocumento.prefixo),
+      referencia: devolucao.referenciaNotaCredito,
+      codigoAT: documentoNota.codigoAt,
+      dataEmissao: documentoNota.emitidoEm,
+      referenciaDocumentoOrigem: referenciaDocumentoOrigem,
+      referenciaPedidoOrigem: referenciaPedidoOrigem,
+      motivo: devolucao.motivo,
+      valor: devolucao.valorCreditado,
+      cliente: cliente,
+      nomeClienteSingular: nomeClienteSingular,
+      apelidoClienteSingular: apelidoClienteSingular,
+      observacoes: observacoes,
+      salesperson: salesperson,
+      itensDevolvidos: itensDevolvidos,
+    );
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
 // DADOS FIXOS DA EMPRESA
 // ═══════════════════════════════════════════════════════════════════
 
@@ -388,6 +568,320 @@ Future<File> gerarDocumentoFiscal(
   }
 }
 
+// ═════════════════════════════════════════════════════════════════
+  // PÚBLICO: Gerar Nota de Crédito / Débito
+  // ═════════════════════════════════════════════════════════════════
+
+  Future<File> gerarNotaRetificativa(NotaRetificativaPdfModel doc) async {
+    final pdf = await _buildNotaRetificativa(doc);
+    return _savePdfWithName(pdf, _nomeArquivoNotaRetificativa(doc));
+  }
+
+  Future<void> imprimirNotaRetificativaViaSumatra({
+    required NotaRetificativaPdfModel doc,
+    required String impressoraNome,
+  }) async {
+    _assertWindows();
+    final sumatra = _sumatraPath();
+    final pdf = await _buildNotaRetificativa(doc);
+    final file = await _savePdfWithName(pdf, _nomeArquivoNotaRetificativa(doc));
+    final result = await Process.run(sumatra, [
+      '-print-to', impressoraNome,
+      '-print-settings', 'fit',
+      '-silent',
+      file.path,
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception('SumatraPDF erro (${result.exitCode}): ${result.stderr}');
+    }
+  }
+
+  Future<void> imprimirNotaRetificativaComDialogo({
+    required NotaRetificativaPdfModel doc,
+  }) async {
+    _assertWindows();
+    final sumatra = _sumatraPath();
+    final pdf = await _buildNotaRetificativa(doc);
+    final file = await _savePdfWithName(pdf, _nomeArquivoNotaRetificativa(doc));
+    await Process.run(sumatra, ['-print-dialog', file.path]);
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // BUILD — NOTA DE CRÉDITO / DÉBITO
+  // ═════════════════════════════════════════════════════════════════
+
+  Future<pw.Document> _buildNotaRetificativa(NotaRetificativaPdfModel doc) async {
+    final iconBytes = await rootBundle.load('assets/icon/app_icon.png');
+    final iconImage = pw.MemoryImage(iconBytes.buffer.asUint8List());
+
+    final pdf = pw.Document(
+      title: doc.referencia,
+      author: _Empresa.nomeCompleto,
+      creator: 'Sistema de Gestão Stech',
+    );
+
+    final corAccent = doc.tipo == TipoDocumentoPdf.notaCredito ? _kAzul : _kVermelho;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(30, 28, 30, 20),
+        footer: (ctx) => _docFiscalFooterPagina(ctx),
+        build: (ctx) => [
+          _notaRetificativaCabecalho(doc, iconImage, corAccent),
+          pw.SizedBox(height: 6),
+          _notaRetificativaEmissorCliente(doc),
+          pw.SizedBox(height: 6),
+          pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+          pw.SizedBox(height: 4),
+          _notaRetificativaMetadados(doc),
+          pw.SizedBox(height: 8),
+          _notaRetificativaBlocoMotivo(doc, corAccent),
+          if (doc.itensDevolvidos.isNotEmpty) ...[
+            pw.SizedBox(height: 10),
+            _notaRetificativaTabelaItens(doc.itensDevolvidos),
+          ],
+          pw.SizedBox(height: 12),
+          _notaRetificativaResumoValor(doc, corAccent),
+          if (doc.observacoes != null && doc.observacoes!.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 10),
+            _notaRetificativaObservacoes(doc.observacoes!),
+          ],
+          pw.SizedBox(height: 16),
+          _docFiscalCodigoAT(doc.codigoAT),
+        ],
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _notaRetificativaCabecalho(
+    NotaRetificativaPdfModel doc,
+    pw.MemoryImage icon,
+    PdfColor corAccent,
+  ) {
+    return pw.Column(
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Image(icon, width: 135, height: 80, fit: pw.BoxFit.contain),
+            pw.SizedBox(width: 20),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    doc.tipo.titulo,
+                    style: pw.TextStyle(
+                      fontSize: 22,
+                      fontWeight: pw.FontWeight.bold,
+                      color: corAccent,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Referente à factura ${doc.referenciaDocumentoOrigem}',
+                    style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 10),
+        pw.Divider(color: corAccent, thickness: 2.5),
+      ],
+    );
+  }
+
+  pw.Widget _notaRetificativaEmissorCliente(NotaRetificativaPdfModel doc) {
+    final nomeCliente = doc.nomeClienteExibicao;
+    final c = doc.cliente;
+
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _t(_Empresa.nomeCompleto, bold: true, size: 8.5),
+              pw.SizedBox(height: 2),
+              _t(_Empresa.bairro, size: 8),
+              _t(_Empresa.telefone, size: 8),
+              _t(_Empresa.email, size: 8),
+              _t(_Empresa.website, size: 8),
+              _t(_Empresa.nuit, size: 8),
+            ],
+          ),
+        ),
+        pw.SizedBox(width: 20),
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _t('Exmo. (s) Sr(s)', size: 8, color: PdfColors.grey700),
+              pw.SizedBox(height: 2),
+              if (nomeCliente.isNotEmpty)
+                _t('Nome:  $nomeCliente', bold: true, size: 8.5),
+              if (c != null && c.nuit != null && c.nuit!.isNotEmpty)
+                _t('NUIT:  ${c.nuit}', size: 8),
+              if (c != null && c.morada != null && c.morada!.isNotEmpty)
+                _t('Endereço:  ${c.morada}', size: 8),
+              if (c != null && c.contacto != null && c.contacto!.isNotEmpty)
+                _t('Tel:  ${c.contacto}', size: 8),
+              if (doc.temClienteSingular)
+                _t('Tipo:  Cliente singular', size: 8, color: PdfColors.grey700),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _notaRetificativaMetadados(NotaRetificativaPdfModel doc) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _metaRow('Data:', _fmt.format(doc.dataEmissao)),
+              _metaRow('Gerado em:',
+                  DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())),
+              _metaRow('Documento de origem:', doc.referenciaDocumentoOrigem),
+              if (doc.referenciaPedidoOrigem != null)
+                _metaRow('Pedido:', doc.referenciaPedidoOrigem!),
+              if (doc.salesperson != null && doc.salesperson!.isNotEmpty)
+                _metaRow('Salesperson:', doc.salesperson!),
+              _metaRow('Moeda:', 'MT'),
+            ],
+          ),
+        ),
+        pw.Text(
+          '${doc.tipo.labelReferencia} ${doc.referencia}',
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: _kVermelho,
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _notaRetificativaBlocoMotivo(NotaRetificativaPdfModel doc, PdfColor corAccent) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey100,
+        border: pw.Border.all(color: corAccent, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Motivo',
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: corAccent),
+          ),
+          pw.SizedBox(height: 3),
+          pw.Text(
+            doc.motivoLabel,
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _notaRetificativaTabelaItens(List<ItemNotaRetificativaModel> itens) {
+    const pw.TextStyle estiloHeader = pw.TextStyle(fontSize: 8, color: PdfColors.white);
+    const pw.TextStyle estiloCell = pw.TextStyle(fontSize: 8);
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+      columnWidths: const {
+        0: pw.FixedColumnWidth(28),
+        1: pw.FlexColumnWidth(),
+        2: pw.FixedColumnWidth(88),
+        3: pw.FixedColumnWidth(88),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: _kAzul),
+          children: [
+            _thCell('Qt', estiloHeader, align: pw.TextAlign.center),
+            _thCell('Descrição', estiloHeader),
+            _thCell('Preço Unitário', estiloHeader, align: pw.TextAlign.right),
+            _thCell('Subtotal', estiloHeader, align: pw.TextAlign.right),
+          ],
+        ),
+        for (final item in itens)
+          pw.TableRow(
+            children: [
+              _tdCell('${item.quantidade}', estiloCell, align: pw.TextAlign.center),
+              _tdCell(item.descricao, estiloCell),
+              _tdCell('MZN ${item.precoUnitario.toStringAsFixed(2)}', estiloCell,
+                  align: pw.TextAlign.right),
+              _tdCell('MZN ${item.subtotal.toStringAsFixed(2)}', estiloCell,
+                  align: pw.TextAlign.right),
+            ],
+          ),
+      ],
+    );
+  }
+
+  pw.Widget _notaRetificativaResumoValor(NotaRetificativaPdfModel doc, PdfColor corAccent) {
+    final label = doc.tipo == TipoDocumentoPdf.notaCredito
+        ? 'Valor creditado'
+        : 'Valor debitado';
+
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey200,
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: pw.TextStyle(fontSize: 10, color: corAccent)),
+          pw.Text(
+            'MZN ${doc.valor.toStringAsFixed(2)}',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: corAccent),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _notaRetificativaObservacoes(String obs) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey100,
+        border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _t('Observações', bold: true, size: 8, color: _kAzul),
+          pw.SizedBox(height: 3),
+          _t(obs, size: 8, color: PdfColors.grey800),
+        ],
+      ),
+    );
+  }
 
 
   Future<void> imprimirDocumentoFiscalComDialogo({
@@ -1753,7 +2247,11 @@ final bool temCliente =
 
   return 'REC-$safeRef-FAT-$safeFat';
 }
-
+  String _nomeArquivoNotaRetificativa(NotaRetificativaPdfModel doc) {
+    final safeRef = doc.referencia.replaceAll('/', '-');
+    final safeOrigem = doc.referenciaDocumentoOrigem.replaceAll('/', '-');
+    return '${doc.tipo.prefixo}-$safeRef-REF-$safeOrigem';
+  }
   String _nomeAutomaticoComprovativo(int pedidoId) {
     final agora = DateTime.now();
     final id = pedidoId.toString().padLeft(5, '0');
