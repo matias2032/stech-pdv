@@ -14,49 +14,55 @@ public class DocumentoFiscalResponse {
             String prefixo
     ) {}
 
-    public record DocumentoResponse(
-            Integer id,
-            TipoDocumentoResponse tipoDocumento,
-            Integer idPedido,
-            String referencia,
-            Integer numeroSeq,
-            Integer ano,
-            String codigoAt,
-            Long idUsuario,
-            String nomeUsuario,
-            OffsetDateTime emitidoEm,
-            Boolean anulado,
-            String motivoAnulacao,
-             String tipoVenda,
-             String snapshotConteudo
-    ) {
-        /** Método de fábrica — converte a entidade para o DTO de resposta. */
-        public static DocumentoResponse from(DocumentoFiscal doc) {
-            var tipo = doc.getTipoDocumento();
-            return new DocumentoResponse(
-                    doc.getId(),
-                    new TipoDocumentoResponse(
-                            tipo.getId(),
-                            tipo.getCodigo(),
-                            tipo.getNome(),
-                            tipo.getPrefixo()
-                    ),
-                    doc.getIdPedido(),
-                    doc.getReferencia(),
-                    doc.getNumeroSeq(),
-                    doc.getAno(),
-                    doc.getCodigoAt(),
-                    doc.getUsuario().getId(),
-                    doc.getUsuario().getNome() + " " + (doc.getUsuario().getApelido() != null ? doc.getUsuario().getApelido() : ""),
-                    doc.getEmitidoEm(),
-                    doc.getAnulado(),
-                    doc.getMotivoAnulacao(),
-                    doc.getSnapshotConteudo(),
-                    null                
-            );
-        }
+public record DocumentoResponse(
+        Integer id,
+        TipoDocumentoResponse tipoDocumento,
+        Integer idPedido,
+        String referencia,
+        Integer numeroSeq,
+        Integer ano,
+        String codigoAt,
+        Long idUsuario,
+        String nomeUsuario,
+        OffsetDateTime emitidoEm,
+        Boolean anulado,
+        String motivoAnulacao,
+        String tipoVenda,          // 👈 Penúltimo parâmetro
+        String snapshotConteudo    // 👈 Último parâmetro
+) {
+    /** Converte a entidade básica (quando não tem tipoVenda) */
+    public static DocumentoResponse from(DocumentoFiscal doc) {
+        return from(doc, null);
     }
 
+    /** Converte a entidade recebendo o tipoVenda externamente */
+    public static DocumentoResponse from(DocumentoFiscal doc, String tipoVenda) {
+        var tipo = doc.getTipoDocumento();
+        return new DocumentoResponse(
+                doc.getId(),
+                new TipoDocumentoResponse(
+                        tipo.getId(),
+                        tipo.getCodigo(),
+                        tipo.getNome(),
+                        tipo.getPrefixo()
+                ),
+                doc.getIdPedido(),
+                doc.getReferencia(),
+                doc.getNumeroSeq(),
+                doc.getAno(),
+                doc.getCodigoAt(),
+                doc.getUsuario() != null ? doc.getUsuario().getId() : null,
+                doc.getUsuario() != null 
+                        ? doc.getUsuario().getNome() + " " + (doc.getUsuario().getApelido() != null ? doc.getUsuario().getApelido() : "") 
+                        : "",
+                doc.getEmitidoEm(),
+                doc.getAnulado(),
+                doc.getMotivoAnulacao(),
+                tipoVenda,                  // ✅ Passa a variável recebida
+                doc.getSnapshotConteudo()   // ✅ Chama o getter que existe na entidade
+        );
+    }
+}
     public record NotaRetificativaResponse(
             DocumentoResponse documento,
             Integer idDocumentoOrigem,

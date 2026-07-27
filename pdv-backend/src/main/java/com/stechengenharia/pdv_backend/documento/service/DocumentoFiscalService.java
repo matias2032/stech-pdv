@@ -62,25 +62,8 @@ public List<DocumentoResponse> listarTodos() {
                 DocumentoFiscal doc = (DocumentoFiscal) obj[0];
                 String tipoVenda = (String) obj[1];
 
-                var dto = DocumentoResponse.from(doc);
-
-                return new DocumentoResponse(
-                        dto.id(),
-                        dto.tipoDocumento(),
-                        dto.idPedido(),
-                        dto.referencia(),
-                        dto.numeroSeq(),
-                        dto.ano(),
-                        dto.codigoAt(),
-                        dto.idUsuario(),
-                        dto.nomeUsuario(),
-                        dto.emitidoEm(),
-                        dto.anulado(),
-                        dto.motivoAnulacao(),
-                        doc.getSnapshotConteudo(),
-                        // 🔥 aqui injectamos
-                        tipoVenda
-                );
+                // ✅ Usa o método customizado passando o tipoVenda injetado
+                return DocumentoResponse.from(doc, tipoVenda);
             })
             .toList();
 }

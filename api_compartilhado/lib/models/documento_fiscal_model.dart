@@ -65,7 +65,7 @@ class DocumentoFiscalModel {
   final String? tipoVenda;
   final String? snapshotConteudo;
 
-const DocumentoFiscalModel({
+  const DocumentoFiscalModel({
     required this.id,
     required this.tipoDocumento,
     required this.idPedido,
@@ -82,49 +82,55 @@ const DocumentoFiscalModel({
     this.snapshotConteudo,
   });
 
-factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
+  factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
     return DocumentoFiscalModel(
-      id: json['id'] as int,
+      id: (json['id'] ?? json['id_documento'] ?? 0) as int,
       tipoDocumento: TipoDocumentoModel.fromJson(
-          json['tipoDocumento'] as Map<String, dynamic>),
-      idPedido: json['idPedido'] as int,
+        (json['tipoDocumento'] ?? json['tipo_documento']) as Map<String, dynamic>,
+      ),
+      idPedido: (json['idPedido'] ?? json['id_pedido'] ?? 0) as int,
       referencia: json['referencia'] as String? ?? '',
-      numeroSeq: json['numeroSeq'] as int,
-      ano: json['ano'] as int,
-      codigoAt: json['codigoAt'] as String? ?? '',
-      idUsuario: json['idUsuario'] as int,
-      nomeUsuario: json['nomeUsuario'] as String? ?? '',
-      emitidoEm: DateTime.parse(json['emitidoEm'] as String),
+      numeroSeq: (json['numeroSeq'] ?? json['numero_seq'] ?? 0) as int,
+      ano: (json['ano'] ?? DateTime.now().year) as int,
+      codigoAt: (json['codigoAt'] ?? json['codigo_at'] ?? '') as String,
+      idUsuario: (json['idUsuario'] ?? json['id_usuario'] ?? 0) as int,
+      nomeUsuario: (json['nomeUsuario'] ?? json['nome_usuario'] ?? '') as String,
+      emitidoEm: json['emitidoEm'] != null
+          ? DateTime.parse(json['emitidoEm'] as String)
+          : (json['emitido_em'] != null
+              ? DateTime.parse(json['emitido_em'] as String)
+              : DateTime.now()),
       anulado: json['anulado'] as bool? ?? false,
-      motivoAnulacao: json['motivoAnulacao'] as String?,
-      tipoVenda: json['tipoVenda'],
-      snapshotConteudo: json['snapshotConteudo'] as String?,
+      motivoAnulacao: json['motivoAnulacao'] ?? json['motivo_anulacao'],
+      tipoVenda: json['tipoVenda'] ?? json['tipo_venda'],
+      snapshotConteudo: json['snapshotConteudo'] ?? json['snapshot_conteudo'],
     );
   }
 
-factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
+  factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
       DocumentoFiscalModel(
-        id:        row['id']         as int,
+        id: row['id'] as int,
         tipoDocumento: TipoDocumentoModel(
-          id:      row['id_tipo_doc'] as int,
-          codigo:  row['tipo_codigo'] as String? ?? '',
-          nome:    row['tipo_nome']   as String? ?? '',
+          id: row['id_tipo_doc'] as int,
+          codigo: row['tipo_codigo'] as String? ?? '',
+          nome: row['tipo_nome'] as String? ?? '',
           prefixo: row['tipo_prefixo'] as String? ?? '',
         ),
-        idPedido:       row['id_pedido']   as int,
-        referencia:     (row['referencia'] as String?) ?? '',
-        numeroSeq:      (row['numero_seq'] as int?) ?? 0,
-        ano:            (row['ano']        as int?) ?? 0,
-        codigoAt:       (row['codigo_at']  as String?) ?? '',
-        idUsuario:      row['id_usuario']  as int,
-        nomeUsuario:    (row['nome_usuario'] as String?) ?? '',
-        emitidoEm:      DateTime.parse(row['emitido_em'] as String),
-        anulado:        (row['anulado']    as int?) == 1,
+        idPedido: row['id_pedido'] as int,
+        referencia: (row['referencia'] as String?) ?? '',
+        numeroSeq: (row['numero_seq'] as int?) ?? 0,
+        ano: (row['ano'] as int?) ?? 0,
+        codigoAt: (row['codigo_at'] as String?) ?? '',
+        idUsuario: row['id_usuario'] as int,
+        nomeUsuario: (row['nome_usuario'] as String?) ?? '',
+        emitidoEm: DateTime.parse(row['emitido_em'] as String),
+        anulado: (row['anulado'] as int?) == 1,
         motivoAnulacao: row['motivo_anulacao'] as String?,
+        tipoVenda: row['tipo_venda'] as String?, // ✅ Adicionado no BD Local
         snapshotConteudo: row['snapshot_conteudo'] as String?,
       );
 
-Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson() => {
         'id': id,
         'tipoDocumento': tipoDocumento.toJson(),
         'idPedido': idPedido,
@@ -141,25 +147,26 @@ Map<String, dynamic> toJson() => {
         'snapshotConteudo': snapshotConteudo,
       };
 
-Map<String, dynamic> toLocalDb() => {
-        'id':              id,
-        'id_tipo_doc':     tipoDocumento.id,
-        'tipo_codigo':     tipoDocumento.codigo,
-        'tipo_nome':       tipoDocumento.nome,
-        'tipo_prefixo':    tipoDocumento.prefixo,
-        'id_pedido':       idPedido,
-        'referencia':      referencia,
-        'numero_seq':      numeroSeq,
-        'ano':             ano,
-        'codigo_at':       codigoAt,
-        'id_usuario':      idUsuario,
-        'nome_usuario':    nomeUsuario,
-        'emitido_em':      emitidoEm.toIso8601String(),
-        'anulado':         anulado ? 1 : 0,
+  Map<String, dynamic> toLocalDb() => {
+        'id': id,
+        'id_tipo_doc': tipoDocumento.id,
+        'tipo_codigo': tipoDocumento.codigo,
+        'tipo_nome': tipoDocumento.nome,
+        'tipo_prefixo': tipoDocumento.prefixo,
+        'id_pedido': idPedido,
+        'referencia': referencia,
+        'numero_seq': numeroSeq,
+        'ano': ano,
+        'codigo_at': codigoAt,
+        'id_usuario': idUsuario,
+        'nome_usuario': nomeUsuario,
+        'emitido_em': emitidoEm.toIso8601String(),
+        'anulado': anulado ? 1 : 0,
         'motivo_anulacao': motivoAnulacao,
+        'tipo_venda': tipoVenda, // ✅ Adicionado no BD Local
         'snapshot_conteudo': snapshotConteudo,
-        'sync_status':     'synced',
-        'updated_at':      DateTime.now().toIso8601String(),
+        'sync_status': 'synced',
+        'updated_at': DateTime.now().toIso8601String(),
       };
 
   DocumentoFiscalModel copyWith({
@@ -195,8 +202,6 @@ Map<String, dynamic> toLocalDb() => {
       snapshotConteudo: snapshotConteudo ?? this.snapshotConteudo,
     );
   }
-
-  
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

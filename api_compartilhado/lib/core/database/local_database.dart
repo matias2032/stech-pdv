@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 2,       
+  version: 3,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -45,6 +45,12 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
         ADD COLUMN motivo_exclusao TEXT
       ''');
     }}
+
+     if (oldVersion < 3) {
+
+      await db.execute(''' ALTER TABLE documento_fiscal ADD COLUMN snapshot_conteudo TEXT;''');
+   
+}
 }
   /// Activa foreign keys no SQLite (desactivadas por defeito).
   Future<void> _onConfigure(Database db) async {
@@ -362,6 +368,7 @@ await txn.execute('''
     emitido_em      TEXT    NOT NULL,
     anulado         INTEGER NOT NULL DEFAULT 0,
     motivo_anulacao TEXT,
+    snapshot_conteudo TEXT,
     sync_status     TEXT    NOT NULL DEFAULT 'synced',
     updated_at      TEXT
   )
