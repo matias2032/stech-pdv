@@ -241,20 +241,21 @@ if (mounted) {
     }
   }
 
-  Future<void> _abrirNotaDebito(DocumentoFiscalModel doc) async {
-    final resultado = await Navigator.of(context).push<dynamic>(
-      MaterialPageRoute(
-        builder: (_) => NotaDebitoScreen(
-          idDocumentoOrigem: doc.id,
-          referenciaDocumento: doc.referencia,
-        ),
-      ),
-    );
+//  ── NOTA DE DÉBITO — desativado ──────────────────────────────────────────
+//   Future<void> _abrirNotaDebito(DocumentoFiscalModel doc) async {
+//     final resultado = await Navigator.of(context).push<dynamic>(
+//       MaterialPageRoute(
+//         builder: (_) => NotaDebitoScreen(
+//           idDocumentoOrigem: doc.id,
+//           referenciaDocumento: doc.referencia,
+//         ),
+//       ),
+//     );
 
-    if (resultado != null && mounted) {
-      await context.read<DocumentoFiscalProvider>().carregarTodos();
-    }
-  }
+//     if (resultado != null && mounted) {
+//       await context.read<DocumentoFiscalProvider>().carregarTodos();
+//     }
+//   }
 
   void _mostrarSnack(String mensagem, {bool erro = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -305,7 +306,7 @@ if (mounted) {
               onGerarPdf: _gerarPdf,
               onAnular: _confirmarAnulacao,
               onDevolver: _abrirDevolucao,
-              onNotaDebito: _abrirNotaDebito,
+              // onNotaDebito: _abrirNotaDebito,
             ),
           ),
         ],
@@ -516,14 +517,14 @@ class _Listagem extends StatelessWidget {
   final Future<void> Function(DocumentoFiscalModel) onGerarPdf;
   final Future<void> Function(DocumentoFiscalModel) onAnular;
   final Future<void> Function(DocumentoFiscalModel) onDevolver;
-  final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
+  // final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
 
   const _Listagem({
     required this.aplicarFiltros,
     required this.onGerarPdf,
     required this.onAnular,
     required this.onDevolver,
-    required this.onNotaDebito,
+    // required this.onNotaDebito,
   });
 
   @override
@@ -579,7 +580,7 @@ return LayoutBuilder(builder: (context, constraints) {
           onGerarPdf: onGerarPdf,
           onAnular: onAnular,
           onDevolver: onDevolver,
-          onNotaDebito: onNotaDebito,
+          // onNotaDebito: onNotaDebito,
         );
       }
       return _ListaDocumentos(
@@ -587,7 +588,7 @@ return LayoutBuilder(builder: (context, constraints) {
         onGerarPdf: onGerarPdf,
         onAnular: onAnular,
         onDevolver: onDevolver,
-        onNotaDebito: onNotaDebito,
+        // onNotaDebito: onNotaDebito,
       );
     });
   }
@@ -602,19 +603,19 @@ class _CardDocumento extends StatelessWidget {
   final Future<void> Function(DocumentoFiscalModel) onGerarPdf;
   final Future<void> Function(DocumentoFiscalModel) onAnular;
   final Future<void> Function(DocumentoFiscalModel) onDevolver;
-  final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
+  // final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
 
   const _CardDocumento({
     required this.doc,
     required this.onGerarPdf,
     required this.onAnular,
     required this.onDevolver,
-    required this.onNotaDebito,
+    // required this.onNotaDebito,
   });
 
   /// Menu de Nota de Crédito/Débito só aparece para FAT/VD ainda válidos
   /// (não anulados). Documentos NCR/NDB ou já anulados não mostram a opção.
-  bool get _podeDevolverOuDebitar =>
+bool get _podeDevolver =>
       !doc.anulado &&
       (doc.tipoDocumento.codigo == 'FAT' || doc.tipoDocumento.codigo == 'VD');
 
@@ -776,17 +777,15 @@ class _CardDocumento extends StatelessWidget {
                         onPressed: () => onAnular(doc),
                       ),
                     ),
-                  if (_podeDevolverOuDebitar)
+                  if (_podeDevolver)
                     PopupMenuButton<String>(
-                      tooltip: 'Devolução / Nota de Débito',
+                      tooltip: 'Devolução / Nota de Crédito',
                       padding: EdgeInsets.zero,
                       icon: const Icon(Icons.more_vert_rounded,
                           color: _kCinzaTexto, size: 20),
                       onSelected: (opcao) {
                         if (opcao == 'devolver') {
                           onDevolver(doc);
-                        } else if (opcao == 'nota_debito') {
-                          onNotaDebito(doc);
                         }
                       },
                       itemBuilder: (_) => const [
@@ -794,10 +793,10 @@ class _CardDocumento extends StatelessWidget {
                           value: 'devolver',
                           child: Text('Devolver / Anular (Nota de Crédito)'),
                         ),
-                        PopupMenuItem(
-                          value: 'nota_debito',
-                          child: Text('Emitir Nota de Débito'),
-                        ),
+                        // PopupMenuItem( // NOTA DE DÉBITO — desativado
+                        //   value: 'nota_debito',
+                        //   child: Text('Emitir Nota de Débito'),
+                        // ),
                       ],
                     ),
                 ],
@@ -903,14 +902,14 @@ class _ListaDocumentos extends StatelessWidget {
   final Future<void> Function(DocumentoFiscalModel) onGerarPdf;
   final Future<void> Function(DocumentoFiscalModel) onAnular;
   final Future<void> Function(DocumentoFiscalModel) onDevolver;
-  final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
+  // final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
 
   const _ListaDocumentos({
     required this.documentos,
     required this.onGerarPdf,
     required this.onAnular,
     required this.onDevolver,
-    required this.onNotaDebito,
+    // required this.onNotaDebito,
   });
 
   @override
@@ -923,7 +922,7 @@ class _ListaDocumentos extends StatelessWidget {
         onGerarPdf: onGerarPdf,
         onAnular: onAnular,
         onDevolver: onDevolver,
-        onNotaDebito: onNotaDebito,
+        // onNotaDebito: onNotaDebito,
       ),
     );
   }
@@ -934,14 +933,14 @@ class _GradeDocumentos extends StatelessWidget {
   final Future<void> Function(DocumentoFiscalModel) onGerarPdf;
   final Future<void> Function(DocumentoFiscalModel) onAnular;
   final Future<void> Function(DocumentoFiscalModel) onDevolver;
-  final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
+  // final Future<void> Function(DocumentoFiscalModel) onNotaDebito;
 
   const _GradeDocumentos({
     required this.documentos,
     required this.onGerarPdf,
     required this.onAnular,
     required this.onDevolver,
-    required this.onNotaDebito,
+    // required this.onNotaDebito,
   });
 
   @override
@@ -961,7 +960,7 @@ class _GradeDocumentos extends StatelessWidget {
           onGerarPdf: onGerarPdf,
           onAnular: onAnular,
           onDevolver: onDevolver,
-          onNotaDebito: onNotaDebito,
+          // onNotaDebito: onNotaDebito,
         ),
       ),
     );

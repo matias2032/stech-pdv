@@ -370,16 +370,16 @@ if (settings.name == '/devolucao_troca') {
   );
 }
 
-if (settings.name == '/nota_debito') {
-    final idDocumentoOrigem = settings.arguments as int;
+// if (settings.name == '/nota_debito') {
+//     final idDocumentoOrigem = settings.arguments as int;
 
-    return MaterialPageRoute(
-      builder: (_) => NotaDebitoScreen(
-        idDocumentoOrigem: idDocumentoOrigem,
-      ),
-      settings: settings,
-    );
-  }
+//     return MaterialPageRoute(
+//       builder: (_) => NotaDebitoScreen(
+//         idDocumentoOrigem: idDocumentoOrigem,
+//       ),
+//       settings: settings,
+//     );
+//   }
           return null;
         },
 

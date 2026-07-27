@@ -1083,6 +1083,13 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
         for (ItemDevolvidoDTO itemDto : dto.itensDevolvidos) {
             valorNota = valorNota.add(devolverItemAoEstoque(pedido, itemDto));
         }
+
+        // Itens devolvidos foram reduzidos/removidos do pedido — o total
+        // precisa reflectir isso, senão o pedido continua a "valer" o
+        // valor original mesmo após a devolução ter sido processada.
+        pedido.recalcularTotal();
+        pedido.setSyncStatus("PENDING_UPDATE");
+        pedidoRepository.save(pedido);
     }
 
     NotaRetificativaResponse notaResponse = documentoFiscalService.emitirNotaRetificativa(
@@ -1116,6 +1123,7 @@ private BigDecimal devolverItemAoEstoque(Pedido pedido, ItemDevolvidoDTO itemDto
     }
 
     if (itemDto.idItemPedido != null) {
+
         ItemPedido item = itemPedidoRepository
                 .findByIdItemPedidoAndPedidoIdPedido(itemDto.idItemPedido, pedido.getIdPedido())
                 .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemPedido, pedido.getIdPedido()));
@@ -1128,7 +1136,21 @@ private BigDecimal devolverItemAoEstoque(Pedido pedido, ItemDevolvidoDTO itemDto
 
         ajustarEstoqueSemMovimento(item.getProduto(), itemDto.quantidade);
 
-        return item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
+        BigDecimal valorDevolvido = item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
+
+        // Reduz (ou remove) o item do pedido — sem isto, a mesma devolução
+        // podia ser repetida indefinidamente, devolvendo mais estoque do
+        // que a quantidade original realmente comprada.
+        int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
+        if (quantidadeRestante <= 0) {
+            pedido.getItensProduto().remove(item);
+            itemPedidoRepository.delete(item);
+        } else {
+            item.setQuantidade(quantidadeRestante);
+            itemPedidoRepository.save(item);
+        }
+
+        return valorDevolvido;
     }
 
     ItemPedidoServico item = itemPedidoServicoRepository
@@ -1142,6 +1164,18 @@ private BigDecimal devolverItemAoEstoque(Pedido pedido, ItemDevolvidoDTO itemDto
     }
 
     // Serviços não têm stock físico — apenas contabiliza o valor para a Nota de Crédito
-    return item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
+    BigDecimal valorDevolvido = item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
+
+    // Mesma correção aplicada aos itens de serviço.
+    int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
+    if (quantidadeRestante <= 0) {
+        pedido.getItensServico().remove(item);
+        itemPedidoServicoRepository.delete(item);
+    } else {
+        item.setQuantidade(quantidadeRestante);
+        itemPedidoServicoRepository.save(item);
+    }
+
+    return valorDevolvido;
 }
 }

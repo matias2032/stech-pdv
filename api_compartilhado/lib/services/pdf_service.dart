@@ -2354,3 +2354,4 @@ class _LinhaItem {
   String get totalStr => isEmpty ? '0,00 MZN' : 'MZN ${total.toStringAsFixed(2)}';
 }
 
+

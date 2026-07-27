@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:api_compartilhado/api_config.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
-import 'devolucao_troca_screen.dart';
+// import 'devolucao_troca_screen.dart';
 // ─── Paleta ──────────────────────────────────────────────────────────────────
 const _kPrimary    = Color(0xFF1B2A6B);
 const _kAccent     = Color(0xFFC8102E);
@@ -360,14 +360,14 @@ class _PedidoCardState extends State<_PedidoCard> {
     bool _imprimindo = false;
   ClienteModel? _cliente;            // ← aqui
   bool _carregandoCliente = false;   // ← aqui
-  DocumentoFiscalModel? _documentoDevolucao;
-  bool _verificandoDocumento = false;
+  // DocumentoFiscalModel? _documentoDevolucao;
+  // bool _verificandoDocumento = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _verificarDocumentoFiscal());
+    // WidgetsBinding.instance
+    //     .addPostFrameCallback((_) => _verificarDocumentoFiscal());
   }
 
   PedidoModel get p => widget.pedido;
@@ -413,50 +413,50 @@ bool get _temClienteSingular => _nomeClienteSingular.isNotEmpty;
   /// estado partilhado — não afecta o resultado exibido neste card (lido
   /// logo após o await), mas outra tela que dependa do estado global do
   /// provider nesse instante pode ver dados de outro pedido brevemente.
-  Future<void> _verificarDocumentoFiscal() async {
-    setState(() => _verificandoDocumento = true);
-    try {
-      final provider = context.read<DocumentoFiscalProvider>();
-      await provider.carregarPorPedido(p.idPedido);
-      if (!mounted) return;
+  // Future<void> _verificarDocumentoFiscal() async {
+  //   setState(() => _verificandoDocumento = true);
+  //   try {
+  //     final provider = context.read<DocumentoFiscalProvider>();
+  //     await provider.carregarPorPedido(p.idPedido);
+  //     if (!mounted) return;
 
-      DocumentoFiscalModel? encontrado;
-      for (final d in provider.documentos) {
-        if ((d.tipoDocumento.codigo == 'FAT' ||
-                d.tipoDocumento.codigo == 'VD') &&
-            !d.anulado) {
-          encontrado = d;
-          break;
-        }
-      }
-      setState(() => _documentoDevolucao = encontrado);
-    } catch (_) {
-      // silencioso — botão "Devolver" simplesmente não aparece
-    } finally {
-      if (mounted) setState(() => _verificandoDocumento = false);
-    }
-  }
+  //     DocumentoFiscalModel? encontrado;
+  //     for (final d in provider.documentos) {
+  //       if ((d.tipoDocumento.codigo == 'FAT' ||
+  //               d.tipoDocumento.codigo == 'VD') &&
+  //           !d.anulado) {
+  //         encontrado = d;
+  //         break;
+  //       }
+  //     }
+  //     setState(() => _documentoDevolucao = encontrado);
+  //   } catch (_) {
+  //     // silencioso — botão "Devolver" simplesmente não aparece
+  //   } finally {
+  //     if (mounted) setState(() => _verificandoDocumento = false);
+  //   }
+  // }
 
-  Future<void> _abrirDevolucao(BuildContext context) async {
-    final documento = _documentoDevolucao;
-    if (documento == null) return;
+  // Future<void> _abrirDevolucao(BuildContext context) async {
+  //   final documento = _documentoDevolucao;
+  //   if (documento == null) return;
 
-    final resultado = await Navigator.push<dynamic>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DevolucaoTrocaScreen(
-          idPedido: p.idPedido,
-          idDocumentoOrigem: documento.id,
-          pedidoInicial: p,
-          documentoOrigem: documento,
-        ),
-      ),
-    );
+  //   final resultado = await Navigator.push<dynamic>(
+  //     context,
+  //     MaterialPageRoute(
+  //       builder: (_) => DevolucaoTrocaScreen(
+  //         idPedido: p.idPedido,
+  //         idDocumentoOrigem: documento.id,
+  //         pedidoInicial: p,
+  //         documentoOrigem: documento,
+  //       ),
+  //     ),
+  //   );
 
-    if (resultado != null && context.mounted) {
-      context.read<PedidoProvider>().listarPorStatus('finalizado');
-    }
-  }
+  //   if (resultado != null && context.mounted) {
+  //     context.read<PedidoProvider>().listarPorStatus('finalizado');
+  //   }
+  // }
 
 Future<TipoDocumentoModel?> _selecionarTipoDocumento(BuildContext context) async {
   final provider = context.read<DocumentoFiscalProvider>();
@@ -820,17 +820,17 @@ const SizedBox(width: 4),
                           constraints: const BoxConstraints(),
                           onPressed: () => _imprimir(context),
                         ),
-                  if (_documentoDevolucao != null) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.assignment_return_outlined,
-                          color: _kAccent, size: 20),
-                      tooltip: 'Devolver',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () => _abrirDevolucao(context),
-                    ),
-                  ],
+                  // if (_documentoDevolucao != null) ...[
+                  //   const SizedBox(width: 4),
+                  //   IconButton(
+                  //     icon: const Icon(Icons.assignment_return_outlined,
+                  //         color: _kAccent, size: 20),
+                  //     tooltip: 'Devolver',
+                  //     padding: EdgeInsets.zero,
+                  //     constraints: const BoxConstraints(),
+                  //     onPressed: () => _abrirDevolucao(context),
+                  //   ),
+                  // ],
                   const SizedBox(width: 4),
                   AnimatedRotation(
                     turns: _expandido ? 0.5 : 0,
