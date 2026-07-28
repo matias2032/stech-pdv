@@ -620,11 +620,9 @@ public PagamentoCreditoResponseDTO registarPagamento(Integer idPedido, RegistarP
     Pedido pedido = buscarPedidoComItens(idPedido);
     validarPedidoCredito(pedido, "registo de pagamento");
 
-BigDecimal saldoDevedor = pedido.getSaldoDevedorAjustado();
 
-if (dto.valorPago().compareTo(saldoDevedor) > 0)
-    throw new PagamentoExcedeSaldoException(dto.valorPago(), saldoDevedor);
-
+    
+    
     PedidoCreditoParcela parcela = null;
     if (dto.idParcela() != null) {
         parcela = parcelaRepository

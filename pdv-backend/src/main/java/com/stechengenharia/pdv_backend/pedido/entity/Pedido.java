@@ -152,13 +152,16 @@ public Builder apelidoClienteSingular(String v) { p.apelidoClienteSingular = v; 
         public Pedido build()                           { return p; }
     }
 
-    public void recalcularTotal() {
-        BigDecimal totalProdutos = itensProduto.stream()
-                .map(ItemPedido::getSubtotal).filter(s -> s != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalServicos = itensServico.stream()
-                .map(ItemPedidoServico::getSubtotal).filter(s -> s != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        this.total = totalProdutos.add(totalServicos);
-    }
+public void recalcularTotal() {
+
+    BigDecimal totalProdutos = itensProduto.stream()
+            .filter(i -> i.getPrecoUnitario() != null)
+            .map(i -> i.getPrecoUnitario().multiply(BigDecimal.valueOf(i.getQuantidade())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalServicos = itensServico.stream()
+            .filter(i -> i.getPrecoUnitario() != null)
+            .map(i -> i.getPrecoUnitario().multiply(BigDecimal.valueOf(i.getQuantidade())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    this.total = totalProdutos.add(totalServicos);
+}
 }
