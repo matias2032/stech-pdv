@@ -176,6 +176,12 @@ ClienteModel? cliente,
     pedido:        pedidoAgregado,
     cliente:       cliente,
     tipoPagamento: tipoPagamento,
+    // Sem isto, uma FAT/VD que cobre múltiplos pedidos NUNCA lia o
+    // snapshot congelado pelo backend — o PDF recaía sempre no caminho
+    // "pedido ao vivo" em _docFiscalTabelaItens, fazendo a factura
+    // mudar de valor sempre que qualquer um dos pedidos agregados
+    // sofresse uma devolução/troca posterior à emissão.
+    snapshot: SnapshotPedidoFiscal.tentarParsear(apiModel.snapshotConteudo),
   );
 }
 }
@@ -249,6 +255,8 @@ class SnapshotPedidoFiscal {
     }
   }
 }
+
+
 
 class ReciboCreditoPdfModel {
   /// Documento fiscal REC gerado pelo backend.

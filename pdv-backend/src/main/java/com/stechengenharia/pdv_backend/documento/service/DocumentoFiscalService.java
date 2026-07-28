@@ -133,11 +133,13 @@ public DocumentoResponse emitir(EmitirDocumentoRequest request) {
 String codigo = doc.getTipoDocumento().getCodigo();
     if ("FAT".equals(codigo) || "VD".equals(codigo)) {
         pedidoRepository.findById(request.idPedido())
-                .ifPresent(pedido -> {
-                    doc.setSnapshotConteudo(gerarSnapshotPedido(pedido));
-                    // Congela o valor da factura no instante da emissão.
-                    doc.setValorTotalEmissao(pedido.getTotal());
-                });
+  .ifPresentOrElse(pedido -> {
+            // força inicialização das coleções lazy dentro da transação
+            pedido.getItensProduto().size();
+            pedido.getItensServico().size();
+            doc.setSnapshotConteudo(gerarSnapshotPedido(pedido));
+            doc.setValorTotalEmissao(pedido.getTotal());
+        }, () -> log.warn("Pedido {} não encontrado ao emitir doc fiscal — snapshot não gerado", request.idPedido()));
     }
 
     documentoRepository.save(doc);
