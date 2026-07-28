@@ -195,7 +195,7 @@ Future<PedidoModel?> adicionarItemProduto(
   // FINALIZAR PEDIDO
   // ════════════════════════════════════════════════════════════════════════
 
-  Future<PedidoModel?> finalizarPedido(
+Future<PedidoModel?> finalizarPedido(
   int idPedido,
   FinalizarPedidoRequestModel dto,
 ) async {
@@ -210,8 +210,11 @@ Future<PedidoModel?> adicionarItemProduto(
           apelidoClienteSingular: dto.apelidoClienteSingular,
         ),
       ));
-  // Após finalizar, limpa o pedido activo no provider
+  // Após finalizar, limpa o pedido activo no provider E no controller,
+  // senão as telas continuam a ler o pedido antigo via PedidoAtivoController
+  // e tentam adicionar itens a um pedido já encerrado no backend.
   _pedidoActual = null;
+  PedidoAtivoController.instance.limpar();
   notifyListeners();
   return result;
 }
@@ -454,28 +457,37 @@ Future<void> carregarExtractoCliente(int idCliente) async {
           ),
         ));
 
-    if (result != null) {
-      _ultimaDevolucao = DevolucaoResponseModel(
-        idNotaCredito:         result.idNotaCredito,
-        referenciaNotaCredito: result.referenciaNotaCredito,
-        idPedidoOrigem:        result.idPedidoOrigem,
-        valorCreditado:        result.valorCreditado,
-        motivo:                result.motivo,
-      );
+if (result != null) {
+  _ultimaDevolucao = DevolucaoResponseModel(
+    idNotaCredito:         result.idNotaCredito,
+    referenciaNotaCredito: result.referenciaNotaCredito,
+    idPedidoOrigem:        result.idPedidoOrigem,
+    valorCreditado:        result.valorCreditado,
+    motivo:                result.motivo,
+  );
 
-      // Recarrega o estoque, já que ERRO_PREENCHIMENTO não mexe nele mas
-      // DEVOLUCAO/TROCA_PRODUTO restauram quantidade — mais simples e
-      // seguro recarregar sempre do que decidir aqui qual foi o caso.
-      await _produtoProvider.listarAtivos();
+  // Recarrega o estoque, já que ERRO_PREENCHIMENTO não mexe nele mas
+  // DEVOLUCAO/TROCA_PRODUTO restauram quantidade — mais simples e
+  // seguro recarregar sempre do que decidir aqui qual foi o caso.
+  await _produtoProvider.listarAtivos();
 
-      // Remove o pedido da lista actual, se estiver lá (ex: já não é mais
-      // relevante para dívida em caso de anulação total).
-      _pedidos.removeWhere((p) => p.idPedido == idPedido);
-      _pedidosEmDivida.removeWhere((p) => p.idPedido == idPedido);
+  // Remove o pedido da lista actual, se estiver lá (ex: já não é mais
+  // relevante para dívida em caso de anulação total).
+  _pedidos.removeWhere((p) => p.idPedido == idPedido);
+  _pedidosEmDivida.removeWhere((p) => p.idPedido == idPedido);
 
-      notifyListeners();
-      return _ultimaDevolucao;
-    }
+  // Depois de emitir a nota de crédito, o pedido de origem fica encerrado
+  // no backend. Tem de deixar de ser tratado como "pedido activo" no
+  // frontend, senão as telas de produto/serviço continuam a oferecer
+  // "Adicionar ao <referência>" para um pedido já fechado.
+  if (_pedidoActual?.idPedido == idPedido) {
+    _pedidoActual = null;
+  }
+  PedidoAtivoController.instance.limpar();
+
+  notifyListeners();
+  return _ultimaDevolucao;
+}
 
     return null;
   }
