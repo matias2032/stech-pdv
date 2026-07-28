@@ -1159,13 +1159,13 @@ int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
             itemPedidoRepository.delete(item);
         } else {
             item.setQuantidade(quantidadeRestante);
-            itemPedidoRepository.saveAndFlush(item);
             // 'subtotal' é GENERATED pela BD (quantidade * preco_unitario).
-            // Sem este refresh, o valor em memória fica desactualizado
-            // NESTA MESMA transacção, e pedido.recalcularTotal() usa o
-            // subtotal ANTIGO — causando o atraso de uma iteração no total
-            // (confirmado nos logs: NCR-0016/0017/0018 do pedido 8, todos
-            // com valor=8000.00 apesar de quantidades diferentes devolvidas).
+            // saveAndFlush pode devolver uma instância diferente da que foi
+            // passada (merge() não garante a mesma referência); capturamos
+            // o retorno e fazemos refresh SOBRE ESSA instância, senão o
+            // Hibernate lança "Entity not managed" quando a referência
+            // original deixou de estar anexada à sessão.
+            item = itemPedidoRepository.saveAndFlush(item);
             entityManager.refresh(item);
         }
 
@@ -1192,7 +1192,9 @@ int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
         itemPedidoServicoRepository.delete(item);
     } else {
         item.setQuantidade(quantidadeRestante);
-        itemPedidoServicoRepository.saveAndFlush(item);
+        // Mesma correção aplicada ao item de produto: usar a instância
+        // devolvida por saveAndFlush antes de chamar refresh.
+        item = itemPedidoServicoRepository.saveAndFlush(item);
         entityManager.refresh(item);
     }
 
