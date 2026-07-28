@@ -259,10 +259,79 @@ public DocumentoResponse emitirMultiplos(EmitirDocumentoMultiplosRequest request
             .setParameter("codigoAt",   request.codigoAt())
             .getSingleResult();
 
-    doc.setSyncStatus("PENDING_CREATE"); // mesma razão que emitir()
-    documentoRepository.save(doc);
+    doc.setSyncStatus("PENDING_CREATE");
 
+    // ✅ MESMA LÓGICA DO emitir() — mas agregando todos os pedidos
+    String codigo = doc.getTipoDocumento().getCodigo();
+    if ("FAT".equals(codigo) || "VD".equals(codigo)) {
+        List<Pedido> pedidos = pedidoRepository.findAllById(ids);
+
+        if (pedidos.size() != ids.size()) {
+            log.warn("emitirMultiplos: nem todos os pedidos {} foram encontrados — snapshot pode ficar incompleto", ids);
+        }
+
+        // força inicialização das coleções lazy dentro da transação
+        pedidos.forEach(p -> {
+            p.getItensProduto().size();
+            p.getItensServico().size();
+        });
+
+        doc.setSnapshotConteudo(gerarSnapshotPedidos(pedidos));
+        doc.setValorTotalEmissao(
+            pedidos.stream()
+                   .map(Pedido::getTotal)
+                   .reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+    }
+
+    documentoRepository.save(doc);
     return DocumentoResponse.from(doc);
+}
+
+/**
+ * Versão agregada de gerarSnapshotPedido() para emitirMultiplos() —
+ * junta os itens de vários pedidos num único snapshot imutável.
+ */
+private String gerarSnapshotPedidos(List<Pedido> pedidos) {
+    try {
+        var itens = pedidos.stream()
+                .flatMap(p -> p.getItensProduto().stream())
+                .map(i -> Map.of(
+                        "produto", i.getProduto().getNomeProduto(),
+                        "quantidade", i.getQuantidade(),
+                        "precoUnitario", i.getPrecoUnitario(),
+                        "subtotal", i.getSubtotal()
+                )).toList();
+
+        var servicos = pedidos.stream()
+                .flatMap(p -> p.getItensServico().stream())
+                .map(i -> Map.of(
+                        "servico", i.getServico() != null ? i.getServico().getNomeServico() : null,
+                        "quantidade", i.getQuantidade(),
+                        "precoUnitario", i.getPrecoUnitario(),
+                        "subtotal", i.getSubtotal()
+                )).toList();
+
+        BigDecimal totalGeral = pedidos.stream()
+                .map(Pedido::getTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        String referenciasConcatenadas = pedidos.stream()
+                .map(Pedido::getReferencia)
+                .collect(java.util.stream.Collectors.joining(", "));
+
+        Map<String, Object> snapshot = Map.of(
+                "referenciaPedido", referenciasConcatenadas,
+                "total", totalGeral,
+                "itensProduto", itens,
+                "itensServico", servicos
+        );
+
+        return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(snapshot);
+    } catch (Exception e) {
+        log.error("Falha ao gerar snapshot agregado dos pedidos {}", pedidos.stream().map(Pedido::getIdPedido).toList(), e);
+        return null;
+    }
 }
 
 @Transactional(readOnly = true)
