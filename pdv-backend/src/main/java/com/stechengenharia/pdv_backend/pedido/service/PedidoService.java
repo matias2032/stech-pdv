@@ -19,7 +19,8 @@ import com.stechengenharia.pdv_backend.produto.repository.ProdutoRepository;
 import com.stechengenharia.pdv_backend.servico.entity.Servico;
 import com.stechengenharia.pdv_backend.servico.service.ServicoService;
 import com.stechengenharia.pdv_backend.cliente.repository.*;
-
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,8 +55,10 @@ public class PedidoService {
     private final DocumentoFiscalRepository         documentoFiscalRepository;
 
     // ─── Serviços cross-module ───────────────────────────────────────────────
-    private final ServicoService servicoService;
+private final ServicoService servicoService;
 
+    @PersistenceContext
+    private EntityManager entityManager;
     // ─── Constantes ──────────────────────────────────────────────────────────
 private static final List<String> STATUS_EDITAVEIS = List.of("aberto");
 private static final List<String> STATUS_PERMITE_ADICIONAR_ITEM = List.of("aberto", "em dívida");
@@ -1054,6 +1057,11 @@ private ItemServicoResponseDTO toItemServicoResponseDTO(ItemPedidoServico item) 
 public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, DevolucaoRequestDTO dto) {
     Pedido pedido = buscarPedidoComItens(idPedido);
 
+    // Garante que a devolução nunca altera o ciclo de vida do pedido —
+    // reafirmado explicitamente no fim do método, como proteção contra
+    // qualquer efeito colateral (dirty-checking, cascatas, etc.).
+    final String statusOriginal = pedido.getStatusPedido();
+
     DocumentoFiscal documentoOrigem = documentoFiscalRepository
             .findById(dto.idDocumentoOrigem)
             .orElseThrow(() -> new DocumentoFiscalNotFoundException(dto.idDocumentoOrigem));
@@ -1084,10 +1092,14 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
             valorNota = valorNota.add(devolverItemAoEstoque(pedido, itemDto));
         }
 
-        // Itens devolvidos foram reduzidos/removidos do pedido — o total
+// Itens devolvidos foram reduzidos/removidos do pedido — o total
         // precisa reflectir isso, senão o pedido continua a "valer" o
         // valor original mesmo após a devolução ter sido processada.
         pedido.recalcularTotal();
+
+        // A devolução nunca deve reabrir o pedido.
+        pedido.setStatusPedido(statusOriginal);
+
         pedido.setSyncStatus("PENDING_UPDATE");
         pedidoRepository.save(pedido);
     }
@@ -1141,13 +1153,20 @@ if (itemDto.idItemPedido != null) {
         // Reduz (ou remove) o item do pedido — sem isto, a mesma devolução
         // podia ser repetida indefinidamente, devolvendo mais estoque do
         // que a quantidade original realmente comprada.
-        int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
+int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
         if (quantidadeRestante <= 0) {
             pedido.getItensProduto().remove(item);
             itemPedidoRepository.delete(item);
         } else {
             item.setQuantidade(quantidadeRestante);
-            itemPedidoRepository.save(item);
+            itemPedidoRepository.saveAndFlush(item);
+            // 'subtotal' é GENERATED pela BD (quantidade * preco_unitario).
+            // Sem este refresh, o valor em memória fica desactualizado
+            // NESTA MESMA transacção, e pedido.recalcularTotal() usa o
+            // subtotal ANTIGO — causando o atraso de uma iteração no total
+            // (confirmado nos logs: NCR-0016/0017/0018 do pedido 8, todos
+            // com valor=8000.00 apesar de quantidades diferentes devolvidas).
+            entityManager.refresh(item);
         }
 
         return valorDevolvido;
@@ -1167,13 +1186,14 @@ ItemPedidoServico item = itemPedidoServicoRepository
     BigDecimal valorDevolvido = item.getPrecoUnitario().multiply(BigDecimal.valueOf(itemDto.quantidade));
 
     // Mesma correção aplicada aos itens de serviço.
-    int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
+int quantidadeRestante = item.getQuantidade() - itemDto.quantidade;
     if (quantidadeRestante <= 0) {
         pedido.getItensServico().remove(item);
         itemPedidoServicoRepository.delete(item);
     } else {
         item.setQuantidade(quantidadeRestante);
-        itemPedidoServicoRepository.save(item);
+        itemPedidoServicoRepository.saveAndFlush(item);
+        entityManager.refresh(item);
     }
 
     return valorDevolvido;

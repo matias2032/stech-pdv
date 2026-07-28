@@ -64,6 +64,7 @@ class DocumentoFiscalModel {
   final String? motivoAnulacao;
   final String? tipoVenda;
   final String? snapshotConteudo;
+  final double? valorTotalEmissao;
 
   const DocumentoFiscalModel({
     required this.id,
@@ -80,6 +81,7 @@ class DocumentoFiscalModel {
     this.motivoAnulacao,
     this.tipoVenda,
     this.snapshotConteudo,
+    this.valorTotalEmissao,
   });
 
   factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
@@ -100,10 +102,13 @@ class DocumentoFiscalModel {
           : (json['emitido_em'] != null
               ? DateTime.parse(json['emitido_em'] as String)
               : DateTime.now()),
-      anulado: json['anulado'] as bool? ?? false,
+anulado: json['anulado'] as bool? ?? false,
       motivoAnulacao: json['motivoAnulacao'] ?? json['motivo_anulacao'],
       tipoVenda: json['tipoVenda'] ?? json['tipo_venda'],
       snapshotConteudo: json['snapshotConteudo'] ?? json['snapshot_conteudo'],
+      valorTotalEmissao: (json['valorTotalEmissao'] ?? json['valor_total_emissao']) != null
+          ? ((json['valorTotalEmissao'] ?? json['valor_total_emissao']) as num).toDouble()
+          : null,
     );
   }
 
@@ -124,13 +129,14 @@ class DocumentoFiscalModel {
         idUsuario: row['id_usuario'] as int,
         nomeUsuario: (row['nome_usuario'] as String?) ?? '',
         emitidoEm: DateTime.parse(row['emitido_em'] as String),
-        anulado: (row['anulado'] as int?) == 1,
+anulado: (row['anulado'] as int?) == 1,
         motivoAnulacao: row['motivo_anulacao'] as String?,
         tipoVenda: row['tipo_venda'] as String?, // ✅ Adicionado no BD Local
         snapshotConteudo: row['snapshot_conteudo'] as String?,
+        valorTotalEmissao: (row['valor_total_emissao'] as num?)?.toDouble(),
       );
 
-  Map<String, dynamic> toJson() => {
+Map<String, dynamic> toJson() => {
         'id': id,
         'tipoDocumento': tipoDocumento.toJson(),
         'idPedido': idPedido,
@@ -145,9 +151,10 @@ class DocumentoFiscalModel {
         'motivoAnulacao': motivoAnulacao,
         'tipoVenda': tipoVenda,
         'snapshotConteudo': snapshotConteudo,
+        'valorTotalEmissao': valorTotalEmissao,
       };
 
-  Map<String, dynamic> toLocalDb() => {
+Map<String, dynamic> toLocalDb() => {
         'id': id,
         'id_tipo_doc': tipoDocumento.id,
         'tipo_codigo': tipoDocumento.codigo,
@@ -165,11 +172,12 @@ class DocumentoFiscalModel {
         'motivo_anulacao': motivoAnulacao,
         'tipo_venda': tipoVenda, // ✅ Adicionado no BD Local
         'snapshot_conteudo': snapshotConteudo,
+        'valor_total_emissao': valorTotalEmissao,
         'sync_status': 'synced',
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-  DocumentoFiscalModel copyWith({
+DocumentoFiscalModel copyWith({
     int? id,
     TipoDocumentoModel? tipoDocumento,
     int? idPedido,
@@ -184,6 +192,7 @@ class DocumentoFiscalModel {
     String? motivoAnulacao,
     String? tipoVenda,
     String? snapshotConteudo,
+    double? valorTotalEmissao,
   }) {
     return DocumentoFiscalModel(
       id: id ?? this.id,
@@ -200,6 +209,7 @@ class DocumentoFiscalModel {
       motivoAnulacao: motivoAnulacao ?? this.motivoAnulacao,
       tipoVenda: tipoVenda ?? this.tipoVenda,
       snapshotConteudo: snapshotConteudo ?? this.snapshotConteudo,
+      valorTotalEmissao: valorTotalEmissao ?? this.valorTotalEmissao,
     );
   }
 }

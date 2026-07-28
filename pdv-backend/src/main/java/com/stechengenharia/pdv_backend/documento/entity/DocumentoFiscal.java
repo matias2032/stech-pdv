@@ -4,6 +4,7 @@ import com.stechengenharia.pdv_backend.common.entity.AuditableEntity;
 import com.stechengenharia.pdv_backend.usuario.entity.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Entity
@@ -55,8 +56,17 @@ public class DocumentoFiscal extends AuditableEntity {
     // emissão. Preenchido apenas para documentos "originais" (FAT/VD).
     // A geração de PDF deve usar este campo, quando presente, em vez de
     // ler o pedido ao vivo — assim a factura nunca muda depois de emitida.
-    @Column(name = "snapshot_conteudo", columnDefinition = "TEXT")
+@Column(name = "snapshot_conteudo", columnDefinition = "TEXT")
     private String snapshotConteudo;
+
+    /**
+     * Valor total do pedido no momento da emissão (apenas para FAT/VD).
+     * Congelado — devoluções/ajustes posteriores no pedido NUNCA alteram
+     * este valor. É este campo que extractos/relatórios devem usar como
+     * "valor da fatura", nunca pedido.getTotal() ao vivo.
+     */
+    @Column(name = "valor_total_emissao", precision = 12, scale = 2)
+    private BigDecimal valorTotalEmissao;
     
     @PrePersist
     protected void onCreate() {

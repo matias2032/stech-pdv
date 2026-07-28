@@ -27,8 +27,9 @@ public record DocumentoResponse(
         OffsetDateTime emitidoEm,
         Boolean anulado,
         String motivoAnulacao,
-        String tipoVenda,          // 👈 Penúltimo parâmetro
-        String snapshotConteudo    // 👈 Último parâmetro
+        String tipoVenda,
+        String snapshotConteudo,
+        BigDecimal valorTotalEmissao
 ) {
     /** Converte a entidade básica (quando não tem tipoVenda) */
     public static DocumentoResponse from(DocumentoFiscal doc) {
@@ -41,10 +42,7 @@ public record DocumentoResponse(
         return new DocumentoResponse(
                 doc.getId(),
                 new TipoDocumentoResponse(
-                        tipo.getId(),
-                        tipo.getCodigo(),
-                        tipo.getNome(),
-                        tipo.getPrefixo()
+                        tipo.getId(), tipo.getCodigo(), tipo.getNome(), tipo.getPrefixo()
                 ),
                 doc.getIdPedido(),
                 doc.getReferencia(),
@@ -58,8 +56,9 @@ public record DocumentoResponse(
                 doc.getEmitidoEm(),
                 doc.getAnulado(),
                 doc.getMotivoAnulacao(),
-                tipoVenda,                  // ✅ Passa a variável recebida
-                doc.getSnapshotConteudo()   // ✅ Chama o getter que existe na entidade
+                tipoVenda,
+                doc.getSnapshotConteudo(),
+                doc.getValorTotalEmissao()
         );
     }
 }

@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 4,       
+  version: 5,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -52,9 +52,15 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
    
 }
 
-  if (oldVersion < 4) {
+if (oldVersion < 4) {
     await db.execute('''
       ALTER TABLE documento_fiscal ADD COLUMN tipo_venda TEXT;
+    ''');
+  }
+
+  if (oldVersion < 5) {
+    await db.execute('''
+      ALTER TABLE documento_fiscal ADD COLUMN valor_total_emissao REAL;
     ''');
   }
 }
@@ -376,6 +382,7 @@ CREATE TABLE documento_fiscal (
   motivo_anulacao TEXT,
   tipo_venda      TEXT,
   snapshot_conteudo TEXT,
+  valor_total_emissao REAL,
   sync_status     TEXT    NOT NULL DEFAULT 'synced',
   updated_at      TEXT
 )

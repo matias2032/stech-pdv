@@ -32,8 +32,6 @@ import com.stechengenharia.pdv_backend.pedido.repository.PedidoRepository;
 import com.stechengenharia.pdv_backend.pedido.entity.Pedido;
 import com.stechengenharia.pdv_backend.documento.dto.ExtractoDocumentalClienteResponseDTO;
 import java.math.BigDecimal;
-
-
 import java.util.List;
 import java.util.Map;
 
@@ -132,10 +130,14 @@ public DocumentoResponse emitir(EmitirDocumentoRequest request) {
 
     // Documentos "originais" (FAT/VD) congelam o conteúdo do pedido no
     // momento da emissão — o PDF passa a ler daqui, não do pedido ao vivo.
-    String codigo = doc.getTipoDocumento().getCodigo();
+String codigo = doc.getTipoDocumento().getCodigo();
     if ("FAT".equals(codigo) || "VD".equals(codigo)) {
         pedidoRepository.findById(request.idPedido())
-                .ifPresent(pedido -> doc.setSnapshotConteudo(gerarSnapshotPedido(pedido)));
+                .ifPresent(pedido -> {
+                    doc.setSnapshotConteudo(gerarSnapshotPedido(pedido));
+                    // Congela o valor da factura no instante da emissão.
+                    doc.setValorTotalEmissao(pedido.getTotal());
+                });
     }
 
     documentoRepository.save(doc);
@@ -292,9 +294,14 @@ public ExtractoDocumentalClienteResponseDTO extractoDocumentalCliente(Long idCli
         ));
 
 // DEPOIS
-    List<ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO> linhas =
+List<ExtractoDocumentalClienteResponseDTO.LinhaDocumentalDTO> linhas =
         documentos.stream().map(d -> {
-            BigDecimal valorTotal = totalPorPedido.getOrDefault(d.getIdPedido(), BigDecimal.ZERO);
+            // Usa o valor congelado na emissão. Só recai sobre o total ao
+            // vivo do pedido para documentos antigos emitidos antes desta
+            // coluna existir — nunca para documentos novos.
+            BigDecimal valorTotal = d.getValorTotalEmissao() != null
+                    ? d.getValorTotalEmissao()
+                    : totalPorPedido.getOrDefault(d.getIdPedido(), BigDecimal.ZERO);
             BigDecimal valorAjuste = calcularAjusteDocumento(d.getId());
             BigDecimal valorLiquido = valorTotal.add(valorAjuste);
 
