@@ -49,8 +49,17 @@ public class DocumentoFiscal extends AuditableEntity {
 @Column(nullable = false)
     private Boolean anulado = false;
 
-    @Column(name = "motivo_anulacao")
+@Column(name = "motivo_anulacao")
     private String motivoAnulacao;
+
+    /**
+     * Motivo da retificação (ERRO_PREENCHIMENTO | TROCA_PRODUTO | DEVOLUCAO |
+     * IVA_INCORRETO | OUTRO). Preenchido apenas para documentos NCR/NDB —
+     * necessário para regenerar o PDF correctamente mais tarde, a partir da
+     * listagem, sem depender da resposta imediata da emissão.
+     */
+    @Column(name = "motivo_retificacao", length = 30)
+    private String motivoRetificacao;
 
     // Fotografia imutável do pedido (itens, preços, total) no momento da
     // emissão. Preenchido apenas para documentos "originais" (FAT/VD).

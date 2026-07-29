@@ -1,6 +1,7 @@
 package com.stechengenharia.pdv_backend.documento.service;
 
 
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.AnularDocumentoRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoMultiplosRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
@@ -466,7 +467,20 @@ public NotaRetificativaResponse emitirNotaRetificativa(
             .setParameter("observacoes",       request.observacoes())
             .getSingleResult();
 
-    doc.setSyncStatus("PENDING_CREATE");
+doc.setSyncStatus("PENDING_CREATE");
+    doc.setMotivoRetificacao(request.motivo());
+    // Reutiliza a mesma coluna usada para FAT/VD — aqui representa o valor
+    // creditado/debitado, e passa a ser o valor de referência para PDFs
+    // regenerados a partir da listagem (nunca o total ao vivo do pedido).
+    doc.setValorTotalEmissao(request.valor());
+
+    // Snapshot dos itens efectivamente devolvidos — sem isto, reabrir o PDF
+    // mais tarde a partir da listagem (fora do fluxo imediato de devolução)
+    // não tem como saber QUAIS itens foram devolvidos.
+    if (request.itensDevolvidos() != null && !request.itensDevolvidos().isEmpty()) {
+        doc.setSnapshotConteudo(gerarSnapshotItensRetificados(request.itensDevolvidos()));
+    }
+
     documentoRepository.save(doc);
 
     // Ponto único de ajuste de saldo — cobre NCR (via PedidoService) e NDB (directo).
@@ -481,6 +495,24 @@ public NotaRetificativaResponse emitirNotaRetificativa(
             request.motivo(),
             request.valor()
     );
+}
+
+private String gerarSnapshotItensRetificados(
+        List<DocumentoFiscalRequest.ItemRetificadoRequest> itens) {
+    try {
+        var lista = itens.stream()
+                .map(i -> Map.of(
+                        "descricao", i.descricao(),
+                        "quantidade", i.quantidade(),
+                        "precoUnitario", i.precoUnitario(),
+                        "subtotal", i.precoUnitario().multiply(BigDecimal.valueOf(i.quantidade()))
+                )).toList();
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+                .writeValueAsString(Map.of("itensDevolvidos", lista));
+    } catch (Exception e) {
+        log.error("Falha ao gerar snapshot de itens retificados", e);
+        return null;
+    }
 }
 
 /**

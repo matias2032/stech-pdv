@@ -29,7 +29,8 @@ public record DocumentoResponse(
         String motivoAnulacao,
         String tipoVenda,
         String snapshotConteudo,
-        BigDecimal valorTotalEmissao
+        BigDecimal valorTotalEmissao,
+        String motivoRetificacao
 ) {
     /** Converte a entidade básica (quando não tem tipoVenda) */
     public static DocumentoResponse from(DocumentoFiscal doc) {
@@ -58,7 +59,8 @@ public record DocumentoResponse(
                 doc.getMotivoAnulacao(),
                 tipoVenda,
                 doc.getSnapshotConteudo(),
-                doc.getValorTotalEmissao()
+                doc.getValorTotalEmissao(),
+                doc.getMotivoRetificacao()
         );
     }
 }

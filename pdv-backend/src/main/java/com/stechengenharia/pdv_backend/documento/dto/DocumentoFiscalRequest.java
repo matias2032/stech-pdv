@@ -66,7 +66,13 @@ public class DocumentoFiscalRequest {
      * a um documento de origem (id vem do path, não deste record).
      * Reflecte os parâmetros de emitir_nota_retificativa(...).
      */
-    public record EmitirNotaRetificativaRequest(
+public record ItemRetificadoRequest(
+            String descricao,
+            Integer quantidade,
+            BigDecimal precoUnitario
+    ) {}
+
+public record EmitirNotaRetificativaRequest(
 
             @NotBlank(message = "O código do tipo de documento é obrigatório")
             @Size(max = 10)
@@ -86,6 +92,11 @@ public class DocumentoFiscalRequest {
             @DecimalMin(value = "0.01", message = "O valor deve ser positivo")
             BigDecimal valor,
 
-            String observacoes
+            String observacoes,
+
+            // Vazio/nulo para ERRO_PREENCHIMENTO (anulação total).
+            List<ItemRetificadoRequest> itensDevolvidos
     ) {}
+    
 }
+

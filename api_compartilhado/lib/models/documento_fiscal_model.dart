@@ -65,6 +65,7 @@ class DocumentoFiscalModel {
   final String? tipoVenda;
   final String? snapshotConteudo;
   final double? valorTotalEmissao;
+  final String? motivoRetificacao;
 
   const DocumentoFiscalModel({
     required this.id,
@@ -82,6 +83,7 @@ class DocumentoFiscalModel {
     this.tipoVenda,
     this.snapshotConteudo,
     this.valorTotalEmissao,
+    this.motivoRetificacao,
   });
 
   factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {

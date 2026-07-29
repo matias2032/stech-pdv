@@ -1,5 +1,6 @@
 // lib/features/documentos/screens/documentos_list_screen.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
@@ -102,10 +103,18 @@ Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
     ),
   );
 
-  try {
+try {
+    final codigo = doc.tipoDocumento.codigo;
+
+    // Notas de Crédito/Débito têm uma estrutura própria (motivo, valor
+    // creditado/debitado, itens devolvidos) — nunca a estrutura de
+    // FAT/VD (tabela de itens do pedido inteiro + IVA + dados bancários).
+    if (codigo == 'NCR' || codigo == 'NDB') {
+      await _gerarPdfNotaRetificativa(doc);
+      return;
+    }
+
 // 1. Buscar o pedido pelo id.
-    // Usa o valor de retorno directamente — nunca provider.pedidoActual,
-    // que agora só reflecte pedidos ainda abertos/em dívida.
     final pedido =
         await context.read<PedidoProvider>().buscarPorId(doc.idPedido);
     if (!mounted) return;
@@ -185,6 +194,54 @@ final arquivo = await pdfService.gerarDocumentoFiscal(
       _mostrarSnack('Erro ao gerar PDF: $e', erro: true);
     }
   }
+}
+
+/// Gera o PDF de uma Nota de Crédito/Débito reabrindo dados persistidos
+/// no próprio documento (valorTotalEmissao = valor creditado/debitado,
+/// snapshotConteudo = itens devolvidos, motivoRetificacao = motivo) —
+/// nunca lendo o pedido ao vivo, que já pode ter mudado desde a emissão.
+Future<void> _gerarPdfNotaRetificativa(DocumentoFiscalModel doc) async {
+  // buscarPorId() do DocumentoFiscalProvider espera o id do DOCUMENTO,
+  // não o id do pedido — doc.idPedido não serve para localizar o FAT/VD
+  // de origem por esta via, por isso a referência usa o fallback abaixo.
+  // TODO: quando existir idDocumentoOrigem no DocumentoFiscalModel (ligação
+  // directa NCR/NDB → FAT/VD), usar aqui em vez do fallback 'Pedido #X'.
+
+  final itens = <ItemNotaRetificativaModel>[];
+  if (doc.snapshotConteudo != null && doc.snapshotConteudo!.trim().isNotEmpty) {
+    try {
+      final json = jsonDecode(doc.snapshotConteudo!) as Map<String, dynamic>;
+      final lista = json['itensDevolvidos'] as List<dynamic>? ?? [];
+      for (final i in lista) {
+        final m = i as Map<String, dynamic>;
+        itens.add(ItemNotaRetificativaModel(
+          descricao: (m['descricao'] ?? '').toString(),
+          quantidade: (m['quantidade'] as num?)?.toInt() ?? 0,
+          precoUnitario: (m['precoUnitario'] as num?)?.toDouble() ?? 0,
+        ));
+      }
+    } catch (_) {
+      // snapshot ausente/corrompido — segue sem itens (ex: ERRO_PREENCHIMENTO)
+    }
+  }
+
+  final pdfDoc = NotaRetificativaPdfModel(
+    tipo: doc.tipoDocumento.codigo == 'NCR'
+        ? TipoDocumentoPdf.notaCredito
+        : TipoDocumentoPdf.notaDebito,
+    referencia: doc.referencia,
+    codigoAT: doc.codigoAt,
+    dataEmissao: doc.emitidoEm,
+    referenciaDocumentoOrigem: 'Pedido #${doc.idPedido}', // ajustar quando
+        // houver acesso directo ao FAT/VD de origem via idDocumentoOrigem
+    motivo: doc.motivoRetificacao ?? 'OUTRO',
+    valor: doc.valorTotalEmissao ?? 0,
+    itensDevolvidos: itens,
+  );
+
+  final arquivo = await PdfService.instance.gerarNotaRetificativa(pdfDoc);
+  if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
+  await PdfService.instance.abrirPdf(arquivo);
 }
 
   // ── Anular documento ──────────────────────────────────────────────────────

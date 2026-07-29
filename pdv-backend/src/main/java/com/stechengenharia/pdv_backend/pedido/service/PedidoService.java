@@ -3,6 +3,7 @@ package com.stechengenharia.pdv_backend.pedido.service;
 import com.stechengenharia.pdv_backend.cliente.repository.ClienteRepository;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirDocumentoRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.EmitirNotaRetificativaRequest;
+import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalRequest.ItemRetificadoRequest;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.DocumentoResponse;
 import com.stechengenharia.pdv_backend.documento.dto.DocumentoFiscalResponse.NotaRetificativaResponse;
 import com.stechengenharia.pdv_backend.documento.entity.DocumentoFiscal;
@@ -1072,8 +1073,12 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
         throw new DocumentoJaAnuladoException(documentoOrigem.getReferencia());
     }
 
-    boolean anulacaoTotal = dto.itensDevolvidos == null || dto.itensDevolvidos.isEmpty();
+boolean anulacaoTotal = dto.itensDevolvidos == null || dto.itensDevolvidos.isEmpty();
     BigDecimal valorNota;
+    // Declarado ANTES do if/else — precisa de ser visível tanto na
+    // atribuição dentro de cada ramo como na chamada a
+    // emitirNotaRetificativa() mais abaixo, fora do if/else.
+List<ItemRetificadoRequest> itensParaSnapshot;
 
     if (anulacaoTotal) {
         // ERRO_PREENCHIMENTO: credita o valor total, sem mexer em stock
@@ -1084,13 +1089,20 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
         documentoOrigem.setSyncStatus("PENDING_UPDATE");
         documentoFiscalRepository.save(documentoOrigem);
 
-} else {
+        itensParaSnapshot = List.of();
+
+    } else {
         valorNota = BigDecimal.ZERO;
+        // Precisa de descrição/preço/quantidade ANTES de devolverItemAoEstoque
+        // mutar ou apagar o item — depois disso a informação já não existe.
+var itensCapturados = new java.util.ArrayList<ItemRetificadoRequest>();
         for (ItemDevolvidoDTO itemDto : dto.itensDevolvidos) {
+            itensCapturados.add(capturarItemParaSnapshot(pedido, itemDto));
             valorNota = valorNota.add(devolverItemAoEstoque(pedido, itemDto));
         }
+        itensParaSnapshot = itensCapturados;
 
-// Itens devolvidos foram reduzidos/removidos do pedido — o total
+        // Itens devolvidos foram reduzidos/removidos do pedido — o total
         // precisa reflectir isso, senão o pedido continua a "valer" o
         // valor original mesmo após a devolução ter sido processada.
         pedido.recalcularTotal();
@@ -1110,7 +1122,8 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
                     dto.codigoAt != null ? dto.codigoAt : "STECH-MZ-NCR",
                     dto.motivo,
                     valorNota,
-                    dto.observacoes
+                    dto.observacoes,
+                    itensParaSnapshot
             )
     );
 
@@ -1126,6 +1139,42 @@ public DevolucaoResponseDTO processarDevolucaoOuTroca(Integer idPedido, Devoluca
     );
 }
 
+/**
+ * Lê descrição, preço unitário e quantidade devolvida de um item ANTES de
+ * devolverItemAoEstoque() o reduzir ou apagar. Sem isto, o snapshot da
+ * Nota de Crédito nunca teria como saber quais itens foram devolvidos ao
+ * ser regenerado mais tarde (ex.: PDF gerado a partir da listagem de
+ * documentos, fora do fluxo imediato de devolução).
+ */
+private ItemRetificadoRequest capturarItemParaSnapshot(
+        Pedido pedido, ItemDevolvidoDTO itemDto) {
+
+    if (itemDto.idItemPedido != null) {
+        ItemPedido item = itemPedidoRepository
+                .findByIdItemPedidoAndPedidoIdPedido(itemDto.idItemPedido, pedido.getIdPedido())
+                .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemPedido, pedido.getIdPedido()));
+
+        return new ItemRetificadoRequest(
+                item.getProduto().getNomeProduto(),
+                itemDto.quantidade,
+                item.getPrecoUnitario()
+        );
+    }
+
+    ItemPedidoServico item = itemPedidoServicoRepository
+            .findByIdItemServicoAndPedido_IdPedido(itemDto.idItemServico, pedido.getIdPedido())
+            .orElseThrow(() -> new ItemNaoPertenceAoPedidoException(itemDto.idItemServico, pedido.getIdPedido()));
+
+    String nomeServico = item.getServico() != null
+            ? item.getServico().getNomeServico()
+            : "Serviço #" + itemDto.idItemServico;
+
+    return new ItemRetificadoRequest(
+            nomeServico,
+            itemDto.quantidade,
+            item.getPrecoUnitario()
+    );
+}
 private BigDecimal devolverItemAoEstoque(Pedido pedido, ItemDevolvidoDTO itemDto) {
     if (itemDto.idItemPedido == null && itemDto.idItemServico == null) {
         throw new IllegalArgumentException(
