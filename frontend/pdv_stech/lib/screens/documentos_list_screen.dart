@@ -103,10 +103,12 @@ Future<void> _gerarPdf(DocumentoFiscalModel doc) async {
   );
 
   try {
-    // 1. Buscar o pedido pelo id
-    await context.read<PedidoProvider>().buscarPorId(doc.idPedido);
+// 1. Buscar o pedido pelo id.
+    // Usa o valor de retorno directamente — nunca provider.pedidoActual,
+    // que agora só reflecte pedidos ainda abertos/em dívida.
+    final pedido =
+        await context.read<PedidoProvider>().buscarPorId(doc.idPedido);
     if (!mounted) return;
-    final pedido = context.read<PedidoProvider>().pedidoActual;
     if (pedido == null) throw Exception('Pedido não encontrado');
 
     // 2. Buscar o cliente

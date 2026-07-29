@@ -192,6 +192,12 @@ const PedidoModel({
   bool get ehCredito => tipoVenda == 'CREDITO';
 bool get ehVendaImediata => tipoVenda == 'IMEDIATA';
 
+  /// True apenas quando o pedido ainda pode receber novos itens no
+  /// frontend: está aberto, ou é uma dívida a crédito ainda não
+  /// liquidada. Pedidos finalizados, cancelados ou com crédito já
+  /// liquidado NUNCA devem voltar a ser tratados como "pedido activo".
+  bool get podeReceberNovosItens => estaAberto || estaEmDivida;
+
 bool get creditoSemParcelas => modalidadeCredito == 'SEM_PARCELAS';
 bool get creditoParcelado => modalidadeCredito == 'PARCELADO';
 

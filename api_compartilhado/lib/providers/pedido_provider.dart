@@ -234,10 +234,12 @@ Future<bool> cancelarPedido(
             motivo:            dto.motivo,
           ),
         ));
-    if (_status == PedidoStatus.success) {
-      _pedidoActual = null;          // ← limpa sempre, sem condição
+if (_status == PedidoStatus.success) {
+      if (_pedidoActual?.idPedido == idPedido) {
+        _pedidoActual = null;
+      }
+      PedidoAtivoController.instance.invalidarSeIdCorresponder(idPedido);
       notifyListeners();
-      PedidoAtivoController.instance.limpar();
     }
     return _status == PedidoStatus.success;
   }
@@ -253,9 +255,15 @@ Future<bool> cancelarPedido(
   // CONSULTAS
   // ════════════════════════════════════════════════════════════════════════
 
-  Future<PedidoModel?> buscarPorId(int idPedido) async {
+Future<PedidoModel?> buscarPorId(int idPedido) async {
     final result = await _run(() => _repository.buscarPorId(idPedido));
-    if (result != null) _pedidoActual = result;
+    // Só marca como "pedido activo" se ainda puder receber itens — a
+    // mesma regra de definirPedidoActual(). Consultas para gerar PDF,
+    // extractos, etc. tipicamente buscam pedidos já encerrados e não
+    // devem reactivá-los na UI.
+    if (result != null && result.podeReceberNovosItens) {
+      _pedidoActual = result;
+    }
     return result;
   }
 
@@ -307,6 +315,15 @@ Future<bool> cancelarPedido(
   // ════════════════════════════════════════════════════════════════════════
 
 void definirPedidoActual(PedidoModel pedido) {
+  if (!pedido.podeReceberNovosItens) {
+    // Nunca definir como "pedido activo" um pedido já encerrado —
+    // é aqui que o bug de reactivação entrava, mesmo com o
+    // PedidoAtivoController a recusar por outro caminho.
+    _pedidoActual = null;
+    PedidoAtivoController.instance.invalidarSeIdCorresponder(pedido.idPedido);
+    notifyListeners();
+    return;
+  }
   _pedidoActual = pedido;
   notifyListeners();
 }
@@ -345,9 +362,14 @@ Future<PedidoModel?> declararCredito(
     _pedidosEmDivida.removeWhere((p) => p.idPedido == result.idPedido);
     _pedidosEmDivida.insert(0, result);
 
-    // Depois de confirmar crédito, o pedido NÃO deve continuar activo.
-    _pedidoActual = null;
-    PedidoAtivoController.instance.limpar();
+// Depois de confirmar crédito, o pedido NÃO deve continuar activo
+    // como "pedido normal" — mas só limpa se era mesmo este que estava
+    // activo (a declaração pode ter sido chamada para um pedido
+    // diferente do que está a ser editado noutro ecrã).
+    if (_pedidoActual?.idPedido == result.idPedido) {
+      _pedidoActual = null;
+    }
+    PedidoAtivoController.instance.invalidarSeIdCorresponder(result.idPedido);
 
     notifyListeners();
   }
@@ -377,7 +399,7 @@ Future<PagamentoCreditoModel?> registarPagamentoCredito(
     () => _repository.registarPagamentoCredito(idPedido, dto),
   );
 
-  if (result != null) {
+if (result != null) {
     _pagamentosCredito.insert(0, result);
     _pedidoActual = null;
 
@@ -389,6 +411,12 @@ Future<PagamentoCreditoModel?> registarPagamentoCredito(
         _pedidosEmDivida[idx] = atualizado;
       } else {
         _pedidosEmDivida.insert(0, atualizado);
+      }
+
+      // Se o pagamento liquidou a dívida, o pedido passou a 'finalizado':
+      // garante que o controller global deixa de o tratar como activo.
+      if (!atualizado.podeReceberNovosItens) {
+        PedidoAtivoController.instance.invalidarSeIdCorresponder(idPedido);
       }
     }
 
@@ -480,10 +508,14 @@ if (result != null) {
   // no backend. Tem de deixar de ser tratado como "pedido activo" no
   // frontend, senão as telas de produto/serviço continuam a oferecer
   // "Adicionar ao <referência>" para um pedido já fechado.
-  if (_pedidoActual?.idPedido == idPedido) {
+if (_pedidoActual?.idPedido == idPedido) {
     _pedidoActual = null;
   }
-  PedidoAtivoController.instance.limpar();
+  // Só limpa o controller se for o mesmo pedido que estava activo —
+  // uma devolução processada para outro pedido (ex.: a partir da tela
+  // de Documentos Fiscais) não deve interromper uma edição de crédito
+  // em curso noutro pedido.
+  PedidoAtivoController.instance.invalidarSeIdCorresponder(idPedido);
 
   notifyListeners();
   return _ultimaDevolucao;

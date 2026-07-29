@@ -91,6 +91,22 @@ bool get _edicaoCredito =>
 
 Future<void> _adicionarAoPedido() async {
   if (_criandoPedido) return;
+
+  // Última defesa: se, por qualquer motivo, ainda restar um pedido
+  // activo já encerrado (ex.: estado antigo em memória), não abre o
+  // diálogo — limpa e trata como pedido novo.
+  if (_temPedidoAtivo && !_pedidoAtivo!.podeReceberNovosItens) {
+    final referenciaEncerrada = _pedidoAtivo!.referencia;
+    PedidoAtivoController.instance.limpar();
+    context.read<PedidoProvider>().limparPedidoActual();
+    if (mounted) setState(() {});
+    _snack(
+      'O pedido $referenciaEncerrada já foi encerrado. Um novo pedido será iniciado.',
+      Colors.orange,
+    );
+    return;
+  }
+
   final ok = await _dialogConfirmacao();
   if (!ok) return;
 

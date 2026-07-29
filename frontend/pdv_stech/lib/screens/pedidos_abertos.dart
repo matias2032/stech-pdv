@@ -235,6 +235,16 @@ Future<void> _cancelarPedido(PedidoModel pedido) async {
   }
 
 Future<void> _editarPedido(PedidoModel pedido) async {
+  if (!pedido.podeReceberNovosItens) {
+    // Pedido já encerrado (finalizado/cancelado/crédito liquidado),
+    // mas ainda visível temporariamente nesta lista — nunca reactivar.
+    PedidoAtivoController.instance.limpar();
+    context.read<PedidoProvider>().limparPedidoActual();
+    _snack('Este pedido já foi encerrado e não pode receber novos itens.', _kAccent);
+    await _carregar();
+    return;
+  }
+
   if (pedido.ehCredito || pedido.estaEmDivida) {
     PedidoAtivoController.instance.definirEdicaoCredito(pedido);
     context.read<PedidoProvider>().definirPedidoActual(pedido);

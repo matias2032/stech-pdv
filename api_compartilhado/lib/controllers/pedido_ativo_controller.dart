@@ -21,7 +21,15 @@ class PedidoAtivoController {
 
   bool get edicaoCredito => _edicaoCredito;
 
-  void definir(PedidoModel pedido) {
+void definir(PedidoModel pedido) {
+    // Nunca reactivar um pedido que o backend já encerrou (finalizado,
+    // cancelado, ou crédito já liquidado). Evita que a UI continue a
+    // oferecer "Adicionar ao <referência>" para um pedido fechado.
+    if (!pedido.podeReceberNovosItens) {
+      limpar();
+      return;
+    }
+
     _edicaoCredito = false;
     itensProdutoBloqueados.value = <int>{};
     itensServicoBloqueados.value = <int>{};
@@ -29,6 +37,13 @@ class PedidoAtivoController {
   }
 
   void definirEdicaoCredito(PedidoModel pedido) {
+    // Edição de crédito só faz sentido enquanto o pedido continuar
+    // crédito/dívida em aberto.
+    if (!(pedido.ehCredito || pedido.estaEmDivida)) {
+      limpar();
+      return;
+    }
+
     _edicaoCredito = true;
 
     itensProdutoBloqueados.value = pedido.itensProduto
@@ -45,9 +60,24 @@ class PedidoAtivoController {
   }
 
   void actualizarPedidoMantendoBloqueios(PedidoModel pedido) {
-  pedidoAtivo.value = pedido;
-}
+    // Se o pedido deixou de poder receber itens (ex.: foi encerrado por
+    // uma devolução/nota de crédito a meio da edição), limpa em vez de
+    // manter activo.
+    if (!pedido.podeReceberNovosItens) {
+      limpar();
+      return;
+    }
+    pedidoAtivo.value = pedido;
+  }
 
+  /// Limpa o pedido activo SE for o mesmo [idPedido]. Deve ser chamado
+  /// sempre que o backend encerrar um pedido (finalizar, cancelar,
+  /// devolução/nota de crédito, crédito liquidado).
+  void invalidarSeIdCorresponder(int idPedido) {
+    if (pedidoAtivo.value?.idPedido == idPedido) {
+      limpar();
+    }
+  }
 
 
   bool produtoEstaBloqueado(int idItemPedido) {
