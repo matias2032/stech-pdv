@@ -140,20 +140,46 @@ Future<File> gerar(ExtratoModel extrato) async {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final linhasExtrato = linhas.map((l) {
+final linhasExtrato = <LinhaExtrato>[];
+
+    for (final l in linhas) {
       final emitidoEmStr = l['emitidoEm']?.toString();
       final emitidoEm = emitidoEmStr != null
           ? DateTime.tryParse(emitidoEmStr)
           : DateTime.now();
+      final dataLinha = emitidoEm ?? DateTime.now();
 
-      return LinhaExtrato(
-        dataEmissao: emitidoEm ?? DateTime.now(),
-        numeroDocumento: (l['referencia'] ?? '-').toString(),
+      final referenciaFactura = (l['referencia'] ?? '-').toString();
+      final valorTotal = (l['valorTotal'] as num?)?.toDouble() ?? 0.0;
+      final valorAjuste = (l['valorAjuste'] as num?)?.toDouble() ?? 0.0;
+
+      // 1. Linha da factura — SEMPRE com o valor congelado no momento da
+      //    emissão (snapshot), nunca o valor já líquido de NCR/NDB.
+      linhasExtrato.add(LinhaExtrato(
+        dataEmissao: dataLinha,
+        numeroDocumento: referenciaFactura,
         nomeEmpresa: cliente.nomeCompleto,
         nuit: cliente.nuit,
-        valorTotal: (l['valorTotal'] as num?)?.toDouble() ?? 0.0,
-      );
-    }).toList();
+        valorTotal: valorTotal,
+      ));
+
+      // 2. Linha de ajuste (Nota de Crédito/Débito) — só aparece quando
+      //    existe efectivamente uma NCR/NDB associada a esta factura.
+      //    valorAjuste já vem negativo para NCR (a subtrair) e positivo
+      //    para NDB (a somar) — basta usá-lo directamente, o que faz o
+      //    somaTotal do ExtratoModel já dar o valor líquido automaticamente.
+      if (valorAjuste != 0) {
+        final ehCredito = valorAjuste < 0;
+        linhasExtrato.add(LinhaExtrato(
+          dataEmissao: dataLinha,
+          numeroDocumento: ehCredito ? 'Nota de Crédito' : 'Nota de Débito',
+          nomeEmpresa: 'Ref. $referenciaFactura',
+          nuit: null,
+          valorTotal: valorAjuste,
+          isAjusteNotaRetificativa: true,
+        ));
+      }
+    }
 
     final dataInicio = linhasExtrato.isNotEmpty
         ? linhasExtrato
@@ -617,36 +643,9 @@ final estiloHeader = pw.TextStyle(
             _thCell('ISENTAS', estiloHeader),
           ],
         ),
-        for (int i = 0; i < _linhasMinimas(linhas.length); i++)
+for (int i = 0; i < _linhasMinimas(linhas.length); i++)
           if (i < linhas.length)
-            pw.TableRow(
-              children: [
-                _tdCell('${i + 1}', estiloCell, align: pw.TextAlign.center),
-                _tdCell(linhas[i].numeroDocumento, estiloBold),
-                _tdCell(_sanitizar(linhas[i].nuit), estiloCell),
-                _tdCell(_fmtData.format(linhas[i].dataEmissao), estiloCell),
-                _tdCell(_sanitizar(linhas[i].nomeEmpresa), estiloCell),
-                _tdCell(
-                  _fmtNumero(linhas[i].valorTotal),
-                  estiloCell,
-                  align: pw.TextAlign.right,
-                ),
-                _tdCell(
-                  _fmtNumero(_valorSemIva(linhas[i].valorTotal)),
-                  estiloCell,
-                  align: pw.TextAlign.right,
-                ),
-                _tdCell(
-                  _fmtNumero(
-                    linhas[i].valorTotal - _valorSemIva(linhas[i].valorTotal),
-                  ),
-                  estiloCell,
-                  align: pw.TextAlign.right,
-                ),
-                _tdCell('-', estiloCell, align: pw.TextAlign.center),
-                _tdCell('-', estiloCell, align: pw.TextAlign.center),
-              ],
-            )
+            _linhaTabelaPrestacaoServicos(linhas[i], i, estiloCell, estiloBold)
           else
             _linhaVaziaTabelaPrincipal(estiloCell),
         pw.TableRow(
@@ -676,6 +675,73 @@ final estiloHeader = pw.TextStyle(
             _tdCell('-', estiloBold, align: pw.TextAlign.center),
           ],
         ),
+      ],
+    );
+  }
+
+  /// Cor de destaque para a linha de ajuste (Nota de Crédito/Débito) no
+  /// extracto documental do cliente.
+  static const _kAjusteCor = PdfColor.fromInt(0xFFB45309); // laranja escuro
+
+  pw.TableRow _linhaTabelaPrestacaoServicos(
+    LinhaExtrato linha,
+    int indice,
+    pw.TextStyle estiloCell,
+    pw.TextStyle estiloBold,
+  ) {
+    if (linha.isAjusteNotaRetificativa) {
+      final estiloAjuste = pw.TextStyle(
+        fontSize: 5.8,
+        fontWeight: pw.FontWeight.bold,
+        color: _kAjusteCor,
+        fontStyle: pw.FontStyle.italic,
+      );
+
+      return pw.TableRow(
+        decoration: pw.BoxDecoration(color: PdfColors.orange50),
+        children: [
+          _tdCell('', estiloAjuste),
+          _tdCell('↳ ${linha.numeroDocumento}', estiloAjuste),
+          _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
+          _tdCell(_fmtData.format(linha.dataEmissao), estiloAjuste),
+          _tdCell(_sanitizar(linha.nomeEmpresa), estiloAjuste),
+          _tdCell(
+            _fmtNumero(linha.valorTotal),
+            estiloAjuste,
+            align: pw.TextAlign.right,
+          ),
+          _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
+          _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
+          _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
+          _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
+        ],
+      );
+    }
+
+    return pw.TableRow(
+      children: [
+        _tdCell('${indice + 1}', estiloCell, align: pw.TextAlign.center),
+        _tdCell(linha.numeroDocumento, estiloBold),
+        _tdCell(_sanitizar(linha.nuit), estiloCell),
+        _tdCell(_fmtData.format(linha.dataEmissao), estiloCell),
+        _tdCell(_sanitizar(linha.nomeEmpresa), estiloCell),
+        _tdCell(
+          _fmtNumero(linha.valorTotal),
+          estiloCell,
+          align: pw.TextAlign.right,
+        ),
+        _tdCell(
+          _fmtNumero(_valorSemIva(linha.valorTotal)),
+          estiloCell,
+          align: pw.TextAlign.right,
+        ),
+        _tdCell(
+          _fmtNumero(linha.valorTotal - _valorSemIva(linha.valorTotal)),
+          estiloCell,
+          align: pw.TextAlign.right,
+        ),
+        _tdCell('-', estiloCell, align: pw.TextAlign.center),
+        _tdCell('-', estiloCell, align: pw.TextAlign.center),
       ],
     );
   }

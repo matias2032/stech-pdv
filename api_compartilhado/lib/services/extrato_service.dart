@@ -28,8 +28,21 @@ class ExtratoService {
   baseUrl: ApiConfig.baseUrl,
   httpClient: http.Client(),
 );
-    // 1. Todos os documentos
+// 1. Todos os documentos (necessário ver TODOS, não só FAT/VD, para
+    //    conseguir localizar as NCR/NDB associadas a cada factura pelo
+    //    mesmo idPedido — a API não expõe directamente a relação
+    //    documento_fiscal_relacao).
     final todos = await docService.listarTodos();
+
+    // 1.1 Agrupar NCR/NDB não anuladas por idPedido, para consulta O(1)
+    //     ao montar cada linha de factura.
+    final Map<int, List<DocumentoFiscalModel>> notasPorPedido = {};
+    for (final d in todos) {
+      final codigo = d.tipoDocumento.codigo;
+      if ((codigo == 'NCR' || codigo == 'NDB') && !d.anulado) {
+        notasPorPedido.putIfAbsent(d.idPedido, () => []).add(d);
+      }
+    }
 
     // 2. Filtrar por tipo e período (não anulados)
 final filtrados = todos.where((d) {
@@ -71,14 +84,40 @@ if (nomeSingular.isNotEmpty) {
   }
 }
 
+// Valor congelado no momento da emissão (snapshot). Só recai sobre o
+// total ao vivo do pedido para documentos antigos, emitidos antes de
+// existir esta coluna — nunca para documentos novos.
+final valorFactura = doc.valorTotalEmissao ?? pedido.total;
+
 linhas.add(LinhaExtrato(
   dataEmissao:     doc.emitidoEm,
   numeroDocumento: doc.referencia,
   nomeEmpresa:     nomeEmpresa,
   nuit:            nuit,
-  valorTotal:      pedido.total,
+  valorTotal:      valorFactura,
   estado:          doc.anulado ? 'ANULADO' : '-',
 ));
+
+// Linha(s) de ajuste — Nota(s) de Crédito/Débito associadas a esta
+// factura pelo mesmo pedido. NCR entra a subtrair, NDB a somar.
+final notas = notasPorPedido[doc.idPedido];
+if (notas != null) {
+  for (final nota in notas) {
+    final ehCredito = nota.tipoDocumento.codigo == 'NCR';
+    final valorAjuste = (nota.valorTotalEmissao ?? 0) * (ehCredito ? -1 : 1);
+    if (valorAjuste == 0) continue;
+
+linhas.add(LinhaExtrato(
+      dataEmissao:     nota.emitidoEm,
+      numeroDocumento: nota.referencia,
+      nomeEmpresa:     'Ref. ${doc.referencia}',
+      nuit:            null,
+      valorTotal:      valorAjuste,
+      estado:          '-',
+      isAjusteNotaRetificativa: true,
+    ));
+  }
+}
       } catch (_) {
         // documento sem pedido acessível — ignorar
       }

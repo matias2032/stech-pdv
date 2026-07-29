@@ -118,6 +118,10 @@ class ExtratoPdfInternoService {
     );
   }
 
+/// Cor de destaque para a linha de ajuste (Nota de Crédito/Débito)
+  /// associada a uma factura, igual à usada no ExtratoPdfService.
+  static const _kAjusteCor = PdfColor.fromInt(0xFFB45309); // laranja escuro
+
   pw.Widget _tabela(ExtratoModel extrato) {
     final linhas = extrato.linhas;
 
@@ -152,33 +156,67 @@ class ExtratoPdfInternoService {
           ],
         ),
         for (int i = 0; i < linhas.length; i++)
-          pw.TableRow(
-            decoration: pw.BoxDecoration(
-              color: i.isOdd ? PdfColors.grey100 : PdfColors.white,
-            ),
-            children: [
-              _tdCell(_fmtData.format(linhas[i].dataEmissao), estiloCell),
-              _tdCell(linhas[i].numeroDocumento, estiloBold),
-              _tdCell(linhas[i].nomeEmpresa, estiloCell),
-              _tdCell(linhas[i].nuit ?? '-', estiloCell),
-              _tdCell(
-                '${_fmtNumero(linhas[i].valorTotal)} MZN',
-                estiloCell,
-                align: pw.TextAlign.right,
-              ),
-              _tdCell(
-                linhas[i].estado,
-                linhas[i].estado.toUpperCase() == 'ANULADO'
-                    ? pw.TextStyle(
-                        fontSize: 8,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _kVermelho,
-                      )
-                    : estiloCell,
-                align: pw.TextAlign.center,
-              ),
-            ],
+          _linhaTabela(linhas[i], i, estiloCell, estiloBold),
+      ],
+    );
+  }
+
+  pw.TableRow _linhaTabela(
+    LinhaExtrato linha,
+    int indice,
+    pw.TextStyle estiloCell,
+    pw.TextStyle estiloBold,
+  ) {
+    if (linha.isAjusteNotaRetificativa) {
+      final estiloAjuste = pw.TextStyle(
+        fontSize: 8,
+        fontWeight: pw.FontWeight.bold,
+        color: _kAjusteCor,
+        fontStyle: pw.FontStyle.italic,
+      );
+
+      return pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.orange50),
+        children: [
+          _tdCell(_fmtData.format(linha.dataEmissao), estiloAjuste),
+          _tdCell('↳ ${linha.numeroDocumento}', estiloAjuste),
+          _tdCell(linha.nomeEmpresa, estiloAjuste),
+          _tdCell('-', estiloAjuste),
+          _tdCell(
+            '${_fmtNumero(linha.valorTotal)} MZN',
+            estiloAjuste,
+            align: pw.TextAlign.right,
           ),
+          _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
+        ],
+      );
+    }
+
+    return pw.TableRow(
+      decoration: pw.BoxDecoration(
+        color: indice.isOdd ? PdfColors.grey100 : PdfColors.white,
+      ),
+      children: [
+        _tdCell(_fmtData.format(linha.dataEmissao), estiloCell),
+        _tdCell(linha.numeroDocumento, estiloBold),
+        _tdCell(linha.nomeEmpresa, estiloCell),
+        _tdCell(linha.nuit ?? '-', estiloCell),
+        _tdCell(
+          '${_fmtNumero(linha.valorTotal)} MZN',
+          estiloCell,
+          align: pw.TextAlign.right,
+        ),
+        _tdCell(
+          linha.estado,
+          linha.estado.toUpperCase() == 'ANULADO'
+              ? pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _kVermelho,
+                )
+              : estiloCell,
+          align: pw.TextAlign.center,
+        ),
       ],
     );
   }

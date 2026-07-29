@@ -25,7 +25,7 @@ class LocalDatabase {
 
 _db = await openDatabase(
   path,
-  version: 5,       
+  version: 6,       
   onCreate:    _onCreate,
   onUpgrade:   _onUpgrade,
   onConfigure: _onConfigure,
@@ -61,6 +61,12 @@ if (oldVersion < 4) {
   if (oldVersion < 5) {
     await db.execute('''
       ALTER TABLE documento_fiscal ADD COLUMN valor_total_emissao REAL;
+    ''');
+  }
+
+    if (oldVersion < 6) {
+    await db.execute('''
+      ALTER TABLE documento_fiscal ADD COLUMN motivo_retificacao TEXT;
     ''');
   }
 }
@@ -383,6 +389,7 @@ CREATE TABLE documento_fiscal (
   tipo_venda      TEXT,
   snapshot_conteudo TEXT,
   valor_total_emissao REAL,
+  motivo_retificacao TEXT,
   sync_status     TEXT    NOT NULL DEFAULT 'synced',
   updated_at      TEXT
 )

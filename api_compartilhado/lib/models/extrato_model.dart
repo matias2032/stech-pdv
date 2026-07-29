@@ -9,6 +9,11 @@ class LinhaExtrato {
   final double valorTotal;
   final String estado;
 
+  /// true quando esta linha representa o ajuste (Nota de Crédito/Débito)
+  /// de uma factura, e não a própria factura. Usado para destacar a linha
+  /// com cor própria no extracto documental do cliente.
+  final bool isAjusteNotaRetificativa;
+
   const LinhaExtrato({
     required this.dataEmissao,
     required this.numeroDocumento,
@@ -16,6 +21,7 @@ class LinhaExtrato {
     this.nuit,
     required this.valorTotal,
     this.estado = '-',
+    this.isAjusteNotaRetificativa = false,
   });
 }
 

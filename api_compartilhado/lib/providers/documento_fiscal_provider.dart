@@ -103,7 +103,20 @@ _documentos = lista
     }
   }
 
-  // ─── BUSCA INDIVIDUAL ────────────────────────────────────────────────────
+// ─── BUSCA INDIVIDUAL ────────────────────────────────────────────────────
+
+  /// Busca os documentos de um pedido SEM alterar o estado `_documentos`
+  /// (usado para localizar a FAT/VD de origem de uma NCR/NDB a partir da
+  /// listagem geral, onde `_documentos` já está a mostrar outra coisa).
+  Future<List<DocumentoFiscalModel>> buscarDocumentosPorPedido(
+      int idPedido) async {
+    try {
+      return await _repository.listarPorPedido(idPedido);
+    } catch (e) {
+      debugPrint('⚠️ buscarDocumentosPorPedido falhou: $e');
+      return [];
+    }
+  }
 
   Future<DocumentoFiscalModel?> buscarPorId(int id) async {
     _erro = null;

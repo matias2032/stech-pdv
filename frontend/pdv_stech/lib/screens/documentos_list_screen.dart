@@ -200,13 +200,11 @@ final arquivo = await pdfService.gerarDocumentoFiscal(
 /// no próprio documento (valorTotalEmissao = valor creditado/debitado,
 /// snapshotConteudo = itens devolvidos, motivoRetificacao = motivo) —
 /// nunca lendo o pedido ao vivo, que já pode ter mudado desde a emissão.
+///
+/// Busca a factura (FAT/VD) de origem, o pedido e o cliente, tal como a
+/// DevolucaoTrocaScreen faz, para que o PDF gerado aqui fique idêntico
+/// ao gerado logo após a devolução.
 Future<void> _gerarPdfNotaRetificativa(DocumentoFiscalModel doc) async {
-  // buscarPorId() do DocumentoFiscalProvider espera o id do DOCUMENTO,
-  // não o id do pedido — doc.idPedido não serve para localizar o FAT/VD
-  // de origem por esta via, por isso a referência usa o fallback abaixo.
-  // TODO: quando existir idDocumentoOrigem no DocumentoFiscalModel (ligação
-  // directa NCR/NDB → FAT/VD), usar aqui em vez do fallback 'Pedido #X'.
-
   final itens = <ItemNotaRetificativaModel>[];
   if (doc.snapshotConteudo != null && doc.snapshotConteudo!.trim().isNotEmpty) {
     try {
@@ -225,6 +223,58 @@ Future<void> _gerarPdfNotaRetificativa(DocumentoFiscalModel doc) async {
     }
   }
 
+  // 1. Localizar a factura (FAT/VD) de origem entre os documentos do
+  //    mesmo pedido — é o mesmo pedido que gerou tanto a factura como
+  //    esta nota retificativa.
+  final documentosDoPedido = await context
+      .read<DocumentoFiscalProvider>()
+      .buscarDocumentosPorPedido(doc.idPedido);
+
+  final DocumentoFiscalModel? factura = documentosDoPedido
+      .cast<DocumentoFiscalModel?>()
+      .firstWhere(
+        (d) =>
+            d != null &&
+            (d.tipoDocumento.codigo == 'FAT' || d.tipoDocumento.codigo == 'VD'),
+        orElse: () => null,
+      );
+
+  final referenciaDocumentoOrigem =
+      factura?.referencia ?? 'Pedido #${doc.idPedido}';
+
+  // 2. Buscar o pedido — dá acesso à referência do pedido e aos dados
+  //    de cliente singular, tal como na tela de devolução.
+  PedidoModel? pedido;
+  try {
+    pedido = await context.read<PedidoProvider>().buscarPorId(doc.idPedido);
+  } catch (_) {}
+
+  // 3. Buscar o cliente cadastrado, se aplicável.
+  ClienteModel? cliente;
+  if (pedido?.idCliente != null) {
+    try {
+      final clienteProvider = context.read<ClienteListaProvider>();
+      var encontrado = clienteProvider.clientes
+          .cast<ClienteModel?>()
+          .firstWhere((c) => c?.id == pedido!.idCliente, orElse: () => null);
+      if (encontrado == null) {
+        await clienteProvider.filtrarPorPerfil(1);
+        if (!mounted) return;
+        encontrado = context
+            .read<ClienteListaProvider>()
+            .clientes
+            .cast<ClienteModel?>()
+            .firstWhere((c) => c?.id == pedido!.idCliente, orElse: () => null);
+      }
+      cliente = encontrado;
+    } catch (_) {}
+  }
+
+  final nomeSingular = [
+    pedido?.nomeClienteSingular,
+    pedido?.apelidoClienteSingular,
+  ].where((v) => v != null && v.trim().isNotEmpty).join(' ').trim();
+
   final pdfDoc = NotaRetificativaPdfModel(
     tipo: doc.tipoDocumento.codigo == 'NCR'
         ? TipoDocumentoPdf.notaCredito
@@ -232,10 +282,14 @@ Future<void> _gerarPdfNotaRetificativa(DocumentoFiscalModel doc) async {
     referencia: doc.referencia,
     codigoAT: doc.codigoAt,
     dataEmissao: doc.emitidoEm,
-    referenciaDocumentoOrigem: 'Pedido #${doc.idPedido}', // ajustar quando
-        // houver acesso directo ao FAT/VD de origem via idDocumentoOrigem
+    referenciaDocumentoOrigem: referenciaDocumentoOrigem,
+    referenciaPedidoOrigem: pedido?.referencia,
     motivo: doc.motivoRetificacao ?? 'OUTRO',
     valor: doc.valorTotalEmissao ?? 0,
+    cliente: cliente,
+    nomeClienteSingular: nomeSingular.isNotEmpty ? pedido?.nomeClienteSingular : null,
+    apelidoClienteSingular:
+        nomeSingular.isNotEmpty ? pedido?.apelidoClienteSingular : null,
     itensDevolvidos: itens,
   );
 

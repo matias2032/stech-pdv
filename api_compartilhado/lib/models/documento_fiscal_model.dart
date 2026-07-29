@@ -86,7 +86,7 @@ class DocumentoFiscalModel {
     this.motivoRetificacao,
   });
 
-  factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
+factory DocumentoFiscalModel.fromJson(Map<String, dynamic> json) {
     return DocumentoFiscalModel(
       id: (json['id'] ?? json['id_documento'] ?? 0) as int,
       tipoDocumento: TipoDocumentoModel.fromJson(
@@ -111,10 +111,11 @@ anulado: json['anulado'] as bool? ?? false,
       valorTotalEmissao: (json['valorTotalEmissao'] ?? json['valor_total_emissao']) != null
           ? ((json['valorTotalEmissao'] ?? json['valor_total_emissao']) as num).toDouble()
           : null,
+      motivoRetificacao: json['motivoRetificacao'] ?? json['motivo_retificacao'],
     );
   }
 
-  factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
+factory DocumentoFiscalModel.fromLocalDb(Map<String, dynamic> row) =>
       DocumentoFiscalModel(
         id: row['id'] as int,
         tipoDocumento: TipoDocumentoModel(
@@ -136,6 +137,7 @@ anulado: (row['anulado'] as int?) == 1,
         tipoVenda: row['tipo_venda'] as String?, // ✅ Adicionado no BD Local
         snapshotConteudo: row['snapshot_conteudo'] as String?,
         valorTotalEmissao: (row['valor_total_emissao'] as num?)?.toDouble(),
+        motivoRetificacao: row['motivo_retificacao'] as String?, // ✅ Adicionado no BD Local
       );
 
 Map<String, dynamic> toJson() => {
@@ -154,6 +156,7 @@ Map<String, dynamic> toJson() => {
         'tipoVenda': tipoVenda,
         'snapshotConteudo': snapshotConteudo,
         'valorTotalEmissao': valorTotalEmissao,
+        'motivoRetificacao': motivoRetificacao,
       };
 
 Map<String, dynamic> toLocalDb() => {
@@ -175,6 +178,7 @@ Map<String, dynamic> toLocalDb() => {
         'tipo_venda': tipoVenda, // ✅ Adicionado no BD Local
         'snapshot_conteudo': snapshotConteudo,
         'valor_total_emissao': valorTotalEmissao,
+        'motivo_retificacao': motivoRetificacao, // ✅ Adicionado no BD Local
         'sync_status': 'synced',
         'updated_at': DateTime.now().toIso8601String(),
       };
