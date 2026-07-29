@@ -175,11 +175,11 @@ class ExtratoPdfInternoService {
         fontStyle: pw.FontStyle.italic,
       );
 
-      return pw.TableRow(
+return pw.TableRow(
         decoration: const pw.BoxDecoration(color: PdfColors.orange50),
         children: [
           _tdCell(_fmtData.format(linha.dataEmissao), estiloAjuste),
-          _tdCell('↳ ${linha.numeroDocumento}', estiloAjuste),
+          _tdCell(linha.numeroDocumento, estiloAjuste),
           _tdCell(linha.nomeEmpresa, estiloAjuste),
           _tdCell('-', estiloAjuste),
           _tdCell(

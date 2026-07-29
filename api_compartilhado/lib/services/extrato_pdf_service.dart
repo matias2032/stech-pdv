@@ -697,11 +697,11 @@ for (int i = 0; i < _linhasMinimas(linhas.length); i++)
         fontStyle: pw.FontStyle.italic,
       );
 
-      return pw.TableRow(
+return pw.TableRow(
         decoration: pw.BoxDecoration(color: PdfColors.orange50),
         children: [
           _tdCell('', estiloAjuste),
-          _tdCell('↳ ${linha.numeroDocumento}', estiloAjuste),
+          _tdCell(linha.numeroDocumento, estiloAjuste),
           _tdCell('-', estiloAjuste, align: pw.TextAlign.center),
           _tdCell(_fmtData.format(linha.dataEmissao), estiloAjuste),
           _tdCell(_sanitizar(linha.nomeEmpresa), estiloAjuste),
