@@ -495,12 +495,13 @@ class _BarraFiltros extends StatelessWidget {
     required this.onFiltroTipo,
   });
 
-  static const _tipos = [
+static const _tipos = [
     (codigo: 'FAT', label: 'Factura'),
     (codigo: 'REC', label: 'Recibo'),
     (codigo: 'VD', label: 'Venda a Dinheiro'),
         // (codigo: 'NCO', label: 'Nota de compra'),
             (codigo: 'NE', label: 'Nota de Entrega'),
+    (codigo: 'NCR', label: 'Nota de Crédito'),
   ];
 
   @override

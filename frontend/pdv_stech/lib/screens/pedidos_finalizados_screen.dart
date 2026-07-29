@@ -467,7 +467,12 @@ Future<TipoDocumentoModel?> _selecionarTipoDocumento(BuildContext context) async
 
   if (!context.mounted) return null;
 
-  final tipos = provider.tipos;
+  // Notas de Crédito/Débito têm fluxo próprio (ligadas a uma factura de
+  // origem) e nunca devem aparecer como opção de emissão directa a partir
+  // de um pedido.
+  final tipos = provider.tipos
+      .where((t) => t.codigo != 'NCR' && t.codigo != 'NDB')
+      .toList();
 
   if (tipos.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -484,39 +489,52 @@ Future<TipoDocumentoModel?> _selecionarTipoDocumento(BuildContext context) async
   return showModalBottomSheet<TipoDocumentoModel>(
     context: context,
     backgroundColor: Colors.white,
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
     ),
     builder: (ctx) {
+      final alturaMaxima = MediaQuery.of(ctx).size.height * 0.75;
+
       return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Escolha o documento fiscal',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: _kPrimary,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: alturaMaxima),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              ...tipos.map((tipo) => _opcaoDocumento(ctx, tipo)).toList(),
-            ],
+                const SizedBox(height: 14),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Escolha o documento fiscal',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _kPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children:
+                        tipos.map((tipo) => _opcaoDocumento(ctx, tipo)).toList(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

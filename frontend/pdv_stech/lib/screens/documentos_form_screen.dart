@@ -370,7 +370,7 @@ Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
 
   // ── Card 1 — Tipo de Documento ────────────────────────────────────────────
 
-  Widget _buildCardTipoDocumento() {
+Widget _buildCardTipoDocumento() {
     return _CardSecao(
       icon: Icons.description_rounded,
       titulo: 'Tipo de Documento',
@@ -379,7 +379,12 @@ Future<String> _resolverNomeTipoPagamento(int idTipoPagamento) async {
           if (provider.carregando) {
             return const Center(child: CircularProgressIndicator(color: _kAzul));
           }
-          final tipos = provider.tipos;
+          // Notas de Crédito/Débito têm fluxo próprio (ligadas a uma factura
+          // de origem) e nunca devem aparecer como opção de emissão directa
+          // a partir de um pedido.
+          final tipos = provider.tipos
+              .where((t) => t.codigo != 'NCR' && t.codigo != 'NDB')
+              .toList();
           if (tipos.isEmpty) {
             return const Text('Nenhum tipo disponível.',
                 style: TextStyle(color: _kCinzaTexto));
