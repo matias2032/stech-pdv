@@ -12,7 +12,7 @@ echo.
 
 cd /d "C:\pdv-stech engenharia\frontend\pdv_stech"
 
-flutter run -d windows -v --no-pub --dart-define=API_BASE_URL=http://prj0evebn0401yqtdjdkw0oy.162.35.186.240.sslip.io
+flutter run -d windows -v --no-pub --dart-define=API_BASE_URL=http://xqd9ac4prs0mw0wmb2n90240.162.35.186.240.sslip.io
 
 echo.
 echo ========================================
