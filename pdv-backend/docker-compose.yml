@@ -27,14 +27,7 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
     depends_on:
       - db
-    expose:
-      - "8080"
+    ports:
+      - "8080:8080"
     networks:
       - stech-net
-
-volumes:
-  pgdata:
-
-networks:
-  stech-net:
-    driver: bridge

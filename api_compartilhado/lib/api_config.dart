@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 class ApiConfig {
   // ── Configuração de ambiente ──────────────────────────────────────
 
-  static const String _baseUrlFromEnv = String.fromEnvironment(
+static const String _baseUrlFromEnv = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://stech-pdv.onrender.com',
+    defaultValue: 'http://prj0evebn0401yqtdjdkw0oy.162.35.186.240.sslip.io',
   );
 
   static String? _baseUrlCache;

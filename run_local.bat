@@ -6,13 +6,13 @@ echo   STech PDV — Flutter
 echo ========================================
 
 echo.
-echo [INFO] A iniciar Flutter Windows apontando para Render...
-echo [INFO] Backend: https://stech-pdv.onrender.com
+echo [INFO] A iniciar Flutter Windows apontando para Coolify VPS...
+echo [INFO] Backend: http://prj0evebn0401yqtdjdkw0oy.162.35.186.240.sslip.io
 echo.
 
 cd /d "C:\pdv-stech engenharia\frontend\pdv_stech"
 
-flutter run -d windows -v --no-pub --dart-define=API_BASE_URL=https://stech-pdv.onrender.com
+flutter run -d windows -v --no-pub --dart-define=API_BASE_URL=http://prj0evebn0401yqtdjdkw0oy.162.35.186.240.sslip.io
 
 echo.
 echo ========================================
