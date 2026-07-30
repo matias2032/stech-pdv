@@ -1,6 +1,18 @@
 version: "3.9"
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: stech_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 8wLLlyI3kO3O6iDuDrrJrMmTxyrtbs4N3nEXBmUw2n18RelSER9BCXuphpYt0O4Y
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - stech-net
 
   app:
     build:
@@ -8,15 +20,17 @@ services:
       dockerfile: Dockerfile
     container_name: stech_app
     restart: unless-stopped
-    env_file: .env
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/postgres
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: 8wLLlyI3kO3O6iDuDrrJrMmTxyrtbs4N3nEXBmUw2n18RelSER9BCXuphpYt0O4Y
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    depends_on:
+      - db
     expose:
       - "8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - stech-net
 
   nginx:
     image: nginx:alpine
@@ -31,3 +45,12 @@ services:
       - ./nginx/app.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
+    networks:
+      - stech-net
+
+volumes:
+  pgdata:
+
+networks:
+  stech-net:
+    driver: bridge
