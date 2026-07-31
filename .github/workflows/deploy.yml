@@ -9,7 +9,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Deploy
+      - name: Exibir Mensagem do Commit
+        run: |
+          echo "Disparando deploy do commit: ${{ github.event.head_commit.message }}"
+
+      - name: Trigger Deploy no Coolify
         run: |
           curl -X GET "http://162.35.186.240:8000/api/v1/deploy?uuid=xlxnfxnx7yc0p4hw2t2khe71&force=false" \
                -H "Authorization: Bearer 1|0IaxA00OH6OBuX7CmJKUUiwvnVHrdcGSaezSzV4Hefbcd5a6"
