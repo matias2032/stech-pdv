@@ -2,7 +2,7 @@
 title STech PDV — Flutter Launcher
 
 echo ========================================
-echo   STech PDV — Flutter
+echo   STech PDV  Flutter Desktop
 echo ========================================
 
 echo.
