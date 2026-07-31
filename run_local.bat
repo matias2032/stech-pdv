@@ -1,5 +1,5 @@
 @echo off
-title STech PDV — Flutter Launcher
+title STech PDV  Flutter Launcher
 
 echo ========================================
 echo   STech PDV  Flutter Desktop
@@ -16,7 +16,7 @@ flutter run -d windows -v --no-pub --dart-define=API_BASE_URL=http://c70gq7ownuk
 
 echo.
 echo ========================================
-echo   Flutter encerrado.
+echo   Flutter encerrando...
 echo ========================================
 
 pause
