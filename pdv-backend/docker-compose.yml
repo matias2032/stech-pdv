@@ -3,7 +3,6 @@ version: "3.9"
 services:
   db:
     image: postgres:15-alpine
-    container_name: stech_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -18,7 +17,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: stech_app
+    # container_name REMOVIDO! Necessário para permitir o deploy sem queda.
     restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/stech_db2
@@ -29,9 +28,10 @@ services:
       - db
     networks:
       - stech-net
-      - coolify  # <-- Conecta o App diretamente ao Traefik do Coolify
-    healthcheck: # <-- CORRIGIDO: Agora o Healthcheck está no container certo!
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/actuator/health || exit 1"]
+      - coolify
+    healthcheck:
+      # Tenta a rota /actuator/health e faz fallback para /api/produtos caso o Actuator não esteja instalado
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/actuator/health || wget --spider -q http://localhost:8080/api/produtos || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,7 +39,6 @@ services:
 
   adminer:
     image: adminer:latest
-    container_name: stech_adminer
     restart: unless-stopped
     ports:
       - "8088:8080"
@@ -52,5 +51,5 @@ volumes:
 networks:
   stech-net:
     driver: bridge
-  coolify:      # <-- Declara a rede externa do Coolify
+  coolify:
     external: true
