@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 8wLLlyI3kO3O6iDuDrrJrMmTxyrtbs4N3nEXBmUw2n18RelSER9BCXuphpYt0O4Y
-      POSTGRES_DB: stech_db2  # <-- CORRIGIDO: Cria a bd stech_db2 no arranque
+      POSTGRES_DB: stech_db2
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -21,7 +21,6 @@ services:
     container_name: stech_app
     restart: unless-stopped
     environment:
-      # <-- CORRIGIDO: Aponta diretamente para stech_db2 usando o hostname fixo "db"
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/stech_db2
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: 8wLLlyI3kO3O6iDuDrrJrMmTxyrtbs4N3nEXBmUw2n18RelSER9BCXuphpYt0O4Y
@@ -31,13 +30,12 @@ services:
     networks:
       - stech-net
 
-  # <-- ADICIONADO: Adminer integrado na mesma rede
   adminer:
     image: adminer:latest
     container_name: stech_adminer
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8088:8080"  # <-- CORRIGIDO: Usa a porta 8088 externa para não conflituar com a 8080
     networks:
       - stech-net
 
