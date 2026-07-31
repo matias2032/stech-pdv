@@ -607,7 +607,7 @@ IconData _iconeDocumento(String codigo) {
   return switch (codigo) {
     'FAT' => Icons.receipt_long_rounded,
     'REC' => Icons.payments_rounded,
-    'NCO' => Icons.note_alt_rounded,
+    'NE' => Icons.note_alt_rounded,
     'VD' => Icons.point_of_sale_rounded,
     _ => Icons.description_rounded,
   };
