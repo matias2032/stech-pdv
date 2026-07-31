@@ -5,7 +5,7 @@ class ApiConfig {
 
 static const String _baseUrlFromEnv = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://c70gq7ownuk9h97yezcz0h3t.162.35.186.240.sslip.io',
+    defaultValue: 'http://api-pdv.162.35.186.240.sslip.io',
   );
 
   static String? _baseUrlCache;
