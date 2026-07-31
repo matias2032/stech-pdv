@@ -29,11 +29,11 @@ class _CotacaoDetalhesServicoScreenState
   int  _quantidade  = 1;
   bool _processando = false;
 
-  @override
+@override
 void initState() {
   super.initState();
   CotacaoAtivaController.instance.limparSeNaoAberta();
-  _sincronizarCotacaoAtiva();
+  WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarCotacaoAtiva());
 }
 
 Future<void> _sincronizarCotacaoAtiva() async {

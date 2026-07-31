@@ -382,9 +382,9 @@ Widget _buildCardTipoDocumento() {
           // Notas de Crédito/Débito têm fluxo próprio (ligadas a uma factura
           // de origem) e nunca devem aparecer como opção de emissão directa
           // a partir de um pedido.
-          final tipos = provider.tipos
-              .where((t) => t.codigo != 'NCR' && t.codigo != 'NDB')
-              .toList();
+final tipos = provider.tipos
+    .where((t) => t.codigo != 'NCR' && t.codigo != 'NDB' && t.codigo != 'NDE')
+    .toList();
           if (tipos.isEmpty) {
             return const Text('Nenhum tipo disponível.',
                 style: TextStyle(color: _kCinzaTexto));

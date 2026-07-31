@@ -256,18 +256,19 @@ if (veioClienteCadastrado) {
                             itemProdutoRepository.save(item);
                             log.info("Produto {} incrementado na cotação {}", dto.idProduto(), idCotacao);
                         },
-                        () -> {
-                            CotacaoItemProduto item = CotacaoItemProduto.builder()
-                                    .cotacao(cotacao)
-                                    .produto(produto)
-                                    .quantidade(dto.quantidade())
-                                    .precoUnitario(preco)
-                                    .observacoes(dto.observacoes())
-                                    .build();
-                            itemProdutoRepository.save(item);
-                            cotacao.getItensProduto().add(item);
-                            log.info("Produto {} adicionado à cotação {}", dto.idProduto(), idCotacao);
-                        }
+() -> {
+    CotacaoItemProduto item = CotacaoItemProduto.builder()
+            .cotacao(cotacao)
+            .produto(produto)
+            .quantidade(dto.quantidade())
+            .precoUnitario(preco)
+            .observacoes(dto.observacoes())
+            .build();
+    // Não gravar directamente — deixar o cascade=ALL do lado da Cotacao
+    // tratar da inserção quando cotacaoRepository.save(cotacao) for chamado.
+    cotacao.getItensProduto().add(item);
+    log.info("Produto {} adicionado à cotação {}", dto.idProduto(), idCotacao);
+}
                 );
 
         cotacao.recalcularTotal();
@@ -302,18 +303,17 @@ if (veioClienteCadastrado) {
                             itemServicoRepository.save(item);
                             log.info("Serviço {} incrementado na cotação {}", dto.idServico(), idCotacao);
                         },
-                        () -> {
-                            CotacaoItemServico item = CotacaoItemServico.builder()
-                                    .cotacao(cotacao)
-                                    .servico(servico)
-                                    .quantidade(dto.quantidade())
-                                    .precoUnitario(preco)
-                                    .observacoes(dto.observacoes())
-                                    .build();
-                            itemServicoRepository.save(item);
-                            cotacao.getItensServico().add(item);
-                            log.info("Serviço {} adicionado à cotação {}", dto.idServico(), idCotacao);
-                        }
+() -> {
+    CotacaoItemServico item = CotacaoItemServico.builder()
+            .cotacao(cotacao)
+            .servico(servico)
+            .quantidade(dto.quantidade())
+            .precoUnitario(preco)
+            .observacoes(dto.observacoes())
+            .build();
+    cotacao.getItensServico().add(item);
+    log.info("Serviço {} adicionado à cotação {}", dto.idServico(), idCotacao);
+}
                 );
 
         cotacao.recalcularTotal();
