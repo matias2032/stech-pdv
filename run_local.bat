@@ -1,7 +1,7 @@
 @echo off
 title STech PDV  Flutter Launcher
 
-@REM gorilla
+@REM gorilla2
 
 echo ========================================
 echo   STech PDV  Flutter Desktop
