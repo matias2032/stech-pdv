@@ -29,8 +29,13 @@ services:
       - stech-net
       - coolify
     labels:
+      - "traefik.enable=true"
       - "traefik.docker.network=coolify"
-      - "traefik.http.services.http-0-xlxnfxnx7yc0p4hw2t2khe71-app.loadbalancer.server.port=8080"
+      # Criamos um roteador próprio com PRIORIDADE MÁXIMA
+      - "traefik.http.routers.app-direct.rule=Host(`api-pdv.162.35.186.240.sslip.io`)"
+      - "traefik.http.routers.app-direct.entrypoints=http"
+      - "traefik.http.routers.app-direct.priority=10000"
+      - "traefik.http.services.app-direct.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/actuator/health || wget --spider -q http://localhost:8080/api/produtos || exit 1"]
       interval: 10s
