@@ -12,6 +12,16 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - stech-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d stech_db2"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   app:
     build:
@@ -23,15 +33,16 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: 8wLLlyI3kO3O6iDuDrrJrMmTxyrtbs4N3nEXBmUw2n18RelSER9BCXuphpYt0O4Y
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - stech-net
       - coolify
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=coolify"
-      # Criamos um roteador próprio com PRIORIDADE MÁXIMA
       - "traefik.http.routers.app-direct.rule=Host(`api-pdv.162.35.186.240.sslip.io`)"
       - "traefik.http.routers.app-direct.entrypoints=http"
       - "traefik.http.routers.app-direct.priority=10000"
@@ -42,6 +53,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   adminer:
     image: adminer:latest
@@ -50,6 +66,11 @@ services:
       - "8088:8080"
     networks:
       - stech-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
 volumes:
   pgdata:
