@@ -17,20 +17,24 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # container_name REMOVIDO! Necessário para permitir o deploy sem queda.
     restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/stech_db2
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: 8wLLlyI3kO3O6iDuDrrJrMmTxyrtbs4N3nEXBmUw2n18RelSER9BCXuphpYt0O4Y
+      SPRING_DATASOURCE_PASSWORD: xxxx
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
     depends_on:
       - db
     networks:
       - stech-net
       - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api-pdv.rule=Host(`api-pdv.162.35.186.240.sslip.io`)"
+      - "traefik.http.routers.api-pdv.entrypoints=http"
+      - "traefik.http.services.api-pdv.loadbalancer.server.port=8080"
+      - "traefik.docker.network=coolify"
     healthcheck:
-      # Tenta a rota /actuator/health e faz fallback para /api/produtos caso o Actuator não esteja instalado
       test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/actuator/health || wget --spider -q http://localhost:8080/api/produtos || exit 1"]
       interval: 10s
       timeout: 5s

@@ -1,3 +1,4 @@
+
 @echo off
 title STech PDV  Flutter Launcher
 
@@ -9,7 +10,7 @@ echo ========================================
 
 echo.
 echo [INFO] A iniciar Flutter Windows apontando para Coolify VPS...
-echo [INFO] Backend: http://api-pdv.162.35.186.240.sslip.io
+echo [INFO] Backend: 
 echo.
 
 cd /d "C:\pdv-stech engenharia\frontend\pdv_stech"
