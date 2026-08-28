@@ -70,8 +70,16 @@ private static final List<String> STATUS_PERMITE_ADICIONAR_ITEM = List.of("abert
 @Transactional
 public PedidoResponseDTO criarPedido(PedidoRequestDTO dto) {
     log.info("Criando pedido para utilizador {}", dto.idUsuario);
+    try {
+        return criarPedidoInterno(dto);
+    } catch (Exception e) {
+        log.error("Falha ao criar pedido para utilizador {}: {}", dto.idUsuario, e.toString(), e);
+        throw e;
+    }
+}
 
-Pedido pedido = Pedido.builder()
+private PedidoResponseDTO criarPedidoInterno(PedidoRequestDTO dto) {
+    Pedido pedido = Pedido.builder()
         .referencia(gerarReferencia())
         .idUsuario(dto.idUsuario)
         .idTipoPagamento(dto.idTipoPagamento)
