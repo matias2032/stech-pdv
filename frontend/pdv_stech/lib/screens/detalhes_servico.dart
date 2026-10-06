@@ -1,5 +1,6 @@
 //detalhes_servico.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:intl/intl.dart';
 import 'package:api_compartilhado/api_config.dart';
@@ -24,6 +25,9 @@ class _DetalhesServicoScreenState extends State<DetalhesServicoScreen> {
   int  _quantidade    = 1;
   bool _criandoPedido = false;
 
+  final _qtdCtrl  = TextEditingController(text: '1');
+  final _qtdFocus = FocusNode();
+
   ServicoModel get servico      => widget.servico;
   double get totalParcial       => servico.precoUnitario * _quantidade;
 PedidoModel? get _pedidoAtivo =>
@@ -35,11 +39,51 @@ bool get _temPedidoAtivo => _pedidoAtivo != null;
 bool get _edicaoCredito =>
     PedidoAtivoController.instance.edicaoCredito;
   @override
-  void dispose() { _obsCtrl.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    _qtdFocus.addListener(() {
+      if (_qtdFocus.hasFocus) {
+        _qtdCtrl.selection =
+            TextSelection(baseOffset: 0, extentOffset: _qtdCtrl.text.length);
+      } else {
+        _sincronizarCampo();
+      }
+    });
+  }
 
-  void _incrementar()        => setState(() => _quantidade++);
-  void _decrementar()        { if (_quantidade > 1) setState(() => _quantidade--); }
-  void _setQuantidade(int v) { if (v >= 1) setState(() => _quantidade = v); }
+  @override
+  void dispose() {
+    _obsCtrl.dispose();
+    _qtdCtrl.dispose();
+    _qtdFocus.dispose();
+    super.dispose();
+  }
+
+  void _sincronizarCampo() {
+    final t = _quantidade.toString();
+    if (_qtdCtrl.text != t) {
+      _qtdCtrl.value = TextEditingValue(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
+    }
+  }
+
+  void _incrementar() {
+    setState(() => _quantidade++);
+    _sincronizarCampo();
+  }
+
+  void _decrementar() {
+    if (_quantidade > 1) {
+      setState(() => _quantidade--);
+      _sincronizarCampo();
+    }
+  }
+
+  void _setQuantidade(int v) {
+    if (v >= 1) setState(() => _quantidade = v); // não mexe no campo enquanto digita
+  }
 
   // SUBSTITUI O MÉTODO INTEIRO:
 
@@ -376,15 +420,20 @@ Navigator.pop(context, resultado);
                 border: Border.all(color: _kPrimary.withOpacity(0.2)),
               ),
               child: Center(
-                child: TextFormField(
-                  key: ValueKey(_quantidade),
-                  initialValue: _quantidade.toString(),
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kPrimary), // ← era 22
-                  decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
-                  onChanged: (v) { final n = int.tryParse(v); if (n != null) _setQuantidade(n); },
-                ),
+child: TextField(
+  controller: _qtdCtrl,
+  focusNode: _qtdFocus,
+  textAlign: TextAlign.center,
+  keyboardType: TextInputType.number,
+  inputFormatters: [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(7),
+  ],
+  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kPrimary),
+  decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
+  onChanged: (v) { final n = int.tryParse(v); if (n != null) _setQuantidade(n); },
+  onSubmitted: (_) => _sincronizarCampo(),
+),
               ),
             ),
           ),

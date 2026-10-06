@@ -5,6 +5,7 @@
 //detalhes_produto.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:api_compartilhado/api_compartilhado.dart';
 import 'package:api_compartilhado/api_config.dart';
 import 'package:intl/intl.dart';
@@ -36,6 +37,42 @@ class _DetalhesProdutoScreenState extends State<DetalhesProdutoScreen> {
 
   int  _quantidade    = 1;
   bool _criandoPedido = false;
+
+  final _qtdCtrl  = TextEditingController(text: '1');
+  final _qtdFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _qtdFocus.addListener(() {
+      if (_qtdFocus.hasFocus) {
+        // Ao tocar no campo, selecciona tudo: o novo número substitui o antigo
+        _qtdCtrl.selection =
+            TextSelection(baseOffset: 0, extentOffset: _qtdCtrl.text.length);
+      } else {
+        // Ao sair do campo, corrige valores vazios ou "0"
+        _sincronizarCampo();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _qtdCtrl.dispose();
+    _qtdFocus.dispose();
+    super.dispose();
+  }
+
+  /// Escreve _quantidade no campo (só quando o texto difere).
+  void _sincronizarCampo() {
+    final t = _quantidade.toString();
+    if (_qtdCtrl.text != t) {
+      _qtdCtrl.value = TextEditingValue(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
+    }
+  }
 
   ProdutoModel get produto      => widget.produto;
   double get precoEfetivo       => produto.precoPromocional ?? produto.preco;
@@ -70,23 +107,29 @@ bool get _edicaoCredito =>
   void _incrementar() {
     if (_quantidade < produto.quantidadeEstoque) {
       setState(() => _quantidade++);
+      _sincronizarCampo();
     } else {
       _snack('Quantidade máxima em estoque atingida', Colors.orange);
     }
   }
 
-  void _decrementar() { if (_quantidade > 1) setState(() => _quantidade--); }
+  void _decrementar() {
+    if (_quantidade > 1) {
+      setState(() => _quantidade--);
+      _sincronizarCampo();
+    }
+  }
 
   void _setQuantidade(int v) {
-    if (v < 1) return;
+    if (v < 1) return; // campo vazio/0 enquanto digita: ignora
     if (v > produto.quantidadeEstoque) {
       _snack('Máximo disponível: ${produto.quantidadeEstoque}', Colors.orange);
       setState(() => _quantidade = produto.quantidadeEstoque);
+      _sincronizarCampo(); // só reescreve o campo quando ultrapassa o limite
       return;
     }
-    setState(() => _quantidade = v);
+    setState(() => _quantidade = v); // NÃO mexe no campo: o utilizador está a digitar
   }
-
 // SUBSTITUI O MÉTODO INTEIRO:
 
 Future<void> _adicionarAoPedido() async {
@@ -472,15 +515,20 @@ Navigator.pop(context, resultado);
               border: Border.all(color: Colors.grey[300]!),
             ),
             child: Center(
-              child: TextFormField(
-                key: ValueKey(_quantidade),
-                initialValue: _quantidade.toString(),
-                textAlign: TextAlign.center,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kPrimary),
-                decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
-                onChanged: (v) { final n = int.tryParse(v); if (n != null) _setQuantidade(n); },
-              ),
+child: TextField(
+  controller: _qtdCtrl,
+  focusNode: _qtdFocus,
+  textAlign: TextAlign.center,
+  keyboardType: TextInputType.number,
+  inputFormatters: [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(7),
+  ],
+  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kPrimary),
+  decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
+  onChanged: (v) { final n = int.tryParse(v); if (n != null) _setQuantidade(n); },
+  onSubmitted: (_) => _sincronizarCampo(),
+),
             ),
           ),
         ),
