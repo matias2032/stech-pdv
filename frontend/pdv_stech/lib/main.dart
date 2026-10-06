@@ -2,6 +2,8 @@
 
 import 'app_imports.dart';
 import 'package:http/http.dart' as http;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,11 +37,16 @@ void main() async {
 
   await ConnectivityService.instance.init();
 
-  runApp(const MyApp());
+  final themeController = ThemeController();
+  await themeController.carregar();
+
+  runApp(MyApp(themeController: themeController));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.themeController});
+
+  final ThemeController themeController;
 
  @override
 Widget build(BuildContext context) {
@@ -170,6 +177,8 @@ fornecedorService: fornecedorService,
 
   return MultiProvider(
     providers: [
+      ChangeNotifierProvider<ThemeController>.value(value: themeController),
+
       // ── Utilizador ────────────────────────────────────────────────
      ChangeNotifierProvider(
   create: (_) => UsuarioProvider(repository: usuarioRepository),
@@ -237,16 +246,12 @@ ChangeNotifierProvider(
       ],
 
 
-      child: MaterialApp(
+      child: Builder(builder: (context) => MaterialApp(
         title: 'Gestor STech',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1B2A6B),
-            primary:   const Color(0xFF1B2A6B),
-          ),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: context.watch<ThemeController>().themeMode,
 
         initialRoute: '/splash',
 
@@ -405,9 +410,8 @@ if (settings.name == '/devolucao_troca') {
               ),
             ),
           ),
-        ),
-      ),
+    ),
+      )),
     );
   }
 }
-
